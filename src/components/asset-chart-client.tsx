@@ -39,41 +39,45 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
   const [isLoadingNews, setIsLoadingNews] = useState(true);
 
   useEffect(() => {
-    async function fetchNews() {
-      if (!asset) return;
-      
-      // Ne rien faire si l'utilisateur n'est pas connecté.
-      if (!user) {
-        setIsLoadingNews(false);
-        return;
-      }
-      
-      setIsLoadingNews(true);
-      const newsDocRef = doc(db, 'asset_news', asset.ticker);
-      
-      try {
-        const newsDoc = await getDoc(newsDocRef);
-        const twentyFourHoursAgo = Timestamp.now().toMillis() - (24 * 60 * 60 * 1000);
+    async function manageNews() {
+        if (!asset) return;
+        setIsLoadingNews(true);
 
-        if (newsDoc.exists() && newsDoc.data().generatedAt.toMillis() > twentyFourHoursAgo) {
-          setNews(newsDoc.data() as GenerateAssetNewsOutput);
-        } else {
-          const result = await generateAssetNews({ ticker: asset.ticker, name: asset.name });
-          const dataToCache = {
-              ...result,
-              generatedAt: Timestamp.now()
-          };
-          await setDoc(newsDocRef, dataToCache);
-          setNews(result);
+        const newsDocRef = doc(db, 'asset_news', asset.ticker);
+        
+        try {
+            const newsDoc = await getDoc(newsDocRef);
+            const twentyFourHoursAgo = Timestamp.now().toMillis() - (24 * 60 * 60 * 1000);
+
+            let newsIsStale = true;
+            if (newsDoc.exists() && newsDoc.data().generatedAt.toMillis() > twentyFourHoursAgo) {
+                setNews(newsDoc.data() as GenerateAssetNewsOutput);
+                newsIsStale = false;
+            }
+
+            if (newsIsStale && user) {
+                const result = await generateAssetNews({ ticker: asset.ticker, name: asset.name });
+                const dataToCache = {
+                    ...result,
+                    generatedAt: Timestamp.now()
+                };
+                await setDoc(newsDocRef, dataToCache);
+                setNews(result);
+            } else if (newsIsStale && !user) {
+                if (newsDoc.exists()) {
+                    setNews(newsDoc.data() as GenerateAssetNewsOutput)
+                } else {
+                    setNews(null);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch or generate AI news:", error);
+            setNews({ headline: 'Erreur de chargement', article: 'Impossible de récupérer les actualités.', sentiment: 'neutral' });
+        } finally {
+            setIsLoadingNews(false);
         }
-      } catch (error) {
-        console.error("Failed to fetch or generate AI news:", error);
-        setNews({ headline: 'Erreur de chargement', article: 'Impossible de générer les actualités pour le moment.', sentiment: 'neutral' });
-      } finally {
-        setIsLoadingNews(false);
-      }
     }
-    fetchNews();
+    manageNews();
   }, [asset, user]);
 
   const filteredData = useMemo(() => {
@@ -106,17 +110,18 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
   };
 
   const formatXAxis = (tickItem: string) => {
+    const date = parseISO(tickItem);
     switch (timeRange) {
       case '1D':
-        return format(parseISO(tickItem), 'HH:mm');
+        return format(date, 'HH:mm');
       case '7D':
-        return format(parseISO(tickItem), 'EEE d');
+        return format(date, 'EEE d');
       case '1M':
       case '3M':
       case '1Y':
       case 'ALL':
       default:
-        return format(parseISO(tickItem), 'MMM d');
+        return format(date, 'MMM d');
     }
   };
   
@@ -141,20 +146,6 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
       );
     }
 
-    if (!user) {
-        return (
-             <Alert variant="default" className="bg-muted/50">
-                <div className="flex items-center gap-2">
-                    <Lock className="h-5 w-5 text-muted-foreground" />
-                    <AlertTitle>Contenu Exclusif</AlertTitle>
-                </div>
-                <AlertDescription className="mt-2">
-                    Connectez-vous pour accéder aux actualités et analyses de l'IA.
-                </AlertDescription>
-            </Alert>
-        )
-    }
-
     if (news) {
         return (
             <Alert>
@@ -169,7 +160,17 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
         );
     }
     
-    return <p className="text-sm text-muted-foreground">Aucune actualité disponible.</p>;
+    return (
+         <Alert variant="default" className="bg-muted/50">
+            <div className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-muted-foreground" />
+                <AlertTitle>Générer l'actualité du jour</AlertTitle>
+            </div>
+            <AlertDescription className="mt-2">
+                Connectez-vous pour être le premier à générer l'analyse de l'IA pour cet actif.
+            </AlertDescription>
+        </Alert>
+    )
   }
 
 

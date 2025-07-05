@@ -43,7 +43,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
             setAssets(prevAssets => 
                 prevAssets.map(asset => {
                     // Increased fluctuation for more dynamic market simulation
-                    const fluctuation = (Math.random() - 0.49) * asset.price * 0.005; 
+                    const fluctuation = (Math.random() - 0.49) * asset.price * 0.05; 
                     const newPrice = Math.max(asset.price + fluctuation, 0.01);
                     
                     const initialPrice = initialPricesRef.current.get(asset.ticker) || newPrice;

@@ -26,7 +26,8 @@ export const generateHistoricalData = (basePrice: number, days: number) => {
     const data = [];
     let price = basePrice;
     const now = new Date();
-    const minutesPerPoint = 10;
+    // Generate a data point for each minute for higher resolution charts
+    const minutesPerPoint = 1; 
     const totalMinutes = days * 24 * 60;
     const pointsToGenerate = totalMinutes / minutesPerPoint;
 
@@ -34,7 +35,7 @@ export const generateHistoricalData = (basePrice: number, days: number) => {
         const date = new Date(now.getTime() - (pointsToGenerate - i - 1) * minutesPerPoint * 60 * 1000);
         
         // Increased volatility for more dynamic charts
-        const fluctuation = (Math.random() - 0.5) * price * 0.01;
+        const fluctuation = (Math.random() - 0.5) * price * 0.05;
         price += fluctuation;
         price = Math.max(price, 0.1); 
         
