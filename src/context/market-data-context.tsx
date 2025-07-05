@@ -97,7 +97,7 @@ async function updateMarketData() {
         for (const assetDoc of assetDocs.docs) {
             const assetRef = doc(db, 'market_state', assetDoc.id);
             const assetData = assetDoc.data() as FirestoreAsset;
-            const secondsSinceLastUpdate = now.seconds - assetData.lastUpdate.seconds;
+            const secondsSinceLastUpdate = now.seconds - (assetData.lastUpdate?.seconds || 0);
 
             if (secondsSinceLastUpdate < MARKET_UPDATE_INTERVAL_SECONDS) {
                 continue; // Already up-to-date
@@ -105,12 +105,12 @@ async function updateMarketData() {
 
             // AI News sentiment modifier
             const newsDocRef = doc(db, 'asset_news', assetData.ticker);
-            const newsDoc = await transaction.get(newsDocRef);
-            const sentiment = newsDoc.exists() ? newsDoc.data().sentiment : 'neutral';
+            const newsDocSnap = await transaction.get(newsDocRef);
+            const sentiment = newsDocSnap.exists() ? newsDocSnap.data().sentiment : 'neutral';
             const sentimentModifier = sentiment === 'positive' ? VOLATILITY_FACTOR / 2 : sentiment === 'negative' ? -VOLATILITY_FACTOR / 2 : 0;
             
             let newPrice = assetData.price;
-            let lastSimulatedDate = assetData.lastUpdate;
+            let lastSimulatedDate = assetData.lastUpdate || now;
 
             // Catch-up simulation for offline periods
             const offlineIntervals = Math.floor(secondsSinceLastUpdate / OFFLINE_SIMULATION_INTERVAL_SECONDS);
@@ -138,8 +138,8 @@ async function updateMarketData() {
             }
 
             // Update 24h reference price if needed
-            let price24hAgo = assetData.price24hAgo;
-            const needs24hUpdate = now.seconds - assetData.price24hAgoLastUpdate.seconds > 24 * 3600;
+            let price24hAgo = assetData.price24hAgo || assetData.price;
+            const needs24hUpdate = !assetData.price24hAgoLastUpdate || (now.seconds - assetData.price24hAgoLastUpdate.seconds > 24 * 3600);
             if (needs24hUpdate) {
                 price24hAgo = assetData.price;
             }
