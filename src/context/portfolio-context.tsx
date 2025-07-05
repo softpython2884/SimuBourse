@@ -162,16 +162,22 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     if (!user) return;
     const cost = asset.price * quantity;
 
+    console.log(`[BUY_TRANSACTION] Initiating for ${quantity} of ${asset.ticker}`);
     try {
       await runTransaction(db, async (t) => {
-        // --- PHASE 1: LECTURES ---
+        console.log('[BUY_TRANSACTION] Inside transaction callback.');
+
+        // --- PHASE 1: READS ---
+        console.log('[BUY_TRANSACTION] Phase 1: Reading documents.');
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
         
         const userDoc = await t.get(userDocRef);
         const holdingDoc = await t.get(holdingDocRef);
+        console.log(`[BUY_TRANSACTION] Phase 1 Complete. User exists: ${userDoc.exists()}, Holding exists: ${holdingDoc.exists()}.`);
 
-        // --- PHASE 2: VALIDATION & PRÉPARATION ---
+        // --- PHASE 2: VALIDATION & PREPARATION (NO DB INTERACTIONS) ---
+        console.log('[BUY_TRANSACTION] Phase 2: Validating and preparing data.');
         if (!userDoc.exists()) {
           throw new Error('Utilisateur non trouvé.');
         }
@@ -189,7 +195,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
           const newQuantity = currentHolding.quantity + quantity;
           const newTotalCost = (currentHolding.avgCost * currentHolding.quantity) + cost;
           const newAvgCost = newTotalCost / newQuantity;
-          newHoldingData = { quantity: newQuantity, avgCost: newAvgCost };
+          newHoldingData = { ...currentHolding, quantity: newQuantity, avgCost: newAvgCost };
         } else {
           newHoldingData = { 
             quantity, 
@@ -208,11 +214,18 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
           date: Timestamp.now(),
         };
         const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
+        console.log('[BUY_TRANSACTION] Phase 2 Complete. Data prepared.');
 
-        // --- PHASE 3: ÉCRITURE ---
+
+        // --- PHASE 3: WRITES ---
+        console.log('[BUY_TRANSACTION] Phase 3: Writing documents.');
         t.update(userDocRef, { cash: newCashValue });
-        t.set(holdingDocRef, newHoldingData, { merge: true });
+        console.log('[BUY_TRANSACTION] Queued user cash update.');
+        t.set(holdingDocRef, newHoldingData);
+        console.log('[BUY_TRANSACTION] Queued holding update/set.');
         t.set(newTransactionRef, newTransactionPayload);
+        console.log('[BUY_TRANSACTION] Queued new transaction log.');
+        console.log('[BUY_TRANSACTION] Phase 3 Complete. All writes queued.');
       });
 
       toast({
@@ -220,6 +233,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         description: `Vous avez acheté ${quantity} ${asset.ticker} pour $${cost.toFixed(2)}.`,
       });
     } catch (e: any) {
+      console.error('[BUY_TRANSACTION_FAILED] Error during transaction:', e);
       toast({
         variant: 'destructive',
         title: 'Échec de l\'achat',
@@ -232,16 +246,22 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     if (!user) return;
     const proceeds = asset.price * quantity;
 
+    console.log(`[SELL_TRANSACTION] Initiating for ${quantity} of ${asset.ticker}`);
     try {
       await runTransaction(db, async (t) => {
-        // --- PHASE 1: LECTURE ---
+        console.log('[SELL_TRANSACTION] Inside transaction callback.');
+
+        // --- PHASE 1: READS ---
+        console.log('[SELL_TRANSACTION] Phase 1: Reading documents.');
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
         
         const userDoc = await t.get(userDocRef);
         const holdingDoc = await t.get(holdingDocRef);
+        console.log(`[SELL_TRANSACTION] Phase 1 Complete. User exists: ${userDoc.exists()}, Holding exists: ${holdingDoc.exists()}.`);
 
-        // --- PHASE 2: VALIDATION & PRÉPARATION ---
+        // --- PHASE 2: VALIDATION & PREPARATION (NO DB INTERACTIONS) ---
+        console.log('[SELL_TRANSACTION] Phase 2: Validating and preparing data.');
         if (!userDoc.exists()) {
           throw new Error('Utilisateur non trouvé.');
         }
@@ -266,17 +286,24 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
           date: Timestamp.now(),
         };
         const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
+        console.log('[SELL_TRANSACTION] Phase 2 Complete. Data prepared.');
         
-        // --- PHASE 3: ÉCRITURE ---
+        // --- PHASE 3: WRITES ---
+        console.log('[SELL_TRANSACTION] Phase 3: Writing documents.');
         t.update(userDocRef, { cash: newCashValue });
+        console.log('[SELL_TRANSACTION] Queued user cash update.');
 
         if (newQuantity > 0.00001) {
           t.update(holdingDocRef, { quantity: newQuantity });
+          console.log('[SELL_TRANSACTION] Queued holding quantity update.');
         } else {
           t.delete(holdingDocRef);
+          console.log('[SELL_TRANSACTION] Queued holding deletion.');
         }
 
         t.set(newTransactionRef, newTransactionPayload);
+        console.log('[SELL_TRANSACTION] Queued new transaction log.');
+        console.log('[SELL_TRANSACTION] Phase 3 Complete. All writes queued.');
       });
 
       toast({
@@ -284,6 +311,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         description: `Vous avez vendu ${quantity} ${asset.ticker} pour $${proceeds.toFixed(2)}.`,
       });
     } catch (e: any) {
+      console.error('[SELL_TRANSACTION_FAILED] Error during transaction:', e);
       toast({
         variant: 'destructive',
         title: 'Échec de la vente',
