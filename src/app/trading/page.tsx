@@ -42,18 +42,18 @@ export default function TradingPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Trading Floor</CardTitle>
-        <CardDescription>Buy and sell assets using real-time market data.</CardDescription>
+        <CardTitle>Salle des Marchés</CardTitle>
+        <CardDescription>Achetez et vendez des actifs en utilisant les données du marché en temps réel.</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Asset</TableHead>
+              <TableHead>Actif</TableHead>
               <TableHead>Type</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Change (24h)</TableHead>
-              <TableHead>Market Cap</TableHead>
+              <TableHead>Prix</TableHead>
+              <TableHead>Variation (24h)</TableHead>
+              <TableHead>Cap. Boursière</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -76,10 +76,10 @@ export default function TradingPage() {
                 <TableCell>{extraData.marketCap}</TableCell>
                 <TableCell className="text-right space-x-2">
                    <TradeDialog asset={asset} tradeType="Buy">
-                    <Button variant="outline" size="sm">Buy</Button>
+                    <Button variant="outline" size="sm">Acheter</Button>
                   </TradeDialog>
                   <TradeDialog asset={asset} tradeType="Sell">
-                    <Button variant="secondary" size="sm">Sell</Button>
+                    <Button variant="secondary" size="sm">Vendre</Button>
                   </TradeDialog>
                 </TableCell>
               </TableRow>

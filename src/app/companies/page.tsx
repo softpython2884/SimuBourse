@@ -4,10 +4,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 
 const companies = [
-  { name: 'Innovatech AI', ticker: 'INVT', industry: 'Technology', sharePrice: '$150.25', marketCap: '$1.5B', dividend: '$2.50/share' },
-  { name: 'EcoPower Grids', ticker: 'EPG', industry: 'Energy', sharePrice: '$78.50', marketCap: '$785M', dividend: '$1.10/share' },
-  { name: 'QuantumLeap Gaming', ticker: 'QLG', industry: 'Entertainment', sharePrice: '$210.00', marketCap: '$2.1B', dividend: 'N/A' },
-  { name: 'BioSynth Pharma', ticker: 'BSP', industry: 'Healthcare', sharePrice: '$325.75', marketCap: '$3.2B', dividend: '$5.00/share' },
+  { name: 'Innovatech AI', ticker: 'INVT', industry: 'Technologie', sharePrice: '$150.25', marketCap: '$1.5B', dividend: '$2.50/action' },
+  { name: 'EcoPower Grids', ticker: 'EPG', industry: 'Énergie', sharePrice: '$78.50', marketCap: '$785M', dividend: '$1.10/action' },
+  { name: 'QuantumLeap Gaming', ticker: 'QLG', industry: 'Divertissement', sharePrice: '$210.00', marketCap: '$2.1B', dividend: 'N/A' },
+  { name: 'BioSynth Pharma', ticker: 'BSP', industry: 'Santé', sharePrice: '$325.75', marketCap: '$3.2B', dividend: '$5.00/action' },
 ];
 
 export default function CompaniesPage() {
@@ -15,20 +15,20 @@ export default function CompaniesPage() {
     <Card>
       <CardHeader className="flex-row items-center justify-between">
         <div>
-          <CardTitle>Companies</CardTitle>
-          <CardDescription>Create or invest in companies, influence management, and earn dividends.</CardDescription>
+          <CardTitle>Entreprises</CardTitle>
+          <CardDescription>Créez ou investissez dans des entreprises, influencez la gestion et gagnez des dividendes.</CardDescription>
         </div>
-        <Button>Create New Company</Button>
+        <Button>Créer une nouvelle entreprise</Button>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Company</TableHead>
-              <TableHead>Industry</TableHead>
-              <TableHead>Share Price</TableHead>
-              <TableHead>Market Cap</TableHead>
-              <TableHead>Dividend</TableHead>
+              <TableHead>Entreprise</TableHead>
+              <TableHead>Industrie</TableHead>
+              <TableHead>Prix de l'action</TableHead>
+              <TableHead>Cap. Boursière</TableHead>
+              <TableHead>Dividende</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -46,8 +46,8 @@ export default function CompaniesPage() {
                 <TableCell>{company.marketCap}</TableCell>
                 <TableCell>{company.dividend}</TableCell>
                 <TableCell className="text-right space-x-2">
-                  <Button variant="outline" size="sm">Details</Button>
-                  <Button variant="default" size="sm">Buy Shares</Button>
+                  <Button variant="outline" size="sm">Détails</Button>
+                  <Button variant="default" size="sm">Acheter des Actions</Button>
                 </TableCell>
               </TableRow>
             ))}

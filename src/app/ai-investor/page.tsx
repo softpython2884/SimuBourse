@@ -6,9 +6,9 @@ export default function AIInvestorPage() {
     <div className="container mx-auto max-w-4xl">
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl font-bold tracking-tight">AI Investment Advisor</CardTitle>
+          <CardTitle className="text-2xl font-bold tracking-tight">Conseiller en Investissement IA</CardTitle>
           <CardDescription className="text-base">
-            Analyze news articles to get AI-powered investment recommendations tailored to your portfolio and risk tolerance.
+            Analysez des articles de presse pour obtenir des recommandations d'investissement personnalisées par l'IA en fonction de votre portefeuille et de votre tolérance au risque.
           </CardDescription>
         </CardHeader>
         <CardContent>

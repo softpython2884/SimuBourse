@@ -16,10 +16,10 @@ const RecommendInvestmentsInputSchema = z.object({
   newsArticle: z
     .string()
     .describe('A news article to analyze for investment opportunities.'),
-  portfolio: z.string().describe('The user\u0027s current investment portfolio.'),
+  portfolio: z.string().describe('The user\'s current investment portfolio.'),
   riskPreferences: z
     .string()
-    .describe('The user\u0027s risk preferences (e.g., low, medium, high).'),
+    .describe('The user\'s risk preferences (e.g., low, medium, high).'),
 });
 export type RecommendInvestmentsInput = z.infer<typeof RecommendInvestmentsInputSchema>;
 

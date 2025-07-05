@@ -16,8 +16,8 @@ import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
-  email: z.string().email({ message: 'Invalid email address.' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
+  email: z.string().email({ message: 'Adresse e-mail invalide.' }),
+  password: z.string().min(6, { message: 'Le mot de passe doit comporter au moins 6 caractères.' }),
 });
 
 export default function LoginPage() {
@@ -41,7 +41,7 @@ export default function LoginPage() {
     } catch (error: any) {
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
+        title: 'Échec de la connexion',
         description: error.message,
       });
       setIsLoading(false);
@@ -52,8 +52,8 @@ export default function LoginPage() {
     <div className="flex min-h-full items-center justify-center">
       <Card className="mx-auto max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>Enter your email below to login to your account</CardDescription>
+          <CardTitle className="text-2xl">Connexion</CardTitle>
+          <CardDescription>Entrez votre e-mail ci-dessous pour vous connecter à votre compte</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -65,7 +65,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="m@example.com" {...field} />
+                      <Input placeholder="m@exemple.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -76,7 +76,7 @@ export default function LoginPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>Mot de passe</FormLabel>
                     <FormControl>
                       <Input type="password" {...field} />
                     </FormControl>
@@ -86,14 +86,14 @@ export default function LoginPage() {
               />
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Login
+                Se connecter
               </Button>
             </form>
           </Form>
           <div className="mt-4 text-center text-sm">
-            Don&apos;t have an account?{' '}
+            Vous n'avez pas de compte ?{' '}
             <Link href="/signup" className="underline">
-              Sign up
+              S'inscrire
             </Link>
           </div>
         </CardContent>

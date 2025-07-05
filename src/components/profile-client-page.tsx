@@ -40,7 +40,7 @@ export default function ProfileClientPage() {
     }, [cash, holdings]);
 
     const totalGains = portfolioValue - initialCash;
-    const totalGainsPercentage = (totalGains / initialCash) * 100;
+    const totalGainsPercentage = initialCash > 0 ? (totalGains / initialCash) * 100 : 0;
 
   return (
     <div className="grid gap-6 md:grid-cols-3">
@@ -51,26 +51,26 @@ export default function ProfileClientPage() {
               <AvatarFallback>{getInitials(user?.email || null)}</AvatarFallback>
             </Avatar>
             <h2 className="text-2xl font-bold">{user?.email}</h2>
-            <p className="text-muted-foreground">Joined July 2024</p>
+            <p className="text-muted-foreground">Inscrit en Juillet 2024</p>
           </CardContent>
         </Card>
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Statistics</CardTitle>
+            <CardTitle>Statistiques</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
              <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Portfolio Value</span>
+              <span className="text-muted-foreground">Valeur Totale du Portefeuille</span>
               <span className="font-bold">${portfolioValue.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Gains</span>
+              <span className="text-muted-foreground">Gains Totaux</span>
               <span className={`font-bold ${totalGains >= 0 ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                 {totalGains >= 0 ? '+' : '-'}${Math.abs(totalGains).toFixed(2)} ({totalGainsPercentage.toFixed(2)}%)
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Prediction Win Rate</span>
+              <span className="text-muted-foreground">Taux de Victoire (Paris)</span>
               <span className="font-bold">N/A</span>
             </div>
           </CardContent>
@@ -80,18 +80,18 @@ export default function ProfileClientPage() {
       <div className="md:col-span-2">
         <Card>
           <CardHeader>
-            <CardTitle>Transaction History</CardTitle>
-            <CardDescription>A log of all your recent trading and betting activity.</CardDescription>
+            <CardTitle>Historique des Transactions</CardTitle>
+            <CardDescription>Un journal de toutes vos activités de trading récentes.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Type</TableHead>
-                  <TableHead>Asset/Details</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Value</TableHead>
+                  <TableHead>Actif/Détails</TableHead>
+                  <TableHead>Quantité</TableHead>
+                  <TableHead>Prix</TableHead>
+                  <TableHead>Valeur</TableHead>
                   <TableHead>Date</TableHead>
                 </TableRow>
               </TableHeader>
@@ -100,8 +100,8 @@ export default function ProfileClientPage() {
                   transactions.map((tx, index) => (
                     <TableRow key={index}>
                       <TableCell>
-                        <Badge variant={tx.type === 'Buy' ? 'destructive' : 'default'}>
-                          {tx.type}
+                        <Badge variant={tx.type === 'Buy' ? 'default' : 'secondary'} className={tx.type === 'Buy' ? 'bg-red-600' : 'bg-green-600'}>
+                          {tx.type === 'Buy' ? 'Achat' : 'Vente'}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-medium">{tx.asset.name} ({tx.asset.ticker})</TableCell>
@@ -116,7 +116,7 @@ export default function ProfileClientPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      No transactions yet.
+                      Aucune transaction pour le moment.
                     </TableCell>
                   </TableRow>
                 )}

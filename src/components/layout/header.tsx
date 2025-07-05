@@ -34,7 +34,7 @@ export function AppHeader() {
         <SheetTrigger asChild>
           <Button size="icon" variant="outline" className="sm:hidden">
             <Menu className="h-5 w-5" />
-            <span className="sr-only">Toggle Menu</span>
+            <span className="sr-only">Ouvrir le menu</span>
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="sm:max-w-xs">
@@ -63,7 +63,7 @@ export function AppHeader() {
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search assets..."
+          placeholder="Rechercher des actifs..."
           className="w-full rounded-lg bg-background pl-8 md:w-[200px] lg:w-[336px]"
         />
       </div>
@@ -72,23 +72,23 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="secondary" size="icon" className="rounded-full">
               <CircleUser className="h-5 w-5" />
-              <span className="sr-only">Toggle user menu</span>
+              <span className="sr-only">Menu utilisateur</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/profile">Profile</Link>
+              <Link href="/profile">Profil</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem>Paramètres</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>Déconnexion</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
         <Button asChild>
-          <Link href="/login">Login</Link>
+          <Link href="/login">Connexion</Link>
         </Button>
       )}
     </header>

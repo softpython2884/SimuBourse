@@ -66,7 +66,7 @@ export default function Home() {
   const recentTransactions = useMemo(() => {
     return transactions.slice(0, 3).map(tx => {
       return {
-        description: `${tx.type === 'Buy' ? 'Bought' : 'Sold'} ${tx.quantity} ${tx.asset.ticker}`,
+        description: `${tx.type === 'Buy' ? 'Achat' : 'Vente'} ${tx.quantity} ${tx.asset.ticker}`,
         details: tx.asset.name,
         amount: `${tx.type === 'Buy' ? '-' : '+'}$${tx.value.toFixed(2)}`
       }
@@ -80,54 +80,54 @@ export default function Home() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Portfolio Value
+              Valeur du Portefeuille
             </CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${portfolioValue.toFixed(2)}</div>
             <p className={`text-xs ${portfolioChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {portfolioChange >= 0 ? '+' : ''}{portfolioChange.toFixed(2)}% from start
+              {portfolioChange >= 0 ? '+' : ''}{portfolioChange.toFixed(2)}% depuis le début
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Crypto Holdings (BTC)
+              Avoirs Crypto (BTC)
             </CardTitle>
             <Bitcoin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{btcHoldings.toFixed(4)} BTC</div>
             <p className="text-xs text-muted-foreground">
-              Value: ${(btcHoldings * (marketPrices['BTC'] || 0)).toFixed(2)}
+              Valeur: ${(btcHoldings * (marketPrices['BTC'] || 0)).toFixed(2)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
+            <CardTitle className="text-sm font-medium">Transactions Totales</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+{transactions.length}</div>
             <p className="text-xs text-muted-foreground">
-              Across all markets
+              Sur tous les marchés
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Prediction Market Wins
+              Gains (Marché des Paris)
             </CardTitle>
             <Trophy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">0</div>
             <p className="text-xs text-muted-foreground">
-              No predictions made yet
+              Aucun pari effectué
             </p>
           </CardContent>
         </Card>
@@ -136,14 +136,14 @@ export default function Home() {
         <Card className="xl:col-span-2">
           <CardHeader className="flex flex-row items-center">
             <div className="grid gap-2">
-              <CardTitle>Top Movers</CardTitle>
+              <CardTitle>Top Mouvements</CardTitle>
               <CardDescription>
-                Assets with the highest price change in the last 24 hours.
+                Les actifs avec la plus forte variation de prix des dernières 24h.
               </CardDescription>
             </div>
             <Button asChild size="sm" className="ml-auto gap-1">
               <Link href="/trading">
-                View All
+                Tout voir
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -152,10 +152,10 @@ export default function Home() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Asset</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="hidden sm:table-cell text-right">Change (24h)</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">Market Cap</TableHead>
+                  <TableHead>Actif</TableHead>
+                  <TableHead className="text-right">Prix</TableHead>
+                  <TableHead className="hidden sm:table-cell text-right">Variation (24h)</TableHead>
+                  <TableHead className="hidden md:table-cell text-right">Cap. Boursière</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -178,7 +178,7 @@ export default function Home() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Recent Transactions</CardTitle>
+            <CardTitle>Transactions Récentes</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-8">
             {recentTransactions.length > 0 ? (
@@ -196,7 +196,7 @@ export default function Home() {
               </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No recent transactions.</p>
+              <p className="text-sm text-muted-foreground">Aucune transaction récente.</p>
             )
           }
           </CardContent>

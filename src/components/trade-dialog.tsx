@@ -26,7 +26,7 @@ interface TradeDialogProps {
 }
 
 const formSchema = z.object({
-  quantity: z.coerce.number().positive({ message: 'Quantity must be positive.' }),
+  quantity: z.coerce.number().positive({ message: 'La quantité doit être positive.' }),
 });
 
 export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
@@ -42,6 +42,7 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
 
   const quantity = form.watch('quantity');
   const totalValue = quantity * asset.price;
+  const tradeTypeFr = tradeType === 'Buy' ? 'Acheter' : 'Vendre';
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     if (tradeType === 'Buy') {
@@ -61,11 +62,11 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>
-            {tradeType} {asset.name} ({asset.ticker})
+            {tradeTypeFr} {asset.name} ({asset.ticker})
           </DialogTitle>
           <DialogDescription>
-            Current Price: ${asset.price.toFixed(2)}. 
-            {tradeType === 'Buy' ? ` Available cash: $${cash.toFixed(2)}.` : ` You own: ${holdingQuantity}.`}
+            Prix actuel: ${asset.price.toFixed(2)}. 
+            {tradeType === 'Buy' ? ` Fonds disponibles: $${cash.toFixed(2)}.` : ` Vous possédez: ${holdingQuantity}.`}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -75,7 +76,7 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
               name="quantity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Quantity</FormLabel>
+                  <FormLabel>Quantité</FormLabel>
                   <FormControl>
                     <Input type="number" step="any" placeholder="0" {...field} />
                   </FormControl>
@@ -84,16 +85,16 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
               )}
             />
             <div className="text-sm font-medium">
-              Total {tradeType === 'Buy' ? 'Cost' : 'Proceeds'}: ${totalValue.toFixed(2)}
+              {tradeType === 'Buy' ? 'Coût total' : 'Produit total'}: ${totalValue.toFixed(2)}
             </div>
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="secondary">
-                  Cancel
+                  Annuler
                 </Button>
               </DialogClose>
               <Button type="submit">
-                Confirm {tradeType}
+                Confirmer {tradeTypeFr}
               </Button>
             </DialogFooter>
           </form>

@@ -4,29 +4,29 @@ import { Progress } from "@/components/ui/progress";
 
 const markets = [
   {
-    title: "US Presidential Election Winner",
-    category: "Politics",
+    title: "Vainqueur de l'élection présidentielle américaine",
+    category: "Politique",
     outcomes: [
-      { name: "Candidate A", odds: "55%" },
-      { name: "Candidate B", odds: "45%" },
+      { name: "Candidat A", odds: "55%" },
+      { name: "Candidat B", odds: "45%" },
     ],
   },
   {
-    title: "Will US Inflation be below 3% in Q4?",
-    category: "Economics",
+    title: "L'inflation américaine sera-t-elle inférieure à 3% au T4?",
+    category: "Économie",
     outcomes: [
-      { name: "Yes", odds: "65%" },
-      { name: "No", odds: "35%" },
+      { name: "Oui", odds: "65%" },
+      { name: "Non", odds: "35%" },
     ],
   },
   {
-    title: "World Cup 2026 Winner",
+    title: "Vainqueur de la Coupe du Monde 2026",
     category: "Sports",
     outcomes: [
-      { name: "Brazil", odds: "20%" },
+      { name: "Brésil", odds: "20%" },
       { name: "France", odds: "18%" },
-      { name: "Argentina", odds: "15%" },
-      { name: "Other", odds: "47%" },
+      { name: "Argentine", odds: "15%" },
+      { name: "Autre", odds: "47%" },
     ],
   },
 ];
@@ -35,8 +35,8 @@ export default function PredictionMarketsPage() {
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       <div className="lg:col-span-3">
-        <h1 className="text-2xl font-bold tracking-tight">Prediction Markets</h1>
-        <p className="text-muted-foreground">Bet on the outcome of real-world events.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Marché des Paris</h1>
+        <p className="text-muted-foreground">Pariez sur le résultat d'événements du monde réel.</p>
       </div>
       {markets.map((market, index) => (
         <Card key={index} className="flex flex-col">
@@ -56,7 +56,7 @@ export default function PredictionMarketsPage() {
             ))}
           </CardContent>
           <CardFooter>
-            <Button className="w-full">Place Bet</Button>
+            <Button className="w-full">Placer un Pari</Button>
           </CardFooter>
         </Card>
       ))}
