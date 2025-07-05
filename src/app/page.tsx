@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { ArrowUpRight } from "lucide-react"
+import { ArrowUpRight, Wallet, Bitcoin, TrendingUp, Trophy } from "lucide-react"
 import Link from "next/link"
 
 export default function Home() {
@@ -26,7 +26,7 @@ export default function Home() {
             <CardTitle className="text-sm font-medium">
               Portfolio Value
             </CardTitle>
-            <span className="text-2xl">💰</span>
+            <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">$45,231.89</div>
@@ -40,7 +40,7 @@ export default function Home() {
             <CardTitle className="text-sm font-medium">
               Crypto Holdings
             </CardTitle>
-            <span className="text-2xl">₿</span>
+            <Bitcoin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+2.73 BTC</div>
@@ -52,7 +52,7 @@ export default function Home() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Open Trades</CardTitle>
-            <span className="text-2xl">📈</span>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+12</div>
@@ -66,7 +66,7 @@ export default function Home() {
             <CardTitle className="text-sm font-medium">
               Prediction Market Wins
             </CardTitle>
-            <span className="text-2xl">🏆</span>
+            <Trophy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+54</div>
