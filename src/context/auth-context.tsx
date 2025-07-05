@@ -17,19 +17,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('AuthProvider: useEffect démarré. Mise en place du listener onAuthStateChanged.');
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('onAuthStateChanged déclenché. Objet utilisateur :', user);
       setUser(user);
       setLoading(false);
-      console.log('AuthProvider: État mis à jour. Le chargement est maintenant terminé.');
     }, (error) => {
       console.error('Erreur onAuthStateChanged :', error);
       setLoading(false);
     });
 
     return () => {
-      console.log('AuthProvider: Nettoyage du listener onAuthStateChanged.');
       unsubscribe();
     };
   }, []);
