@@ -18,7 +18,7 @@ export default function AssetDetailPage() {
   const asset = getAssetByTicker(ticker);
   const historicalData = getHistoricalData(ticker);
 
-  if (loading) {
+  if (loading && !asset) {
     return (
       <div className="flex h-[400px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -38,7 +38,7 @@ export default function AssetDetailPage() {
     );
   }
 
-  const changeIsPositive = asset.change24h.startsWith('+');
+  const changeIsPositive = asset.change24h?.startsWith('+');
 
   return (
     <div className="flex flex-1 flex-col gap-6">

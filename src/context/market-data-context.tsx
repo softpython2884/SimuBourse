@@ -1,19 +1,24 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useRef } from 'react';
-import { assets as initialAssets, generateHistoricalData, DetailedAsset } from '@/lib/assets';
-import type { Asset } from './portfolio-context';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, query, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { updateMarketData } from '@/lib/actions/market';
+import type { DetailedAsset } from '@/lib/assets';
 
-export type HistoricalData = {
+export type HistoricalDataPoint = {
     date: string;
     price: number;
 };
 
+type AssetsMap = { [ticker: string]: DetailedAsset };
+type HistoricalDataMap = { [ticker: string]: HistoricalDataPoint[] };
+
 interface MarketDataContextType {
     assets: DetailedAsset[];
     getAssetByTicker: (ticker: string) => DetailedAsset | undefined;
-    getHistoricalData: (ticker: string) => HistoricalData[];
+    getHistoricalData: (ticker: string) => HistoricalDataPoint[];
     loading: boolean;
 }
 
@@ -21,65 +26,82 @@ const MarketDataContext = createContext<MarketDataContextType | undefined>(undef
 
 export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
-    const [assets, setAssets] = useState<DetailedAsset[]>(initialAssets);
-    const initialPricesRef = useRef<Map<string, number>>(new Map());
-
-    const historicalData = useMemo(() => {
-        const dataMap = new Map<string, HistoricalData[]>();
-        initialAssets.forEach(asset => {
-            dataMap.set(asset.ticker, generateHistoricalData(asset.price, 30));
-        });
-        return dataMap;
-    }, []);
+    const [assets, setAssets] = useState<AssetsMap>({});
+    const [historicalData, setHistoricalData] = useState<HistoricalDataMap>({});
 
     useEffect(() => {
-        initialAssets.forEach(asset => {
-            if (!initialPricesRef.current.has(asset.ticker)) {
-                initialPricesRef.current.set(asset.ticker, asset.price);
-            }
+        // Déclencher la mise à jour du marché au chargement de l'application
+        updateMarketData();
+
+        // Écouter les mises à jour en temps réel des prix
+        const assetsUnsubscribe = onSnapshot(collection(db, 'market_state'), (snapshot) => {
+            const assetsData: AssetsMap = {};
+            snapshot.forEach((doc) => {
+                assetsData[doc.id] = doc.data() as DetailedAsset;
+            });
+            setAssets(assetsData);
+            setLoading(false);
         });
-
-        const interval = setInterval(() => {
-            setAssets(prevAssets => 
-                prevAssets.map(asset => {
-                    // Increased fluctuation for more dynamic market simulation
-                    const fluctuation = (Math.random() - 0.49) * asset.price * 0.05; 
-                    const newPrice = Math.max(asset.price + fluctuation, 0.01);
+        
+        // Écouter les données historiques
+        const historicalDataUnsubscribeFunctions: (() => void)[] = [];
+        const tickers = Object.keys(assets);
+        
+        if(tickers.length === 0){ // Au premier chargement, assets est vide, on écoute tout
+            onSnapshot(collection(db, 'market_state'), (snapshot) => {
+                snapshot.docs.forEach(doc => {
+                    const ticker = doc.id;
+                    const pointsCollectionRef = collection(db, 'historical_data', ticker, 'points');
+                    const q = query(pointsCollectionRef, orderBy('date', 'desc'), limit(1440)); // 1 jour de données à la minute
                     
-                    const initialPrice = initialPricesRef.current.get(asset.ticker) || newPrice;
-                    const change = newPrice - initialPrice;
-                    const changePercent = initialPrice === 0 ? 0 : (change / initialPrice) * 100;
-                    const newChange24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+                    const unsubscribe = onSnapshot(q, (pointsSnapshot) => {
+                        const points = pointsSnapshot.docs.map(pointDoc => {
+                            const data = pointDoc.data();
+                            return {
+                                price: data.price,
+                                date: (data.date as Timestamp).toDate().toISOString(),
+                            };
+                        }).reverse(); // Inverser pour que le graphique soit chronologique
+                        
+                        setHistoricalData(prev => ({ ...prev, [ticker]: points }));
+                    });
+                    historicalDataUnsubscribeFunctions.push(unsubscribe);
+                });
+            });
+        }
 
-                    return { ...asset, price: newPrice, change24h: newChange24h };
-                })
-            );
-        }, 60000); // Update every 1 minute
-
-        setLoading(false);
-
-        return () => clearInterval(interval);
+        return () => {
+            assetsUnsubscribe();
+            historicalDataUnsubscribeFunctions.forEach(unsub => unsub());
+        };
     }, []);
 
-    const getAssetByTicker = (ticker: string) => {
-        return assets.find(a => a.ticker === ticker);
+    const getAssetByTicker = useCallback((ticker: string): DetailedAsset | undefined => {
+        return assets[ticker];
+    }, [assets]);
+
+    const getHistoricalData = useCallback((ticker: string): HistoricalDataPoint[] => {
+        return historicalData[ticker] || [];
+    }, [historicalData]);
+
+    const assetsArray = React.useMemo(() => Object.values(assets), [assets]);
+
+    const value = {
+        assets: assetsArray,
+        getAssetByTicker,
+        getHistoricalData,
+        loading,
     };
-
-    const getHistoricalData = (ticker: string) => {
-        return historicalData.get(ticker) || [];
-    }
     
-    if (loading) {
-      return (
-        <div className="flex h-screen w-full items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      );
-    }
-
     return (
-        <MarketDataContext.Provider value={{ assets, getAssetByTicker, getHistoricalData, loading }}>
-            {children}
+        <MarketDataContext.Provider value={value}>
+            {loading ? (
+                <div className="flex h-screen w-full items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+            ) : (
+                children
+            )}
         </MarketDataContext.Provider>
     );
 };
