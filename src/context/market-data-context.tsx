@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { updateMarketData } from '@/lib/actions/market';
 import type { DetailedAsset } from '@/lib/assets';
+import { useAuth } from './auth-context';
 
 export type HistoricalDataPoint = {
     date: string;
@@ -25,54 +26,66 @@ interface MarketDataContextType {
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
 
 export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
+    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [assets, setAssets] = useState<AssetsMap>({});
     const [historicalData, setHistoricalData] = useState<HistoricalDataMap>({});
 
+    // Cet effet se déclenche uniquement lorsque le statut de l'utilisateur change.
+    // Il déclenche la mise à jour du marché côté serveur.
     useEffect(() => {
-        // Déclencher la mise à jour du marché au chargement de l'application
-        updateMarketData();
+        if (user) {
+            updateMarketData();
+        }
+    }, [user]);
 
-        // Écouter les mises à jour en temps réel des prix
+    // Cet effet met en place tous les auditeurs de données en temps réel.
+    useEffect(() => {
+        const unsubscribeFunctions: (() => void)[] = [];
+
+        // Auditeur pour les prix des actifs en temps réel
         const assetsUnsubscribe = onSnapshot(collection(db, 'market_state'), (snapshot) => {
-            const assetsData: AssetsMap = {};
+            const newAssetsData: AssetsMap = {};
+            const receivedTickers: string[] = [];
             snapshot.forEach((doc) => {
-                assetsData[doc.id] = doc.data() as DetailedAsset;
+                newAssetsData[doc.id] = doc.data() as DetailedAsset;
+                receivedTickers.push(doc.id);
             });
-            setAssets(assetsData);
+            setAssets(newAssetsData);
             setLoading(false);
+        }, (error) => {
+            console.error("Erreur de l'auditeur Firebase market_state :", error);
+            setLoading(false); // Arrêter le chargement en cas d'erreur
         });
         
-        // Écouter les données historiques
-        const historicalDataUnsubscribeFunctions: (() => void)[] = [];
-        const tickers = Object.keys(assets);
-        
-        if(tickers.length === 0){ // Au premier chargement, assets est vide, on écoute tout
-            onSnapshot(collection(db, 'market_state'), (snapshot) => {
-                snapshot.docs.forEach(doc => {
-                    const ticker = doc.id;
-                    const pointsCollectionRef = collection(db, 'historical_data', ticker, 'points');
-                    const q = query(pointsCollectionRef, orderBy('date', 'desc'), limit(1440)); // 1 jour de données à la minute
+        unsubscribeFunctions.push(assetsUnsubscribe);
+
+        // Auditeur pour les données historiques, déclenché une seule fois
+        const historicalUnsubscribe = onSnapshot(collection(db, 'market_state'), (snapshot) => {
+            snapshot.docs.forEach(doc => {
+                const ticker = doc.id;
+                const pointsCollectionRef = collection(db, 'historical_data', ticker, 'points');
+                const q = query(pointsCollectionRef, orderBy('date', 'desc'), limit(1440));
+                
+                const unsubscribe = onSnapshot(q, (pointsSnapshot) => {
+                    const points = pointsSnapshot.docs.map(pointDoc => {
+                        const data = pointDoc.data();
+                        return {
+                            price: data.price,
+                            date: (data.date as Timestamp).toDate().toISOString(),
+                        };
+                    }).reverse();
                     
-                    const unsubscribe = onSnapshot(q, (pointsSnapshot) => {
-                        const points = pointsSnapshot.docs.map(pointDoc => {
-                            const data = pointDoc.data();
-                            return {
-                                price: data.price,
-                                date: (data.date as Timestamp).toDate().toISOString(),
-                            };
-                        }).reverse(); // Inverser pour que le graphique soit chronologique
-                        
-                        setHistoricalData(prev => ({ ...prev, [ticker]: points }));
-                    });
-                    historicalDataUnsubscribeFunctions.push(unsubscribe);
+                    setHistoricalData(prev => ({ ...prev, [ticker]: points }));
                 });
+                unsubscribeFunctions.push(unsubscribe);
             });
-        }
+        });
+        unsubscribeFunctions.push(historicalUnsubscribe);
+
 
         return () => {
-            assetsUnsubscribe();
-            historicalDataUnsubscribeFunctions.forEach(unsub => unsub());
+            unsubscribeFunctions.forEach(unsub => unsub());
         };
     }, []);
 
