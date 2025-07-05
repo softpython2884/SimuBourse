@@ -43,6 +43,7 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
   const quantity = form.watch('quantity');
   const totalValue = quantity * asset.price;
   const tradeTypeFr = tradeType === 'Buy' ? 'Acheter' : 'Vendre';
+  const holdingQuantity = getHoldingQuantity(asset.ticker);
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     if (tradeType === 'Buy') {
@@ -53,8 +54,6 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
     form.reset();
     setOpen(false);
   }
-  
-  const holdingQuantity = getHoldingQuantity(asset.ticker);
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
@@ -82,9 +81,27 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Quantité</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="any" placeholder="0" {...field} />
-                  </FormControl>
+                   <div className="relative">
+                      <FormControl>
+                        <Input type="number" step="any" placeholder="0" {...field} className={tradeType === 'Buy' ? 'pr-12' : ''} />
+                      </FormControl>
+                      {tradeType === 'Buy' && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 h-7"
+                          onClick={() => {
+                            if (asset.price > 0) {
+                              const maxQuantity = Math.floor(cash / asset.price);
+                              form.setValue('quantity', maxQuantity > 0 ? maxQuantity : 0, { shouldValidate: true });
+                            }
+                          }}
+                        >
+                          Max
+                        </Button>
+                      )}
+                    </div>
                   <FormMessage />
                 </FormItem>
               )}

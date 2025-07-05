@@ -28,6 +28,8 @@ export interface Holding {
   ticker: string;
   quantity: number;
   avgCost: number;
+  name: string;
+  type: 'Stock' | 'Crypto' | 'Commodity' | 'Forex';
 }
 
 export interface Transaction {
@@ -166,16 +168,13 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
 
-        // --- All reads must happen first ---
         const userDoc = await transaction.get(userDocRef);
         const holdingDoc = await transaction.get(holdingDocRef);
 
-        // --- Perform checks on read data ---
         if (!userDoc.exists() || userDoc.data().cash < cost) {
           throw new Error('Fonds insuffisants.');
         }
 
-        // --- All writes happen after reads ---
         const currentCash = userDoc.data().cash;
         transaction.update(userDocRef, { cash: currentCash - cost });
 
@@ -186,7 +185,12 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
           const newAvgCost = newTotalCost / newQuantity;
           transaction.update(holdingDocRef, { quantity: newQuantity, avgCost: newAvgCost });
         } else {
-          transaction.set(holdingDocRef, { quantity, avgCost: asset.price, name: asset.name, type: asset.type });
+          transaction.set(holdingDocRef, { 
+            quantity, 
+            avgCost: asset.price, 
+            name: asset.name, 
+            type: asset.type 
+          });
         }
 
         const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));

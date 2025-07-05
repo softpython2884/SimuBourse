@@ -38,90 +38,101 @@ interface MarketDataContextType {
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
 
 const MARKET_UPDATE_INTERVAL_SECONDS = 60; // Update every minute when a user is active
-const VOLATILITY_FACTOR = 0.05; // Increased volatility for more noticeable price swings
+const OFFLINE_UPDATE_INTERVAL_SECONDS = 3600; // Update every hour when no one is active
+const VOLATILITY_FACTOR = 0.005; // Base fluctuation percentage
 
 async function updateMarketData() {
   console.log('Checking if market data needs seeding or updating...');
   
   const marketStateRef = collection(db, 'market_state');
-  const assetsSnapshot = await getDocs(marketStateRef);
+  
+  // --- Seed new assets not present in Firestore ---
+  const existingAssetsSnapshot = await getDocs(marketStateRef);
+  const existingTickers = new Set(existingAssetsSnapshot.docs.map(d => d.id));
+  const newAssetsBatch = writeBatch(db);
+  let hasNewAssets = false;
 
-  if (assetsSnapshot.empty) {
-    console.log('Initialising market in Firestore...');
-    const batch = writeBatch(db);
-    for (const asset of initialAssets) {
+  for (const asset of initialAssets) {
+    if (!existingTickers.has(asset.ticker)) {
+      hasNewAssets = true;
+      console.log(`New asset found: ${asset.ticker}. Seeding...`);
       const assetRef = doc(marketStateRef, asset.ticker);
       const initialData = {
         ...asset,
         lastUpdate: Timestamp.now(),
         initialPrice24h: asset.price,
       };
-      batch.set(assetRef, initialData);
+      newAssetsBatch.set(assetRef, initialData);
 
       const historyRef = doc(collection(db, 'historical_data'), asset.ticker);
-      batch.set(historyRef, { lastUpdate: Timestamp.now() });
+      newAssetsBatch.set(historyRef, { lastUpdate: Timestamp.now() });
 
       const pointsRef = collection(historyRef, 'points');
       const initialPointRef = doc(pointsRef);
-      batch.set(initialPointRef, {
+      newAssetsBatch.set(initialPointRef, {
         date: Timestamp.now(),
         price: asset.price,
       });
     }
-    await batch.commit();
-    console.log('Market initialised.');
-    return; // Exit after seeding
   }
 
+  if (hasNewAssets) {
+    await newAssetsBatch.commit();
+    console.log('New assets have been seeded.');
+  }
+
+
+  // --- Run simulation for time passed since last update ---
   try {
     const assetDocs = await getDocs(query(collection(db, 'market_state')));
     
     await runTransaction(db, async (transaction) => {
         console.log('Running market update transaction...');
         const now = Timestamp.now();
-        const twentyFourHoursAgo = new Timestamp(now.seconds - 24 * 60 * 60, now.nanoseconds);
 
         for (const assetDoc of assetDocs.docs) {
             const assetData = assetDoc.data() as DetailedAsset & { lastUpdate: Timestamp, initialPrice24h: number };
             const secondsSinceLastUpdate = now.seconds - assetData.lastUpdate.seconds;
             
-            // This simulates updates that would have happened "offline"
-            const intervalsToSimulate = Math.floor(secondsSinceLastUpdate / MARKET_UPDATE_INTERVAL_SECONDS);
+            const intervalsToSimulate = Math.floor(secondsSinceLastUpdate / OFFLINE_UPDATE_INTERVAL_SECONDS);
 
             if (intervalsToSimulate < 1) {
-                continue; // This asset is up-to-date
+                continue; // This asset is up-to-date enough, no catch-up needed
             }
             
-            console.log(`Simulating ${intervalsToSimulate} intervals for ${assetData.ticker}`);
+            console.log(`Simulating ${intervalsToSimulate} offline intervals for ${assetData.ticker}`);
 
             let newPrice = assetData.price;
             let lastSimulatedDate = assetData.lastUpdate;
 
-            // Get news sentiment once before the loop
             const newsDocRef = doc(db, 'asset_news', assetData.ticker);
-            const newsDoc = await getDoc(newsDocRef);
+            const newsDoc = await transaction.get(newsDocRef);
             let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
-            if (newsDoc.exists() && newsDoc.data().generatedAt.toMillis() > twentyFourHoursAgo.toMillis()) {
+            if (newsDoc.exists()) {
                 sentiment = newsDoc.data().sentiment;
             }
-            const sentimentModifier = sentiment === 'positive' ? 0.005 : sentiment === 'negative' ? -0.005 : 0;
+            const sentimentModifier = sentiment === 'positive' ? 0.0005 : sentiment === 'negative' ? -0.0005 : 0;
 
-            // Simulate each missed interval
             for (let i = 0; i < intervalsToSimulate; i++) {
-                const baseFluctuation = (Math.random() - 0.5) * VOLATILITY_FACTOR;
+                const baseFluctuation = (Math.random() - 0.5) * 2 * VOLATILITY_FACTOR; // Fluctuation can be up to +/- VOLATILITY_FACTOR
                 const totalChangeFactor = 1 + baseFluctuation + sentimentModifier;
                 newPrice *= totalChangeFactor;
                 newPrice = Math.max(newPrice, 0.01);
                 
-                // Add a new historical point for each simulated interval
-                lastSimulatedDate = new Timestamp(lastSimulatedDate.seconds + MARKET_UPDATE_INTERVAL_SECONDS, 0);
+                lastSimulatedDate = new Timestamp(lastSimulatedDate.seconds + OFFLINE_UPDATE_INTERVAL_SECONDS, 0);
                 const historyPointsRef = collection(db, 'historical_data', assetData.ticker, 'points');
                 const newPointRef = doc(historyPointsRef);
                 transaction.set(newPointRef, { date: lastSimulatedDate, price: newPrice });
             }
 
-            const change = newPrice - assetData.initialPrice24h;
-            const changePercent = (change / assetData.initialPrice24h) * 100;
+            // Fetch 24h old price for accurate change calculation
+            const twentyFourHoursAgo = new Timestamp(now.seconds - 24 * 60 * 60, now.nanoseconds);
+            const historyQuery = query(collection(db, 'historical_data', assetData.ticker, 'points'), where('date', '<=', twentyFourHoursAgo), orderBy('date', 'desc'), limit(1));
+            const oldPriceSnapshot = await getDocs(historyQuery);
+            const price24hAgo = oldPriceSnapshot.empty ? assetData.initialPrice24h : oldPriceSnapshot.docs[0].data().price;
+
+            const change = newPrice - price24hAgo;
+            const changePercent = (change / price24hAgo) * 100;
             const newChange24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
 
             const assetRef = doc(db, 'market_state', assetData.ticker);
@@ -179,12 +190,11 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
             });
             setAssets(newAssetsData);
             
-            // Subscribe to historical data for each asset
             snapshot.docs.forEach(doc => {
                 const ticker = doc.id;
-                if (!historicalData[ticker] || unsubscribeFunctions.length <= snapshot.docs.length) { // Prevent resubscribing
+                if (!historicalData[ticker] || unsubscribeFunctions.length <= snapshot.docs.length) { 
                     const pointsCollectionRef = collection(db, 'historical_data', ticker, 'points');
-                    const q = query(pointsCollectionRef, orderBy('date', 'desc'), limit(1440)); // ~24h of data if 1 point/min
+                    const q = query(pointsCollectionRef, orderBy('date', 'desc'), limit(1440));
                     
                     const unsubscribe = onSnapshot(q, (pointsSnapshot) => {
                         const points = pointsSnapshot.docs.map(pointDoc => {

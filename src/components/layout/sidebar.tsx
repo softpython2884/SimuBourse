@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Home, LineChart, Users, Cpu, BrainCircuit, Landmark, BarChart } from 'lucide-react';
+import { Home, LineChart, Users, Cpu, BrainCircuit, Landmark, BarChart, Wallet } from 'lucide-react';
 import { Logo } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 export const NAV_LINKS = [
   { href: '/', icon: Home, label: 'Tableau de Bord' },
+  { href: '/portfolio', icon: Wallet, label: 'Portefeuille' },
   { href: '/trading', icon: LineChart, label: 'Trading' },
   { href: '/markets', icon: BarChart, label: 'Marché des Paris' },
   { href: '/mining', icon: Cpu, label: 'Minage de Crypto' },
