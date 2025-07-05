@@ -89,30 +89,43 @@ async function updateMarketData() {
   // --- Run simulation for time passed since last update ---
   try {
     const assetDocs = await getDocs(query(collection(db, 'market_state')));
+    if (assetDocs.empty) {
+        console.log("No assets in market_state to simulate.");
+        return;
+    }
     
     await runTransaction(db, async (transaction) => {
-        console.log('Running market simulation...');
+        console.log('Running market simulation transaction...');
         const now = Timestamp.now();
+        
+        // --- PHASE 1: READS ---
+        console.log("Transaction Phase 1: Reading all AI news sentiments...");
+        const newsSentiments = new Map<string, string>();
+        for (const assetDoc of assetDocs.docs) {
+            const newsDocRef = doc(db, 'asset_news', assetDoc.id);
+            const newsDocSnap = await transaction.get(newsDocRef);
+            const sentiment = newsDocSnap.exists() ? newsDocSnap.data().sentiment : 'neutral';
+            newsSentiments.set(assetDoc.id, sentiment);
+        }
+        console.log("Transaction Phase 1 Complete.");
 
+        // --- PHASE 2: CALCULATIONS & WRITES ---
+        console.log("Transaction Phase 2: Calculating and writing all market updates...");
         for (const assetDoc of assetDocs.docs) {
             const assetRef = doc(db, 'market_state', assetDoc.id);
             const assetData = assetDoc.data() as FirestoreAsset;
             const secondsSinceLastUpdate = now.seconds - (assetData.lastUpdate?.seconds || 0);
 
             if (secondsSinceLastUpdate < MARKET_UPDATE_INTERVAL_SECONDS) {
-                continue; // Already up-to-date
+                continue;
             }
 
-            // AI News sentiment modifier
-            const newsDocRef = doc(db, 'asset_news', assetData.ticker);
-            const newsDocSnap = await transaction.get(newsDocRef);
-            const sentiment = newsDocSnap.exists() ? newsDocSnap.data().sentiment : 'neutral';
+            const sentiment = newsSentiments.get(assetData.ticker) || 'neutral';
             const sentimentModifier = sentiment === 'positive' ? VOLATILITY_FACTOR / 2 : sentiment === 'negative' ? -VOLATILITY_FACTOR / 2 : 0;
             
             let newPrice = assetData.price;
             let lastSimulatedDate = assetData.lastUpdate || now;
 
-            // Catch-up simulation for offline periods
             const offlineIntervals = Math.floor(secondsSinceLastUpdate / OFFLINE_SIMULATION_INTERVAL_SECONDS);
             if (offlineIntervals > 0) {
                 for (let i = 0; i < offlineIntervals; i++) {
@@ -124,7 +137,6 @@ async function updateMarketData() {
                 }
             }
             
-            // Live simulation for active periods
             const remainingSeconds = secondsSinceLastUpdate % OFFLINE_SIMULATION_INTERVAL_SECONDS;
             const liveIntervals = Math.floor(remainingSeconds / MARKET_UPDATE_INTERVAL_SECONDS);
             if (liveIntervals > 0) {
@@ -137,7 +149,6 @@ async function updateMarketData() {
                 }
             }
 
-            // Update 24h reference price if needed
             let price24hAgo = assetData.price24hAgo || assetData.price;
             const needs24hUpdate = !assetData.price24hAgoLastUpdate || (now.seconds - assetData.price24hAgoLastUpdate.seconds > 24 * 3600);
             if (needs24hUpdate) {
@@ -159,6 +170,7 @@ async function updateMarketData() {
             }
             transaction.update(assetRef, updatePayload);
         }
+        console.log("Transaction Phase 2 Complete.");
     });
     console.log('Market simulation completed successfully.');
   } catch (error) {
