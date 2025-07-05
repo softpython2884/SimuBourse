@@ -15,7 +15,6 @@ import {
   doc,
   runTransaction,
   getDoc,
-  setDoc,
 } from 'firebase/firestore';
 import { assets as initialAssets, DetailedAsset } from '@/lib/assets';
 import { useAuth } from './auth-context';
@@ -23,6 +22,12 @@ import { useAuth } from './auth-context';
 export type HistoricalDataPoint = {
     date: string;
     price: number;
+};
+
+type FirestoreAsset = DetailedAsset & {
+    lastUpdate: Timestamp;
+    price24hAgo: number;
+    price24hAgoLastUpdate: Timestamp;
 };
 
 type AssetsMap = { [ticker: string]: DetailedAsset };
@@ -37,9 +42,9 @@ interface MarketDataContextType {
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
 
-const MARKET_UPDATE_INTERVAL_SECONDS = 60; // Update every minute when a user is active
-const OFFLINE_UPDATE_INTERVAL_SECONDS = 3600; // Update every hour when no one is active
-const VOLATILITY_FACTOR = 0.005; // Base fluctuation percentage
+export const MARKET_UPDATE_INTERVAL_SECONDS = 60; // Update every minute when a user is active
+const OFFLINE_SIMULATION_INTERVAL_SECONDS = 3600; // Simulate every hour for offline catch-up
+const VOLATILITY_FACTOR = 0.0005; // Base fluctuation for live updates
 
 async function updateMarketData() {
   console.log('Checking if market data needs seeding or updating...');
@@ -49,7 +54,7 @@ async function updateMarketData() {
   // --- Seed new assets not present in Firestore ---
   const existingAssetsSnapshot = await getDocs(marketStateRef);
   const existingTickers = new Set(existingAssetsSnapshot.docs.map(d => d.id));
-  const newAssetsBatch = writeBatch(db);
+  const batch = writeBatch(db);
   let hasNewAssets = false;
 
   for (const asset of initialAssets) {
@@ -57,95 +62,107 @@ async function updateMarketData() {
       hasNewAssets = true;
       console.log(`New asset found: ${asset.ticker}. Seeding...`);
       const assetRef = doc(marketStateRef, asset.ticker);
+      const now = Timestamp.now();
       const initialData = {
         ...asset,
-        lastUpdate: Timestamp.now(),
-        initialPrice24h: asset.price,
+        lastUpdate: now,
+        price24hAgo: asset.price,
+        price24hAgoLastUpdate: now,
       };
-      newAssetsBatch.set(assetRef, initialData);
+      batch.set(assetRef, initialData);
 
       const historyRef = doc(collection(db, 'historical_data'), asset.ticker);
-      newAssetsBatch.set(historyRef, { lastUpdate: Timestamp.now() });
-
-      const pointsRef = collection(historyRef, 'points');
-      const initialPointRef = doc(pointsRef);
-      newAssetsBatch.set(initialPointRef, {
-        date: Timestamp.now(),
-        price: asset.price,
-      });
+      const historyDoc = await getDoc(historyRef);
+      if (!historyDoc.exists()) {
+        batch.set(historyRef, { lastUpdate: now });
+        const pointsRef = collection(historyRef, 'points');
+        const initialPointRef = doc(pointsRef);
+        batch.set(initialPointRef, { date: now, price: asset.price });
+      }
     }
   }
-
   if (hasNewAssets) {
-    await newAssetsBatch.commit();
+    await batch.commit();
     console.log('New assets have been seeded.');
   }
-
 
   // --- Run simulation for time passed since last update ---
   try {
     const assetDocs = await getDocs(query(collection(db, 'market_state')));
     
     await runTransaction(db, async (transaction) => {
-        console.log('Running market update transaction...');
+        console.log('Running market simulation...');
         const now = Timestamp.now();
 
         for (const assetDoc of assetDocs.docs) {
-            const assetData = assetDoc.data() as DetailedAsset & { lastUpdate: Timestamp, initialPrice24h: number };
+            const assetRef = doc(db, 'market_state', assetDoc.id);
+            const assetData = assetDoc.data() as FirestoreAsset;
             const secondsSinceLastUpdate = now.seconds - assetData.lastUpdate.seconds;
-            
-            const intervalsToSimulate = Math.floor(secondsSinceLastUpdate / OFFLINE_UPDATE_INTERVAL_SECONDS);
 
-            if (intervalsToSimulate < 1) {
-                continue; // This asset is up-to-date enough, no catch-up needed
+            if (secondsSinceLastUpdate < MARKET_UPDATE_INTERVAL_SECONDS) {
+                continue; // Already up-to-date
             }
-            
-            console.log(`Simulating ${intervalsToSimulate} offline intervals for ${assetData.ticker}`);
 
+            // AI News sentiment modifier
+            const newsDocRef = doc(db, 'asset_news', assetData.ticker);
+            const newsDoc = await transaction.get(newsDocRef);
+            const sentiment = newsDoc.exists() ? newsDoc.data().sentiment : 'neutral';
+            const sentimentModifier = sentiment === 'positive' ? VOLATILITY_FACTOR / 2 : sentiment === 'negative' ? -VOLATILITY_FACTOR / 2 : 0;
+            
             let newPrice = assetData.price;
             let lastSimulatedDate = assetData.lastUpdate;
 
-            const newsDocRef = doc(db, 'asset_news', assetData.ticker);
-            const newsDoc = await transaction.get(newsDocRef);
-            let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
-            if (newsDoc.exists()) {
-                sentiment = newsDoc.data().sentiment;
+            // Catch-up simulation for offline periods
+            const offlineIntervals = Math.floor(secondsSinceLastUpdate / OFFLINE_SIMULATION_INTERVAL_SECONDS);
+            if (offlineIntervals > 0) {
+                for (let i = 0; i < offlineIntervals; i++) {
+                    const fluctuation = (Math.random() - 0.5) * 2 * (VOLATILITY_FACTOR * 10);
+                    newPrice *= (1 + fluctuation + sentimentModifier);
+                    newPrice = Math.max(newPrice, 0.01);
+                    lastSimulatedDate = new Timestamp(lastSimulatedDate.seconds + OFFLINE_SIMULATION_INTERVAL_SECONDS, 0);
+                    transaction.set(doc(collection(db, 'historical_data', assetData.ticker, 'points')), { date: lastSimulatedDate, price: newPrice });
+                }
             }
-            const sentimentModifier = sentiment === 'positive' ? 0.0005 : sentiment === 'negative' ? -0.0005 : 0;
-
-            for (let i = 0; i < intervalsToSimulate; i++) {
-                const baseFluctuation = (Math.random() - 0.5) * 2 * VOLATILITY_FACTOR; // Fluctuation can be up to +/- VOLATILITY_FACTOR
-                const totalChangeFactor = 1 + baseFluctuation + sentimentModifier;
-                newPrice *= totalChangeFactor;
-                newPrice = Math.max(newPrice, 0.01);
-                
-                lastSimulatedDate = new Timestamp(lastSimulatedDate.seconds + OFFLINE_UPDATE_INTERVAL_SECONDS, 0);
-                const historyPointsRef = collection(db, 'historical_data', assetData.ticker, 'points');
-                const newPointRef = doc(historyPointsRef);
-                transaction.set(newPointRef, { date: lastSimulatedDate, price: newPrice });
+            
+            // Live simulation for active periods
+            const remainingSeconds = secondsSinceLastUpdate % OFFLINE_SIMULATION_INTERVAL_SECONDS;
+            const liveIntervals = Math.floor(remainingSeconds / MARKET_UPDATE_INTERVAL_SECONDS);
+            if (liveIntervals > 0) {
+                 for (let i = 0; i < liveIntervals; i++) {
+                    const fluctuation = (Math.random() - 0.5) * 2 * VOLATILITY_FACTOR;
+                    newPrice *= (1 + fluctuation + sentimentModifier);
+                    newPrice = Math.max(newPrice, 0.01);
+                    lastSimulatedDate = new Timestamp(lastSimulatedDate.seconds + MARKET_UPDATE_INTERVAL_SECONDS, 0);
+                    transaction.set(doc(collection(db, 'historical_data', assetData.ticker, 'points')), { date: lastSimulatedDate, price: newPrice });
+                }
             }
 
-            // Fetch 24h old price for accurate change calculation
-            const twentyFourHoursAgo = new Timestamp(now.seconds - 24 * 60 * 60, now.nanoseconds);
-            const historyQuery = query(collection(db, 'historical_data', assetData.ticker, 'points'), where('date', '<=', twentyFourHoursAgo), orderBy('date', 'desc'), limit(1));
-            const oldPriceSnapshot = await getDocs(historyQuery);
-            const price24hAgo = oldPriceSnapshot.empty ? assetData.initialPrice24h : oldPriceSnapshot.docs[0].data().price;
-
+            // Update 24h reference price if needed
+            let price24hAgo = assetData.price24hAgo;
+            const needs24hUpdate = now.seconds - assetData.price24hAgoLastUpdate.seconds > 24 * 3600;
+            if (needs24hUpdate) {
+                price24hAgo = assetData.price;
+            }
+            
             const change = newPrice - price24hAgo;
-            const changePercent = (change / price24hAgo) * 100;
+            const changePercent = (price24hAgo > 0) ? (change / price24hAgo) * 100 : 0;
             const newChange24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
 
-            const assetRef = doc(db, 'market_state', assetData.ticker);
-            transaction.update(assetRef, {
+            const updatePayload: { [key: string]: any } = {
                 price: newPrice,
                 change24h: newChange24h,
                 lastUpdate: now,
-            });
+            };
+            if (needs24hUpdate) {
+                updatePayload.price24hAgo = price24hAgo;
+                updatePayload.price24hAgoLastUpdate = now;
+            }
+            transaction.update(assetRef, updatePayload);
         }
     });
-    console.log('Market update transaction completed successfully.');
+    console.log('Market simulation completed successfully.');
   } catch (error) {
-    console.error("Failed to run market update transaction:", error);
+    console.error("Failed to run market simulation:", error);
   }
 }
 
@@ -178,7 +195,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         const unsubscribeFunctions: (() => void)[] = [];
 
         const assetsUnsubscribe = onSnapshot(collection(db, 'market_state'), (snapshot) => {
-            if (snapshot.empty) {
+            if (snapshot.empty && !Object.keys(assets).length) {
               console.log("Market state is empty, attempting to seed.");
               updateMarketData().then(() => setLoading(false)).catch(console.error);
               return;

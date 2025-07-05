@@ -5,7 +5,8 @@ import { usePortfolio } from '@/context/portfolio-context';
 import { useMarketData } from '@/context/market-data-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { TradeDialog } from '@/components/trade-dialog';
+import { Button } from '@/components/ui/button';
 
 export default function PortfolioClientPage() {
     const { holdings, cash, initialCash } = usePortfolio();
@@ -74,7 +75,8 @@ export default function PortfolioClientPage() {
                                 <TableHead>Coût Moyen</TableHead>
                                 <TableHead>Prix Actuel</TableHead>
                                 <TableHead>Valeur Actuelle</TableHead>
-                                <TableHead className="text-right">Gains/Pertes</TableHead>
+                                <TableHead>Gains/Pertes</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -89,15 +91,24 @@ export default function PortfolioClientPage() {
                                         <TableCell>${holding.avgCost.toFixed(2)}</TableCell>
                                         <TableCell>${holding.currentPrice.toFixed(2)}</TableCell>
                                         <TableCell>${holding.currentValue.toFixed(2)}</TableCell>
-                                        <TableCell className={`text-right font-medium ${holding.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                        <TableCell className={`font-medium ${holding.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                                             <div>{holding.pnl >= 0 ? '+' : '-'}${Math.abs(holding.pnl).toFixed(2)}</div>
                                             <div className="text-xs">({holding.pnlPercent.toFixed(2)}%)</div>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {holding.asset ? (
+                                                <TradeDialog asset={holding.asset} tradeType="Sell">
+                                                    <Button variant="secondary" size="sm">Vendre</Button>
+                                                </TradeDialog>
+                                            ) : (
+                                                <Button variant="secondary" size="sm" disabled>Vendre</Button>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
+                                    <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
                                         Vous ne possédez aucun actif pour le moment.
                                     </TableCell>
                                 </TableRow>
