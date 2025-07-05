@@ -1,65 +1,109 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { CreateMarketDialog } from '@/components/create-market-dialog';
+import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
+import { Loader2 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
-const markets = [
-  {
-    title: "Vainqueur de l'élection présidentielle américaine",
-    category: "Politique",
-    outcomes: [
-      { name: "Candidat A", odds: "55%" },
-      { name: "Candidat B", odds: "45%" },
-    ],
-  },
-  {
-    title: "L'inflation américaine sera-t-elle inférieure à 3% au T4?",
-    category: "Économie",
-    outcomes: [
-      { name: "Oui", odds: "65%" },
-      { name: "Non", odds: "35%" },
-    ],
-  },
-  {
-    title: "Vainqueur de la Coupe du Monde 2026",
-    category: "Sports",
-    outcomes: [
-      { name: "Brésil", odds: "20%" },
-      { name: "France", odds: "18%" },
-      { name: "Argentine", odds: "15%" },
-      { name: "Autre", odds: "47%" },
-    ],
-  },
-];
+export interface Market {
+  id: string;
+  title: string;
+  category: string;
+  outcomes: { name: string; pool: number }[];
+  totalPool: number;
+  creatorDisplayName: string;
+  status: 'open' | 'closed' | 'settled';
+  closingAt: Timestamp;
+  createdAt: Timestamp;
+}
 
 export default function PredictionMarketsPage() {
+  const [markets, setMarkets] = useState<Market[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, 'prediction_markets'),
+      where('status', '==', 'open'),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const marketsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Market));
+      setMarkets(marketsData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching markets: ", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const getOdds = (pool: number, totalPool: number) => {
+    if (totalPool === 0) return 0;
+    return Math.round((pool / totalPool) * 100);
+  }
+
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      <div className="lg:col-span-3">
-        <h1 className="text-2xl font-bold tracking-tight">Marché des Paris</h1>
-        <p className="text-muted-foreground">Pariez sur le résultat d'événements du monde réel.</p>
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Marché des Paris</h1>
+          <p className="text-muted-foreground">Pariez sur le résultat d'événements du monde réel.</p>
+        </div>
+        <CreateMarketDialog />
       </div>
-      {markets.map((market, index) => (
-        <Card key={index} className="flex flex-col">
-          <CardHeader>
-            <CardTitle>{market.title}</CardTitle>
-            <CardDescription>{market.category}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-grow space-y-4">
-            {market.outcomes.map((outcome, i) => (
-              <div key={i} className="space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span>{outcome.name}</span>
-                  <span className="font-semibold">{outcome.odds}</span>
-                </div>
-                <Progress value={parseInt(outcome.odds)} />
-              </div>
-            ))}
-          </CardContent>
-          <CardFooter>
-            <Button className="w-full">Placer un Pari</Button>
-          </CardFooter>
-        </Card>
-      ))}
+
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      ) : markets.length === 0 ? (
+        <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30">
+            <p className="text-muted-foreground">Aucun marché ouvert pour le moment. Soyez le premier à en créer un !</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {markets.map((market) => (
+            <Card key={market.id} className="flex flex-col">
+              <CardHeader>
+                <CardTitle>{market.title}</CardTitle>
+                <CardDescription>
+                  Par {market.creatorDisplayName} • Ferme dans {formatDistanceToNow(market.closingAt.toDate(), { locale: fr })}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex-grow space-y-4">
+                {market.outcomes.map((outcome, i) => {
+                  const odds = getOdds(outcome.pool, market.totalPool);
+                  return (
+                    <div key={i} className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span>{outcome.name}</span>
+                        <span className="font-semibold">{odds}%</span>
+                      </div>
+                      <Progress value={odds} />
+                    </div>
+                  )
+                })}
+              </CardContent>
+              <CardFooter className="flex-col items-stretch gap-2">
+                 <div className="text-xs text-muted-foreground text-center">Pot Total : ${market.totalPool.toFixed(2)}</div>
+                <Button className="w-full">Placer un Pari</Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

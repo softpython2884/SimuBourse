@@ -53,11 +53,53 @@ export default function ProfileClientPage() {
                 currentPrice,
                 currentValue,
                 pnl,
-                pnlPercent
+                pnlPercent,
+                isRealized: false,
             };
         }).sort((a, b) => b.currentValue - a.currentValue);
     }, [holdings, getAssetByTicker]);
     
+    const realizedPnL = useMemo(() => {
+        const transactionMap: { [key: string]: { buys: number, sells: number, name: string } } = {};
+
+        transactions.forEach(tx => {
+            if (!transactionMap[tx.asset.ticker]) {
+                transactionMap[tx.asset.ticker] = { buys: 0, sells: 0, name: tx.asset.name };
+            }
+            if (tx.type === 'Buy') {
+                transactionMap[tx.asset.ticker].buys += tx.value;
+            } else {
+                transactionMap[tx.asset.ticker].sells += tx.value;
+            }
+        });
+
+        const holdingTickers = new Set(holdings.map(h => h.ticker));
+
+        return Object.keys(transactionMap)
+            .filter(ticker => !holdingTickers.has(ticker) && transactionMap[ticker].sells > 0)
+            .map(ticker => {
+                const pnl = transactionMap[ticker].sells - transactionMap[ticker].buys;
+                const costBasis = transactionMap[ticker].buys;
+                return {
+                    ticker,
+                    name: transactionMap[ticker].name,
+                    quantity: 0,
+                    currentValue: 0,
+                    pnl,
+                    pnlPercent: costBasis > 0 ? (pnl / costBasis) * 100 : 0,
+                    isRealized: true,
+                };
+            });
+    }, [transactions, holdings]);
+
+    const allAssetsPerformance = useMemo(() => {
+        return [...holdingsWithMarketData, ...realizedPnL].sort((a,b) => {
+            if (a.isRealized && !b.isRealized) return 1;
+            if (!a.isRealized && b.isRealized) return -1;
+            return (b.currentValue || b.pnl) - (a.currentValue || a.pnl);
+        });
+    }, [holdingsWithMarketData, realizedPnL]);
+
     const portfolioValue = useMemo(() => {
         const assetsValue = holdingsWithMarketData.reduce((total, holding) => total + holding.currentValue, 0);
         return cash + assetsValue;
@@ -170,7 +212,7 @@ export default function ProfileClientPage() {
                <Card>
                 <CardHeader>
                   <CardTitle>Gains & Pertes par Actif</CardTitle>
-                  <CardDescription>Performance de vos actifs actuels.</CardDescription>
+                  <CardDescription>Performance de vos actifs actuels et passés.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -183,15 +225,18 @@ export default function ProfileClientPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {holdingsWithMarketData.length > 0 ? (
-                        holdingsWithMarketData.map(holding => (
-                          <TableRow key={holding.ticker}>
+                      {allAssetsPerformance.length > 0 ? (
+                        allAssetsPerformance.map(holding => (
+                          <TableRow key={holding.ticker} className={holding.isRealized ? "opacity-60" : ""}>
                             <TableCell>
                               <div className="font-medium">{holding.name}</div>
-                              <div className="text-sm text-muted-foreground">{holding.ticker}</div>
+                              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                                {holding.ticker}
+                                {holding.isRealized && <Badge variant="outline">Vendu</Badge>}
+                              </div>
                             </TableCell>
-                            <TableCell>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 5 })}</TableCell>
-                            <TableCell>${holding.currentValue.toFixed(2)}</TableCell>
+                            <TableCell>{holding.quantity > 0 ? holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 5 }) : '-'}</TableCell>
+                            <TableCell>${holding.currentValue > 0 ? holding.currentValue.toFixed(2) : '0.00'}</TableCell>
                             <TableCell className={`font-medium ${holding.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                               <div>{holding.pnl >= 0 ? '+' : '-'}${Math.abs(holding.pnl).toFixed(2)}</div>
                               <div className="text-xs">({holding.pnlPercent.toFixed(2)}%)</div>
@@ -201,7 +246,7 @@ export default function ProfileClientPage() {
                       ) : (
                         <TableRow>
                           <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
-                            Vous ne possédez aucun actif.
+                            Vous n'avez aucun historique d'actifs.
                           </TableCell>
                         </TableRow>
                       )}
