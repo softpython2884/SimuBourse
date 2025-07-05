@@ -6,7 +6,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyBsl_3iwowf_cZKoRm6SNXXk3Kn7-aAzCM",
   authDomain: "simubourse.firebaseapp.com",
   projectId: "simubourse",
-  storageBucket: "simubourse.appspot.com",
+  storageBucket: "simubourse.firebasestorage.app",
   messagingSenderId: "943658338198",
   appId: "1:943658338198:web:8d7b126e4ddec0e1557fb7"
 };
