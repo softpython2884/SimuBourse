@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { AppSidebar } from '@/components/layout/sidebar';
 import { AppHeader } from '@/components/layout/header';
 import { AuthProvider } from '@/context/auth-context';
+import { PortfolioProvider } from '@/context/portfolio-context';
 
 export const metadata: Metadata = {
   title: 'SimuBourse',
@@ -27,16 +28,18 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
-          <div className="flex min-h-screen w-full flex-col bg-muted/40">
-            <AppSidebar />
-            <div className="flex flex-col sm:pl-14">
-              <AppHeader />
-              <main className="flex-1 p-4 sm:px-6 sm:py-6">
-                {children}
-              </main>
+          <PortfolioProvider>
+            <div className="flex min-h-screen w-full flex-col bg-muted/40">
+              <AppSidebar />
+              <div className="flex flex-col sm:pl-14">
+                <AppHeader />
+                <main className="flex-1 p-4 sm:px-6 sm:py-6">
+                  {children}
+                </main>
+              </div>
             </div>
-          </div>
-          <Toaster />
+            <Toaster />
+          </PortfolioProvider>
         </AuthProvider>
       </body>
     </html>

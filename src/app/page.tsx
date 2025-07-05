@@ -1,3 +1,6 @@
+'use client';
+
+import { useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -16,8 +19,61 @@ import {
 import { Button } from "@/components/ui/button"
 import { ArrowUpRight, Wallet, Bitcoin, TrendingUp, Trophy } from "lucide-react"
 import Link from "next/link"
+import { usePortfolio } from '@/context/portfolio-context';
+
+// In a real app, this would come from a backend API or a shared state
+const marketPrices: { [ticker: string]: number } = {
+  'AAPL': 207.69,
+  'MSFT': 442.57,
+  'AMZN': 183.63,
+  'BTC': 67120.50,
+  'ETH': 3450.78,
+  'XAU': 2320.50,
+  'EURUSD': 1.0712,
+  'NVDA': 120.89,
+  'TSLA': 177.46,
+};
+
+const topMovers = [
+  { name: 'Tesla, Inc.', ticker: 'TSLA', price: '$177.46', change: '+5.42%', marketCap: '$565.4B' },
+  { name: 'Bitcoin', ticker: 'BTC', price: '$67,120.50', change: '+2.10%', marketCap: '$1.32T' },
+  { name: 'Ethereum', ticker: 'ETH', price: '$3,450.78', change: '-1.50%', marketCap: '$414.5B' },
+  { name: 'NVIDIA Corporation', ticker: 'NVDA', price: '$120.89', change: '+8.97%', marketCap: '$2.97T' },
+];
 
 export default function Home() {
+  const { cash, holdings, transactions, initialCash } = usePortfolio();
+
+  const portfolioValue = useMemo(() => {
+    const assetsValue = holdings.reduce((total, holding) => {
+        const currentPrice = marketPrices[holding.ticker] || holding.avgCost;
+        return total + (currentPrice * holding.quantity);
+    }, 0);
+    return cash + assetsValue;
+  }, [cash, holdings]);
+
+  const portfolioChange = useMemo(() => {
+    if (initialCash === 0) return 0;
+    const change = portfolioValue - initialCash;
+    const percentage = (change / initialCash) * 100;
+    return percentage;
+  }, [portfolioValue, initialCash]);
+
+  const btcHoldings = useMemo(() => {
+    return holdings.find(h => h.ticker === 'BTC')?.quantity || 0;
+  }, [holdings]);
+
+  const recentTransactions = useMemo(() => {
+    return transactions.slice(0, 3).map(tx => {
+      return {
+        description: `${tx.type === 'Buy' ? 'Bought' : 'Sold'} ${tx.quantity} ${tx.asset.ticker}`,
+        details: tx.asset.name,
+        amount: `${tx.type === 'Buy' ? '-' : '+'}$${tx.value.toFixed(2)}`
+      }
+    });
+  }, [transactions]);
+
+
   return (
     <div className="flex flex-1 flex-col gap-4 md:gap-8">
       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
@@ -29,35 +85,35 @@ export default function Home() {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$45,231.89</div>
-            <p className="text-xs text-muted-foreground">
-              +20.1% from last month
+            <div className="text-2xl font-bold">${portfolioValue.toFixed(2)}</div>
+            <p className={`text-xs ${portfolioChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {portfolioChange >= 0 ? '+' : ''}{portfolioChange.toFixed(2)}% from start
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Crypto Holdings
+              Crypto Holdings (BTC)
             </CardTitle>
             <Bitcoin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+2.73 BTC</div>
+            <div className="text-2xl font-bold">{btcHoldings.toFixed(4)} BTC</div>
             <p className="text-xs text-muted-foreground">
-              +18.1% from last month
+              Value: ${(btcHoldings * (marketPrices['BTC'] || 0)).toFixed(2)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Open Trades</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+12</div>
+            <div className="text-2xl font-bold">+{transactions.length}</div>
             <p className="text-xs text-muted-foreground">
-              +2 since last hour
+              Across all markets
             </p>
           </CardContent>
         </Card>
@@ -69,9 +125,9 @@ export default function Home() {
             <Trophy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+54</div>
+            <div className="text-2xl font-bold">0</div>
             <p className="text-xs text-muted-foreground">
-              3 new predictions active
+              No predictions made yet
             </p>
           </CardContent>
         </Card>
@@ -103,50 +159,19 @@ export default function Home() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow>
-                  <TableCell>
-                    <div className="font-medium">Tesla, Inc.</div>
-                    <div className="hidden text-sm text-muted-foreground md:inline">
-                      TSLA
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">$177.46</TableCell>
-                  <TableCell className="hidden sm:table-cell text-right text-green-500 dark:text-green-400">+5.42%</TableCell>
-                  <TableCell className="hidden md:table-cell text-right">$565.4B</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <div className="font-medium">Bitcoin</div>
-                    <div className="hidden text-sm text-muted-foreground md:inline">
-                      BTC
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">$67,120.50</TableCell>
-                  <TableCell className="hidden sm:table-cell text-right text-green-500 dark:text-green-400">+2.10%</TableCell>
-                  <TableCell className="hidden md:table-cell text-right">$1.32T</TableCell>
-                </TableRow>
-                 <TableRow>
-                  <TableCell>
-                    <div className="font-medium">Ethereum</div>
-                    <div className="hidden text-sm text-muted-foreground md:inline">
-                      ETH
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">$3,450.78</TableCell>
-                   <TableCell className="hidden sm:table-cell text-right text-red-500 dark:text-red-400">-1.50%</TableCell>
-                  <TableCell className="hidden md:table-cell text-right">$414.5B</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <div className="font-medium">NVIDIA Corporation</div>
-                    <div className="hidden text-sm text-muted-foreground md:inline">
-                      NVDA
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">$120.89</TableCell>
-                  <TableCell className="hidden sm:table-cell text-right text-green-500 dark:text-green-400">+8.97%</TableCell>
-                  <TableCell className="hidden md:table-cell text-right">$2.97T</TableCell>
-                </TableRow>
+                {topMovers.map(mover => (
+                  <TableRow key={mover.ticker}>
+                    <TableCell>
+                      <div className="font-medium">{mover.name}</div>
+                      <div className="hidden text-sm text-muted-foreground md:inline">
+                        {mover.ticker}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">{mover.price}</TableCell>
+                    <TableCell className={`hidden sm:table-cell text-right ${mover.change.startsWith('+') ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>{mover.change}</TableCell>
+                    <TableCell className="hidden md:table-cell text-right">{mover.marketCap}</TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </CardContent>
@@ -156,39 +181,24 @@ export default function Home() {
             <CardTitle>Recent Transactions</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-8">
-            <div className="flex items-center gap-4">
-              <div className="grid gap-1">
-                <p className="text-sm font-medium leading-none">
-                  Bought 10 AAPL
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Apple Inc.
-                </p>
+            {recentTransactions.length > 0 ? (
+              recentTransactions.map((tx, index) => (
+              <div className="flex items-center gap-4" key={index}>
+                <div className="grid gap-1">
+                  <p className="text-sm font-medium leading-none">
+                    {tx.description}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {tx.details}
+                  </p>
+                </div>
+                <div className={`ml-auto font-medium ${tx.amount.startsWith('-') ? 'text-red-500' : 'text-green-500'}`}>{tx.amount}</div>
               </div>
-              <div className="ml-auto font-medium">-$2,076.90</div>
-            </div>
-            <div className="flex items-center gap-4">
-               <div className="grid gap-1">
-                <p className="text-sm font-medium leading-none">
-                  Sold 0.5 ETH
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Ethereum
-                </p>
-              </div>
-              <div className="ml-auto font-medium">+$1,725.39</div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="grid gap-1">
-                <p className="text-sm font-medium leading-none">
-                  Won Prediction
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Election Outcome: Candidate A
-                </p>
-              </div>
-              <div className="ml-auto font-medium">+$500.00</div>
-            </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No recent transactions.</p>
+            )
+          }
           </CardContent>
         </Card>
       </div>
