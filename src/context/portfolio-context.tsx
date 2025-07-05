@@ -166,15 +166,19 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
 
+        // --- All reads must happen first ---
         const userDoc = await transaction.get(userDocRef);
+        const holdingDoc = await transaction.get(holdingDocRef);
+
+        // --- Perform checks on read data ---
         if (!userDoc.exists() || userDoc.data().cash < cost) {
           throw new Error('Fonds insuffisants.');
         }
 
+        // --- All writes happen after reads ---
         const currentCash = userDoc.data().cash;
         transaction.update(userDocRef, { cash: currentCash - cost });
 
-        const holdingDoc = await transaction.get(holdingDocRef);
         if (holdingDoc.exists()) {
           const currentHolding = holdingDoc.data();
           const newQuantity = currentHolding.quantity + quantity;
@@ -252,7 +256,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       toast({
         variant: 'destructive',
         title: 'Échec de la vente',
-        description: e.message || 'An error occurred.',
+        description: e.message || 'Une erreur est survenue.',
       });
     }
   }, [user, toast]);

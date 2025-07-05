@@ -155,9 +155,22 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         if (user) {
+            console.log("User logged in, starting market updates.");
             updateMarketData().catch(err => {
-              console.error("An error occurred during market update:", err);
+              console.error("An error occurred during initial market update:", err);
             });
+
+            const intervalId = setInterval(() => {
+                console.log("Periodic market update triggered.");
+                updateMarketData().catch(err => {
+                    console.error("An error occurred during periodic market update:", err);
+                });
+            }, 60 * 1000); // Every 60 seconds
+
+            return () => {
+                console.log("User logged out, stopping market updates.");
+                clearInterval(intervalId);
+            };
         }
     }, [user]);
 
