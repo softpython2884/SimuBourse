@@ -47,28 +47,22 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
         
         try {
             const newsDoc = await getDoc(newsDocRef);
-            const twentyFourHoursAgo = Timestamp.now().toMillis() - (24 * 60 * 60 * 1000);
+            const oneHourAgo = Timestamp.now().toMillis() - (60 * 60 * 1000);
 
-            let newsIsStale = true;
-            if (newsDoc.exists() && newsDoc.data().generatedAt.toMillis() > twentyFourHoursAgo) {
-                setNews(newsDoc.data() as GenerateAssetNewsOutput);
-                newsIsStale = false;
+            let isStale = true;
+            if (newsDoc.exists()) {
+                isStale = newsDoc.data().generatedAt.toMillis() < oneHourAgo;
             }
 
-            if (newsIsStale && user) {
+            if (isStale && user) {
                 const result = await generateAssetNews({ ticker: asset.ticker, name: asset.name });
-                const dataToCache = {
-                    ...result,
-                    generatedAt: Timestamp.now()
-                };
+                const dataToCache = { ...result, generatedAt: Timestamp.now() };
                 await setDoc(newsDocRef, dataToCache);
                 setNews(result);
-            } else if (newsIsStale && !user) {
-                if (newsDoc.exists()) {
-                    setNews(newsDoc.data() as GenerateAssetNewsOutput)
-                } else {
-                    setNews(null);
-                }
+            } else if (newsDoc.exists()) {
+                setNews(newsDoc.data() as GenerateAssetNewsOutput);
+            } else {
+                setNews(null);
             }
         } catch (error) {
             console.error("Failed to fetch or generate AI news:", error);
