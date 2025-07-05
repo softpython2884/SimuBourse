@@ -25,15 +25,21 @@ export const getAssetByTicker = (ticker: string) => {
 export const generateHistoricalData = (basePrice: number, days: number) => {
     const data = [];
     let price = basePrice;
-    const today = new Date();
-    for (let i = 0; i < days; i++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - (days - i - 1));
-        const fluctuation = (Math.random() - 0.5) * price * 0.05; // 5% fluctuation
+    const now = new Date();
+    const minutesPerPoint = 10; // Generate a data point every 10 minutes
+    const totalMinutes = days * 24 * 60;
+    const pointsToGenerate = totalMinutes / minutesPerPoint;
+
+    for (let i = 0; i < pointsToGenerate; i++) {
+        const date = new Date(now.getTime() - (pointsToGenerate - i - 1) * minutesPerPoint * 60 * 1000);
+        
+        // Fluctuation logic suitable for 10-minute intervals
+        const fluctuation = (Math.random() - 0.5) * price * 0.002;
         price += fluctuation;
-        price = Math.max(price, 0.1); // Ensure price doesn't go below 0.1
+        price = Math.max(price, 0.1); 
+        
         data.push({
-            date: date.toISOString().split('T')[0],
+            date: date.toISOString(),
             price: parseFloat(price.toFixed(2)),
         });
     }

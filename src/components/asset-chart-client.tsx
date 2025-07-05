@@ -83,14 +83,12 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
       case '1M':
         startDate = subDays(now, 30);
         break;
+      // For ranges longer than 30 days, we'll show all available data (which is 30 days).
       case '3M':
-        startDate = subDays(now, 90);
-        break;
       case '1Y':
-        startDate = subDays(now, 365);
-        break;
       case 'ALL':
       default:
+        // By returning the full dataset, the chart will display all 30 days of data.
         return initialHistoricalData;
     }
     return initialHistoricalData.filter(d => parseISO(d.date) >= startDate);
@@ -101,6 +99,21 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
       label: 'Price',
       color: 'hsl(var(--chart-1))',
     },
+  };
+
+  const formatXAxis = (tickItem: string) => {
+    switch (timeRange) {
+      case '1D':
+        return format(parseISO(tickItem), 'HH:mm');
+      case '7D':
+        return format(parseISO(tickItem), 'EEE d');
+      case '1M':
+      case '3M':
+      case '1Y':
+      case 'ALL':
+      default:
+        return format(parseISO(tickItem), 'MMM d');
+    }
   };
   
   const sentimentIcon = useMemo(() => {
@@ -152,7 +165,7 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
                                 tickLine={false}
                                 axisLine={false}
                                 tickMargin={8}
-                                tickFormatter={(value) => format(parseISO(value), 'MMM d')}
+                                tickFormatter={formatXAxis}
                             />
                             <YAxis
                                 domain={['dataMin', 'dataMax']}
