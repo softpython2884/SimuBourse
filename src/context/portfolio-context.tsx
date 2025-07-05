@@ -164,7 +164,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       await runTransaction(db, async (t) => {
-        // --- PHASE 1: LECTURE ---
+        // --- PHASE 1: LECTURES ---
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
         
@@ -207,12 +207,11 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
           value: cost,
           date: Timestamp.now(),
         };
+        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
 
         // --- PHASE 3: ÉCRITURE ---
         t.update(userDocRef, { cash: newCashValue });
         t.set(holdingDocRef, newHoldingData, { merge: true });
-        
-        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
         t.set(newTransactionRef, newTransactionPayload);
       });
 
@@ -266,7 +265,8 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
           value: proceeds,
           date: Timestamp.now(),
         };
-
+        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
+        
         // --- PHASE 3: ÉCRITURE ---
         t.update(userDocRef, { cash: newCashValue });
 
@@ -276,7 +276,6 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
           t.delete(holdingDocRef);
         }
 
-        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
         t.set(newTransactionRef, newTransactionPayload);
       });
 
