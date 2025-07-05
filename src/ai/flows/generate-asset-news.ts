@@ -10,13 +10,13 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const GenerateAssetNewsInputSchema = z.object({
+const GenerateAssetNewsInputSchema = z.object({
   ticker: z.string().describe('The stock ticker of the asset.'),
   name: z.string().describe('The name of the company or asset.'),
 });
 export type GenerateAssetNewsInput = z.infer<typeof GenerateAssetNewsInputSchema>;
 
-export const GenerateAssetNewsOutputSchema = z.object({
+const GenerateAssetNewsOutputSchema = z.object({
   headline: z.string().describe('A plausible, short news headline (less than 15 words).'),
   article: z.string().describe('A brief, 2-3 sentence news article expanding on the headline.'),
   sentiment: z.enum(['positive', 'negative', 'neutral']).describe('The overall sentiment of the news regarding the asset.'),
