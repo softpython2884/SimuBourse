@@ -1,7 +1,21 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from './auth-context';
+import { db } from '@/lib/firebase';
+import {
+  doc,
+  setDoc,
+  collection,
+  onSnapshot,
+  runTransaction,
+  query,
+  orderBy,
+  Timestamp,
+  deleteDoc,
+} from 'firebase/firestore';
+import { Loader2 } from 'lucide-react';
 
 export interface Asset {
   name: string;
@@ -40,103 +54,188 @@ const PortfolioContext = createContext<PortfolioContextType | undefined>(undefin
 const INITIAL_CASH = 100000;
 
 export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
-  const [cash, setCash] = useState(INITIAL_CASH);
-  const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const { user } = useAuth();
   const { toast } = useToast();
 
-  const buyAsset = useCallback((asset: Asset, quantity: number) => {
+  const [cash, setCash] = useState(INITIAL_CASH);
+  const [initialCash, setInitialCash] = useState(INITIAL_CASH);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) {
+      setCash(INITIAL_CASH);
+      setInitialCash(INITIAL_CASH);
+      setHoldings([]);
+      setTransactions([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const userDocRef = doc(db, 'users', user.uid);
+
+    const unsubscribeUser = onSnapshot(userDocRef, async (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setCash(data.cash);
+        setInitialCash(data.initialCash);
+      } else {
+        await setDoc(userDocRef, {
+          cash: INITIAL_CASH,
+          initialCash: INITIAL_CASH,
+          email: user.email,
+        });
+        setCash(INITIAL_CASH);
+        setInitialCash(INITIAL_CASH);
+      }
+    });
+
+    const holdingsCollectionRef = collection(db, 'users', user.uid, 'holdings');
+    const unsubscribeHoldings = onSnapshot(holdingsCollectionRef, (snapshot) => {
+      const userHoldings = snapshot.docs.map(
+        (doc) =>
+          ({
+            ticker: doc.id,
+            ...doc.data(),
+          } as Holding)
+      );
+      setHoldings(userHoldings);
+    });
+    
+    const transactionsCollectionRef = collection(db, 'users', user.uid, 'transactions');
+    const q = query(transactionsCollectionRef, orderBy('date', 'desc'));
+    const unsubscribeTransactions = onSnapshot(q, (snapshot) => {
+      const userTransactions = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          ...data,
+          date: (data.date as Timestamp).toDate().toISOString().split('T')[0],
+        } as Transaction;
+      });
+      setTransactions(userTransactions);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribeUser();
+      unsubscribeHoldings();
+      unsubscribeTransactions();
+    };
+  }, [user]);
+
+  const buyAsset = useCallback(async (asset: Asset, quantity: number) => {
+    if (!user) return;
     const cost = asset.price * quantity;
-    if (cost > cash) {
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const userDocRef = doc(db, 'users', user.uid);
+        const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
+
+        const userDoc = await transaction.get(userDocRef);
+        if (!userDoc.exists() || userDoc.data().cash < cost) {
+          throw new Error('Insufficient funds.');
+        }
+
+        const currentCash = userDoc.data().cash;
+        transaction.update(userDocRef, { cash: currentCash - cost });
+
+        const holdingDoc = await transaction.get(holdingDocRef);
+        if (holdingDoc.exists()) {
+          const currentHolding = holdingDoc.data();
+          const newQuantity = currentHolding.quantity + quantity;
+          const newTotalCost = (currentHolding.avgCost * currentHolding.quantity) + cost;
+          const newAvgCost = newTotalCost / newQuantity;
+          transaction.update(holdingDocRef, { quantity: newQuantity, avgCost: newAvgCost });
+        } else {
+          transaction.set(holdingDocRef, { quantity, avgCost: asset.price, name: asset.name, type: asset.type });
+        }
+
+        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
+        transaction.set(newTransactionRef, {
+          type: 'Buy',
+          asset: { name: asset.name, ticker: asset.ticker },
+          quantity,
+          price: asset.price,
+          value: cost,
+          date: Timestamp.now(),
+        });
+      });
+      toast({
+        title: 'Purchase Successful',
+        description: `You bought ${quantity} of ${asset.ticker} for $${cost.toFixed(2)}.`,
+      });
+    } catch (e: any) {
       toast({
         variant: 'destructive',
-        title: 'Insufficient Funds',
-        description: `You need $${cost.toFixed(2)} but only have $${cash.toFixed(2)}.`,
+        title: 'Purchase Failed',
+        description: e.message || 'An error occurred.',
       });
-      return;
     }
+  }, [user, toast]);
 
-    setCash(prevCash => prevCash - cost);
-
-    setHoldings(prevHoldings => {
-      const existingHoldingIndex = prevHoldings.findIndex(h => h.ticker === asset.ticker);
-      if (existingHoldingIndex > -1) {
-        const existingHolding = prevHoldings[existingHoldingIndex];
-        const newQuantity = existingHolding.quantity + quantity;
-        const newTotalCost = (existingHolding.avgCost * existingHolding.quantity) + cost;
-        const newAvgCost = newTotalCost / newQuantity;
-        
-        const updatedHoldings = [...prevHoldings];
-        updatedHoldings[existingHoldingIndex] = { ...existingHolding, quantity: newQuantity, avgCost: newAvgCost };
-        return updatedHoldings;
-      } else {
-        return [...prevHoldings, { ticker: asset.ticker, quantity, avgCost: asset.price }];
-      }
-    });
-
-    const newTransaction: Transaction = {
-      type: 'Buy',
-      asset: { name: asset.name, ticker: asset.ticker },
-      quantity,
-      price: asset.price,
-      value: cost,
-      date: new Date().toISOString().split('T')[0],
-    };
-    setTransactions(prev => [newTransaction, ...prev]);
-
-    toast({
-      title: 'Purchase Successful',
-      description: `You bought ${quantity} of ${asset.ticker} for $${cost.toFixed(2)}.`,
-    });
-  }, [cash, toast]);
-
-  const sellAsset = useCallback((asset: Asset, quantity: number) => {
-    const existingHolding = holdings.find(h => h.ticker === asset.ticker);
-    if (!existingHolding || existingHolding.quantity < quantity) {
-      toast({
-        variant: 'destructive',
-        title: 'Insufficient Holdings',
-        description: `You are trying to sell ${quantity} of ${asset.ticker} but you only own ${existingHolding?.quantity || 0}.`,
-      });
-      return;
-    }
-
+  const sellAsset = useCallback(async (asset: Asset, quantity: number) => {
+    if (!user) return;
     const proceeds = asset.price * quantity;
-    setCash(prevCash => prevCash + proceeds);
+    try {
+      await runTransaction(db, async (transaction) => {
+        const userDocRef = doc(db, 'users', user.uid);
+        const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
+        
+        const userDoc = await transaction.get(userDocRef);
+        const holdingDoc = await transaction.get(holdingDocRef);
 
-    setHoldings(prevHoldings => {
-      const holdingIndex = prevHoldings.findIndex(h => h.ticker === asset.ticker);
-      const holding = prevHoldings[holdingIndex];
-      const newQuantity = holding.quantity - quantity;
+        if (!userDoc.exists()) throw new Error('User not found.');
+        if (!holdingDoc.exists() || holdingDoc.data().quantity < quantity) {
+          throw new Error(`You are trying to sell ${quantity} of ${asset.ticker} but you only own ${holdingDoc.data()?.quantity || 0}.`);
+        }
 
-      if (newQuantity === 0) {
-        return prevHoldings.filter(h => h.ticker !== asset.ticker);
-      } else {
-        const updatedHoldings = [...prevHoldings];
-        updatedHoldings[holdingIndex] = { ...holding, quantity: newQuantity };
-        return updatedHoldings;
-      }
-    });
+        const currentCash = userDoc.data().cash;
+        transaction.update(userDocRef, { cash: currentCash + proceeds });
 
-    const newTransaction: Transaction = {
-      type: 'Sell',
-      asset: { name: asset.name, ticker: asset.ticker },
-      quantity,
-      price: asset.price,
-      value: proceeds,
-      date: new Date().toISOString().split('T')[0],
-    };
-    setTransactions(prev => [newTransaction, ...prev]);
+        const newQuantity = holdingDoc.data().quantity - quantity;
+        if (newQuantity > 0) {
+          transaction.update(holdingDocRef, { quantity: newQuantity });
+        } else {
+          transaction.delete(holdingDocRef);
+        }
 
-    toast({
-      title: 'Sale Successful',
-      description: `You sold ${quantity} of ${asset.ticker} for $${proceeds.toFixed(2)}.`,
-    });
-  }, [holdings, toast]);
-  
+        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
+        transaction.set(newTransactionRef, {
+          type: 'Sell',
+          asset: { name: asset.name, ticker: asset.ticker },
+          quantity,
+          price: asset.price,
+          value: proceeds,
+          date: Timestamp.now(),
+        });
+      });
+      toast({
+        title: 'Sale Successful',
+        description: `You sold ${quantity} of ${asset.ticker} for $${proceeds.toFixed(2)}.`,
+      });
+    } catch (e: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Sale Failed',
+        description: e.message || 'An error occurred.',
+      });
+    }
+  }, [user, toast]);
+
   const getHoldingQuantity = (ticker: string) => {
-    return holdings.find(h => h.ticker === ticker)?.quantity || 0;
+    return holdings.find((h) => h.ticker === ticker)?.quantity || 0;
   };
+  
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   const contextValue = {
     cash,
@@ -145,7 +244,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     buyAsset,
     sellAsset,
     getHoldingQuantity,
-    initialCash: INITIAL_CASH,
+    initialCash,
   };
 
   return (
