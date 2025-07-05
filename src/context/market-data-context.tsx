@@ -19,8 +19,6 @@ import {
 } from 'firebase/firestore';
 import { assets as initialAssets, DetailedAsset } from '@/lib/assets';
 import { useAuth } from './auth-context';
-import { generateAssetNews } from '@/ai/flows/generate-asset-news';
-
 
 export type HistoricalDataPoint = {
     date: string;
@@ -41,14 +39,12 @@ const MarketDataContext = createContext<MarketDataContextType | undefined>(undef
 
 const MARKET_UPDATE_INTERVAL_MINUTES = 1;
 
-// This function now runs on the client, authenticated.
 async function updateMarketData() {
   console.log('Checking if market data needs seeding or updating...');
   
-  // 1. Seed data if it doesn't exist
   const marketStateRef = collection(db, 'market_state');
-  const snapshot = await getDocs(marketStateRef);
-  if (snapshot.empty) {
+  const marketStateSnapshot = await getDocs(marketStateRef);
+  if (marketStateSnapshot.empty) {
     console.log('Initialising market in Firestore...');
     const batch = writeBatch(db);
     for (const asset of initialAssets) {
@@ -74,17 +70,16 @@ async function updateMarketData() {
     console.log('Market initialised.');
   }
 
-  // 2. Run the update transaction
   try {
+    const assetsQuery = query(collection(db, 'market_state'));
+    const assetsSnapshot = await getDocs(assetsQuery);
+
     await runTransaction(db, async (transaction) => {
       console.log('Running market update transaction...');
-      const assetsSnapshot = await transaction.get(query(collection(db, 'market_state')));
-
       const now = Timestamp.now();
       const twentyFourHoursAgo = new Timestamp(now.seconds - 24 * 60 * 60, now.nanoseconds);
       let needsUpdate = false;
 
-      // First, check if any asset actually needs an update to avoid unnecessary work
       for (const assetDoc of assetsSnapshot.docs) {
           const assetData = assetDoc.data() as DetailedAsset & { lastUpdate: Timestamp };
           const minutesSinceLastUpdate = (now.seconds - assetData.lastUpdate.seconds) / 60;
@@ -111,11 +106,10 @@ async function updateMarketData() {
           continue;
         }
 
-        let baseFluctuation = (Math.random() - 0.5) * 0.02; // Volatility
+        let baseFluctuation = (Math.random() - 0.5) * 0.02; 
         let sentimentModifier = 0;
         
         const newsDocRef = doc(db, 'asset_news', assetData.ticker);
-        // We use a direct getDoc here instead of transaction.get because we might write to it later outside the transaction.
         const newsDoc = await getDoc(newsDocRef);
         let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
         
@@ -123,8 +117,8 @@ async function updateMarketData() {
             sentiment = newsDoc.data().sentiment;
         }
 
-        if (sentiment === 'positive') sentimentModifier = Math.random() * 0.01; // Positive drift
-        if (sentiment === 'negative') sentimentModifier = Math.random() * -0.01; // Negative drift
+        if (sentiment === 'positive') sentimentModifier = Math.random() * 0.01;
+        if (sentiment === 'negative') sentimentModifier = Math.random() * -0.01;
         
         const totalChangeFactor = 1 + baseFluctuation + sentimentModifier;
         let newPrice = assetData.price * totalChangeFactor;
@@ -180,7 +174,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
             if (snapshot.docs.length > 0) {
               snapshot.docs.forEach(doc => {
                   const ticker = doc.id;
-                  if (!historicalData[ticker]) { // Fetch only if not already fetched
+                  if (!historicalData[ticker]) {
                       const pointsCollectionRef = collection(db, 'historical_data', ticker, 'points');
                       const q = query(pointsCollectionRef, orderBy('date', 'desc'), limit(1440));
                       
