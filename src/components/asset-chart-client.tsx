@@ -21,6 +21,8 @@ import { generateAssetNews, GenerateAssetNewsOutput } from '@/ai/flows/generate-
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Loader2, TrendingDown, TrendingUp, Newspaper } from 'lucide-react';
 import { subDays, format, parseISO } from 'date-fns';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 
 type TimeRange = '1D' | '7D' | '1M' | '3M' | '1Y' | 'ALL';
 
@@ -38,11 +40,28 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
     async function fetchNews() {
       if (!asset) return;
       setIsLoadingNews(true);
+      
+      const newsDocRef = doc(db, 'asset_news', asset.ticker);
+      
       try {
-        const result = await generateAssetNews({ ticker: asset.ticker, name: asset.name });
-        setNews(result);
+        const newsDoc = await getDoc(newsDocRef);
+        const twentyFourHoursAgo = Timestamp.now().toMillis() - (24 * 60 * 60 * 1000);
+
+        // Check if a recent news item exists in the cache
+        if (newsDoc.exists() && newsDoc.data().generatedAt.toMillis() > twentyFourHoursAgo) {
+          setNews(newsDoc.data() as GenerateAssetNewsOutput);
+        } else {
+          // If not, generate new news and cache it
+          const result = await generateAssetNews({ ticker: asset.ticker, name: asset.name });
+          const dataToCache = {
+              ...result,
+              generatedAt: Timestamp.now()
+          };
+          await setDoc(newsDocRef, dataToCache);
+          setNews(result);
+        }
       } catch (error) {
-        console.error("Failed to fetch AI news:", error);
+        console.error("Failed to fetch or generate AI news:", error);
         setNews({ headline: 'Erreur de chargement', article: 'Impossible de générer les actualités pour le moment.', sentiment: 'neutral' });
       } finally {
         setIsLoadingNews(false);

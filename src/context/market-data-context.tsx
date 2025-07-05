@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useRef } from 'react';
 import { assets as initialAssets, generateHistoricalData, DetailedAsset } from '@/lib/assets';
 import type { Asset } from './portfolio-context';
 import { Loader2 } from 'lucide-react';
@@ -22,6 +22,7 @@ const MarketDataContext = createContext<MarketDataContextType | undefined>(undef
 export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [assets, setAssets] = useState<DetailedAsset[]>(initialAssets);
+    const initialPricesRef = useRef<Map<string, number>>(new Map());
 
     const historicalData = useMemo(() => {
         const dataMap = new Map<string, HistoricalData[]>();
@@ -32,15 +33,27 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     useEffect(() => {
+        initialAssets.forEach(asset => {
+            if (!initialPricesRef.current.has(asset.ticker)) {
+                initialPricesRef.current.set(asset.ticker, asset.price);
+            }
+        });
+
         const interval = setInterval(() => {
             setAssets(prevAssets => 
                 prevAssets.map(asset => {
-                    const fluctuation = (Math.random() - 0.49) * asset.price * 0.005; // Smaller fluctuation for real-time
+                    const fluctuation = (Math.random() - 0.495) * asset.price * 0.01; 
                     const newPrice = Math.max(asset.price + fluctuation, 0.01);
-                    return { ...asset, price: newPrice };
+                    
+                    const initialPrice = initialPricesRef.current.get(asset.ticker) || newPrice;
+                    const change = newPrice - initialPrice;
+                    const changePercent = initialPrice === 0 ? 0 : (change / initialPrice) * 100;
+                    const newChange24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+
+                    return { ...asset, price: newPrice, change24h: newChange24h };
                 })
             );
-        }, 5000); // Update every 5 seconds
+        }, 5000); // Update every 5 seconds for demonstration purposes
 
         setLoading(false);
 
