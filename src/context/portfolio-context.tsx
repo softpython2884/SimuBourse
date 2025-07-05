@@ -16,6 +16,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
+import { useMarketData } from './market-data-context';
 
 export interface Asset {
   name: string;
@@ -69,6 +70,7 @@ const INITIAL_CASH = 100000;
 export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { triggerMarketUpdate } = useMarketData();
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
@@ -95,7 +97,6 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       if (docSnap.exists()) {
         setUserProfile(docSnap.data() as UserProfile);
       } else {
-        // This is a fallback in case the user doc wasn't created at signup.
         const newUserProfile: UserProfile = {
           displayName: user.displayName || user.email?.split('@')[0] || 'Joueur',
           email: user.email!,
@@ -141,6 +142,17 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user]);
 
+  useEffect(() => {
+    if (user) {
+      const intervalId = setInterval(() => {
+        console.log('Déclenchement de la mise à jour périodique du marché...');
+        triggerMarketUpdate();
+      }, 60 * 1000); // Toutes les minutes
+
+      return () => clearInterval(intervalId);
+    }
+  }, [user, triggerMarketUpdate]);
+
   const updateUserProfile = useCallback(async (data: Partial<Pick<UserProfile, 'displayName' | 'phoneNumber'>>) => {
     if (!user) return;
     const userDocRef = doc(db, 'users', user.uid);
@@ -167,14 +179,18 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       await runTransaction(db, async (transaction) => {
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
+        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
 
+        // --- PHASE DE LECTURE ---
         const userDoc = await transaction.get(userDocRef);
         const holdingDoc = await transaction.get(holdingDocRef);
 
+        // --- VALIDATION ---
         if (!userDoc.exists() || userDoc.data().cash < cost) {
           throw new Error('Fonds insuffisants.');
         }
 
+        // --- PHASE D'ÉCRITURE ---
         const currentCash = userDoc.data().cash;
         transaction.update(userDocRef, { cash: currentCash - cost });
 
@@ -193,7 +209,6 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
           });
         }
 
-        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
         transaction.set(newTransactionRef, {
           type: 'Buy',
           asset: { name: asset.name, ticker: asset.ticker },
@@ -224,14 +239,17 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
         
+        // --- PHASE DE LECTURE ---
         const userDoc = await transaction.get(userDocRef);
         const holdingDoc = await transaction.get(holdingDocRef);
 
+        // --- VALIDATION ---
         if (!userDoc.exists()) throw new Error('Utilisateur non trouvé.');
         if (!holdingDoc.exists() || holdingDoc.data().quantity < quantity) {
           throw new Error(`Vous essayez de vendre ${quantity} ${asset.ticker} mais vous en possédez seulement ${holdingDoc.data()?.quantity || 0}.`);
         }
-
+        
+        // --- PHASE D'ÉCRITURE ---
         const currentCash = userDoc.data().cash;
         transaction.update(userDocRef, { cash: currentCash + proceeds });
 
