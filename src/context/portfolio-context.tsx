@@ -70,7 +70,6 @@ const INITIAL_CASH = 100000;
 export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { triggerMarketUpdate } = useMarketData();
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
@@ -142,17 +141,6 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user]);
 
-  useEffect(() => {
-    if (user) {
-      const intervalId = setInterval(() => {
-        console.log('Déclenchement de la mise à jour périodique du marché...');
-        triggerMarketUpdate();
-      }, 60 * 1000); // Toutes les minutes
-
-      return () => clearInterval(intervalId);
-    }
-  }, [user, triggerMarketUpdate]);
-
   const updateUserProfile = useCallback(async (data: Partial<Pick<UserProfile, 'displayName' | 'phoneNumber'>>) => {
     if (!user) return;
     const userDocRef = doc(db, 'users', user.uid);
@@ -181,16 +169,16 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
         const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
 
-        // --- PHASE DE LECTURE ---
+        // --- PHASE 1: LECTURE ---
         const userDoc = await transaction.get(userDocRef);
         const holdingDoc = await transaction.get(holdingDocRef);
 
-        // --- VALIDATION ---
+        // --- PHASE 2: VALIDATION ---
         if (!userDoc.exists() || userDoc.data().cash < cost) {
           throw new Error('Fonds insuffisants.');
         }
-
-        // --- PHASE D'ÉCRITURE ---
+        
+        // --- PHASE 3: ÉCRITURE ---
         const currentCash = userDoc.data().cash;
         transaction.update(userDocRef, { cash: currentCash - cost });
 
@@ -238,29 +226,37 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       await runTransaction(db, async (transaction) => {
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
+        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
         
-        // --- PHASE DE LECTURE ---
+        // --- PHASE 1: LECTURE ---
         const userDoc = await transaction.get(userDocRef);
         const holdingDoc = await transaction.get(holdingDocRef);
 
-        // --- VALIDATION ---
-        if (!userDoc.exists()) throw new Error('Utilisateur non trouvé.');
-        if (!holdingDoc.exists() || holdingDoc.data().quantity < quantity) {
-          throw new Error(`Vous essayez de vendre ${quantity} ${asset.ticker} mais vous en possédez seulement ${holdingDoc.data()?.quantity || 0}.`);
+        // --- PHASE 2: VALIDATION ET PRÉPARATION ---
+        if (!userDoc.exists()) {
+          throw new Error('Utilisateur non trouvé.');
+        }
+        if (!holdingDoc.exists()) {
+            throw new Error(`Vous n'avez pas d'actions ${asset.ticker} à vendre.`);
+        }
+
+        const currentCash = userDoc.data().cash;
+        const currentHolding = holdingDoc.data();
+
+        if (currentHolding.quantity < quantity) {
+          throw new Error(`Vous essayez de vendre ${quantity} ${asset.ticker} mais vous en possédez seulement ${currentHolding.quantity}.`);
         }
         
-        // --- PHASE D'ÉCRITURE ---
-        const currentCash = userDoc.data().cash;
+        // --- PHASE 3: ÉCRITURE ---
         transaction.update(userDocRef, { cash: currentCash + proceeds });
 
-        const newQuantity = holdingDoc.data().quantity - quantity;
-        if (newQuantity > 0) {
+        const newQuantity = currentHolding.quantity - quantity;
+        if (newQuantity > 0.00001) { // Utiliser une petite marge pour la comparaison des flottants
           transaction.update(holdingDocRef, { quantity: newQuantity });
         } else {
           transaction.delete(holdingDocRef);
         }
 
-        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
         transaction.set(newTransactionRef, {
           type: 'Sell',
           asset: { name: asset.name, ticker: asset.ticker },
