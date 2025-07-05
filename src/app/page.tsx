@@ -20,37 +20,19 @@ import { Button } from "@/components/ui/button"
 import { ArrowUpRight, Wallet, Bitcoin, TrendingUp, Trophy } from "lucide-react"
 import Link from "next/link"
 import { usePortfolio } from '@/context/portfolio-context';
-
-// In a real app, this would come from a backend API or a shared state
-const marketPrices: { [ticker: string]: number } = {
-  'AAPL': 207.69,
-  'MSFT': 442.57,
-  'AMZN': 183.63,
-  'BTC': 67120.50,
-  'ETH': 3450.78,
-  'XAU': 2320.50,
-  'EURUSD': 1.0712,
-  'NVDA': 120.89,
-  'TSLA': 177.46,
-};
-
-const topMovers = [
-  { name: 'Tesla, Inc.', ticker: 'TSLA', price: '$177.46', change: '+5.42%', marketCap: '$565.4B' },
-  { name: 'Bitcoin', ticker: 'BTC', price: '$67,120.50', change: '+2.10%', marketCap: '$1.32T' },
-  { name: 'Ethereum', ticker: 'ETH', price: '$3,450.78', change: '-1.50%', marketCap: '$414.5B' },
-  { name: 'NVIDIA Corporation', ticker: 'NVDA', price: '$120.89', change: '+8.97%', marketCap: '$2.97T' },
-];
+import { useMarketData } from '@/context/market-data-context';
 
 export default function Home() {
   const { cash, holdings, transactions, initialCash } = usePortfolio();
+  const { assets: marketAssets, getAssetByTicker } = useMarketData();
 
   const portfolioValue = useMemo(() => {
     const assetsValue = holdings.reduce((total, holding) => {
-        const currentPrice = marketPrices[holding.ticker] || holding.avgCost;
+        const currentPrice = getAssetByTicker(holding.ticker)?.price || holding.avgCost;
         return total + (currentPrice * holding.quantity);
     }, 0);
     return cash + assetsValue;
-  }, [cash, holdings]);
+  }, [cash, holdings, getAssetByTicker]);
 
   const portfolioChange = useMemo(() => {
     if (initialCash === 0) return 0;
@@ -62,6 +44,8 @@ export default function Home() {
   const btcHoldings = useMemo(() => {
     return holdings.find(h => h.ticker === 'BTC')?.quantity || 0;
   }, [holdings]);
+  
+  const btcPrice = getAssetByTicker('BTC')?.price || 0;
 
   const recentTransactions = useMemo(() => {
     return transactions.slice(0, 3).map(tx => {
@@ -72,6 +56,18 @@ export default function Home() {
       }
     });
   }, [transactions]);
+
+  const topMovers = useMemo(() => {
+    return marketAssets
+      .filter(a => ['TSLA', 'BTC', 'ETH', 'NVDA'].includes(a.ticker))
+      .map(a => ({
+          name: a.name,
+          ticker: a.ticker,
+          price: `$${a.price.toFixed(2)}`,
+          change: a.change24h,
+          marketCap: a.marketCap,
+      }))
+  }, [marketAssets]);
 
 
   return (
@@ -101,7 +97,7 @@ export default function Home() {
           <CardContent>
             <div className="text-2xl font-bold">{btcHoldings.toFixed(4)} BTC</div>
             <p className="text-xs text-muted-foreground">
-              Valeur: ${(btcHoldings * (marketPrices['BTC'] || 0)).toFixed(2)}
+              Valeur: ${(btcHoldings * btcPrice).toFixed(2)}
             </p>
           </CardContent>
         </Card>

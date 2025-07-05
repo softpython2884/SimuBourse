@@ -9,23 +9,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { usePortfolio } from "@/context/portfolio-context";
+import { useMarketData } from "@/context/market-data-context";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
-
-// In a real app, this would come from a backend API
-const marketPrices: { [ticker: string]: number } = {
-  'AAPL': 207.69,
-  'MSFT': 442.57,
-  'AMZN': 183.63,
-  'BTC': 67120.50,
-  'ETH': 3450.78,
-  'XAU': 2320.50,
-  'EURUSD': 1.0712,
-  'NVDA': 120.89,
-  'TSLA': 177.46,
-};
 
 const profileFormSchema = z.object({
   displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
@@ -35,6 +23,7 @@ const profileFormSchema = z.object({
 
 export default function ProfileClientPage() {
     const { userProfile, updateUserProfile, transactions, cash, holdings, initialCash } = usePortfolio();
+    const { getAssetByTicker } = useMarketData();
     const [isEditing, setIsEditing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -62,11 +51,11 @@ export default function ProfileClientPage() {
     
     const portfolioValue = useMemo(() => {
         const assetsValue = holdings.reduce((total, holding) => {
-            const currentPrice = marketPrices[holding.ticker] || holding.avgCost;
+            const currentPrice = getAssetByTicker(holding.ticker)?.price || holding.avgCost;
             return total + (currentPrice * holding.quantity);
         }, 0);
         return cash + assetsValue;
-    }, [cash, holdings]);
+    }, [cash, holdings, getAssetByTicker]);
 
     const totalGains = portfolioValue - initialCash;
     const totalGainsPercentage = initialCash > 0 ? (totalGains / initialCash) * 100 : 0;

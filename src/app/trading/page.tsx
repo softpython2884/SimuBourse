@@ -1,42 +1,24 @@
 'use client';
 
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TradeDialog } from "@/components/trade-dialog";
-import type { Asset } from "@/context/portfolio-context";
-
-// Note: In a real app, this data would come from an API.
-const assets: Asset[] = [
-    { name: 'Apple Inc.', ticker: 'AAPL', price: 207.69, type: 'Stock' },
-    { name: 'Microsoft Corp.', ticker: 'MSFT', price: 442.57, type: 'Stock' },
-    { name: 'Amazon.com, Inc.', ticker: 'AMZN', price: 183.63, type: 'Stock' },
-    { name: 'Bitcoin', ticker: 'BTC', price: 67120.50, type: 'Crypto' },
-    { name: 'Ethereum', ticker: 'ETH', price: 3450.78, type: 'Crypto' },
-    { name: 'Gold Spot', ticker: 'XAU', price: 2320.50, type: 'Commodity' },
-    { name: 'EUR/USD', ticker: 'EURUSD', price: 1.0712, type: 'Forex' },
-    { name: 'NVIDIA Corporation', ticker: 'NVDA', price: 120.89, type: 'Stock' },
-    { name: 'Tesla, Inc.', ticker: 'TSLA', price: 177.46, type: 'Stock' },
-  ];
-
-  const staticData = [
-    { ticker: 'AAPL', change: '+1.24%', marketCap: '$3.18T' },
-    { ticker: 'MSFT', change: '+0.92%', marketCap: '$3.29T' },
-    { ticker: 'AMZN', change: '-0.10%', marketCap: '$1.91T' },
-    { ticker: 'BTC', change: '+2.10%', marketCap: '$1.32T' },
-    { ticker: 'ETH', change: '-1.50%', marketCap: '$414.5B' },
-    { ticker: 'XAU', change: '+0.50%', marketCap: '$15.8T' },
-    { ticker: 'EURUSD', change: '-0.21%', marketCap: 'N/A' },
-    { ticker: 'NVDA', change: '+8.97%', marketCap: '$2.97T' },
-    { ticker: 'TSLA', change: '+5.42%', marketCap: '$565.4B' },
-  ]
+import { useMarketData } from '@/context/market-data-context';
+import { Loader2 } from 'lucide-react';
 
 
 export default function TradingPage() {
+  const { assets, loading } = useMarketData();
 
-  const getAssetStaticData = (ticker: string) => {
-    return staticData.find(d => d.ticker === ticker) || { change: 'N/A', marketCap: 'N/A' };
+  if (loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -59,7 +41,7 @@ export default function TradingPage() {
           </TableHeader>
           <TableBody>
             {assets.map((asset) => {
-              const extraData = getAssetStaticData(asset.ticker);
+              const changeIsPositive = asset.change24h.startsWith('+');
               return (
               <TableRow key={asset.ticker}>
                 <TableCell>
@@ -70,11 +52,14 @@ export default function TradingPage() {
                   <Badge variant="outline">{asset.type}</Badge>
                 </TableCell>
                 <TableCell className="font-mono">${asset.price.toFixed(2)}</TableCell>
-                <TableCell className={extraData.change.startsWith('+') ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}>
-                  {extraData.change}
+                <TableCell className={changeIsPositive ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}>
+                  {asset.change24h}
                 </TableCell>
-                <TableCell>{extraData.marketCap}</TableCell>
+                <TableCell>{asset.marketCap}</TableCell>
                 <TableCell className="text-right space-x-2">
+                   <Button asChild variant="outline" size="sm">
+                    <Link href={`/trading/${asset.ticker}`}>Détails</Link>
+                   </Button>
                    <TradeDialog asset={asset} tradeType="Buy">
                     <Button variant="outline" size="sm">Acheter</Button>
                   </TradeDialog>
