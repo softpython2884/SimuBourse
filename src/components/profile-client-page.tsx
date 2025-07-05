@@ -28,7 +28,7 @@ export default function ProfileClientPage() {
 
     const form = useForm<z.infer<typeof profileFormSchema>>({
       resolver: zodResolver(profileFormSchema),
-      values: { // Use values instead of defaultValues to prevent uncontrolled component warning
+      values: { 
         displayName: userProfile?.displayName || '',
         phoneNumber: userProfile?.phoneNumber || '',
       },
@@ -39,13 +39,29 @@ export default function ProfileClientPage() {
         return displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     }
     
+    const holdingsWithMarketData = useMemo(() => {
+        return holdings.map(holding => {
+            const asset = getAssetByTicker(holding.ticker);
+            const currentPrice = asset?.price || holding.avgCost;
+            const currentValue = holding.quantity * currentPrice;
+            const totalCost = holding.quantity * holding.avgCost;
+            const pnl = currentValue - totalCost;
+            const pnlPercent = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
+            return {
+                ...holding,
+                asset,
+                currentPrice,
+                currentValue,
+                pnl,
+                pnlPercent
+            };
+        }).sort((a, b) => b.currentValue - a.currentValue);
+    }, [holdings, getAssetByTicker]);
+    
     const portfolioValue = useMemo(() => {
-        const assetsValue = holdings.reduce((total, holding) => {
-            const currentPrice = getAssetByTicker(holding.ticker)?.price || holding.avgCost;
-            return total + (currentPrice * holding.quantity);
-        }, 0);
+        const assetsValue = holdingsWithMarketData.reduce((total, holding) => total + holding.currentValue, 0);
         return cash + assetsValue;
-    }, [cash, holdings, getAssetByTicker]);
+    }, [cash, holdingsWithMarketData]);
 
     const totalGains = portfolioValue - initialCash;
     const totalGainsPercentage = initialCash > 0 ? (totalGains / initialCash) * 100 : 0;
@@ -103,7 +119,7 @@ export default function ProfileClientPage() {
               </Card>
             </div>
 
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Historique des Transactions</CardTitle>
@@ -150,6 +166,50 @@ export default function ProfileClientPage() {
                   </Table>
                 </CardContent>
               </Card>
+
+               <Card>
+                <CardHeader>
+                  <CardTitle>Gains & Pertes par Actif</CardTitle>
+                  <CardDescription>Performance de vos actifs actuels.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Actif</TableHead>
+                        <TableHead>Quantité</TableHead>
+                        <TableHead>Valeur Actuelle</TableHead>
+                        <TableHead>Gains/Pertes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {holdingsWithMarketData.length > 0 ? (
+                        holdingsWithMarketData.map(holding => (
+                          <TableRow key={holding.ticker}>
+                            <TableCell>
+                              <div className="font-medium">{holding.name}</div>
+                              <div className="text-sm text-muted-foreground">{holding.ticker}</div>
+                            </TableCell>
+                            <TableCell>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 5 })}</TableCell>
+                            <TableCell>${holding.currentValue.toFixed(2)}</TableCell>
+                            <TableCell className={`font-medium ${holding.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              <div>{holding.pnl >= 0 ? '+' : '-'}${Math.abs(holding.pnl).toFixed(2)}</div>
+                              <div className="text-xs">({holding.pnlPercent.toFixed(2)}%)</div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                            Vous ne possédez aucun actif.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
             </div>
           </div>
       </TabsContent>
