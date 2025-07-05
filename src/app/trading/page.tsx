@@ -17,8 +17,8 @@ export default function TradingPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Virtual Trading Floor</CardTitle>
-        <CardDescription>Buy and sell assets with virtual currency using real-time market data.</CardDescription>
+        <CardTitle>Trading Floor</CardTitle>
+        <CardDescription>Buy and sell assets using real-time market data.</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>

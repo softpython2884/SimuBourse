@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
@@ -17,7 +17,6 @@ export default function ProfilePage() {
         <Card>
           <CardContent className="pt-6 flex flex-col items-center text-center">
             <Avatar className="h-24 w-24 mb-4">
-              <AvatarImage src="https://placehold.co/100x100.png" alt="@username" data-ai-hint="person avatar" />
               <AvatarFallback>U</AvatarFallback>
             </Avatar>
             <h2 className="text-2xl font-bold">Username</h2>

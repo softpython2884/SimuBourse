@@ -15,8 +15,8 @@ export default function CompaniesPage() {
     <Card>
       <CardHeader className="flex-row items-center justify-between">
         <div>
-          <CardTitle>Virtual Companies</CardTitle>
-          <CardDescription>Invest in player-created companies, influence management, and earn dividends.</CardDescription>
+          <CardTitle>Companies</CardTitle>
+          <CardDescription>Create or invest in companies, influence management, and earn dividends.</CardDescription>
         </div>
         <Button>Create New Company</Button>
       </CardHeader>

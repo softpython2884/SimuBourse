@@ -6,7 +6,7 @@ import { AppHeader } from '@/components/layout/header';
 
 export const metadata: Metadata = {
   title: 'SimuBourse',
-  description: 'A virtual trading and investment simulation platform.',
+  description: 'An immersive financial simulation platform.',
 };
 
 export default function RootLayout({

@@ -12,7 +12,7 @@ export const NAV_LINKS = [
   { href: '/trading', icon: LineChart, label: 'Trading' },
   { href: '/markets', icon: BarChart, label: 'Prediction Markets' },
   { href: '/mining', icon: Cpu, label: 'Crypto Mining' },
-  { href: '/companies', icon: Landmark, label: 'Virtual Companies' },
+  { href: '/companies', icon: Landmark, label: 'Companies' },
   { href: '/ai-investor', icon: BrainCircuit, label: 'AI Investor' },
   { href: '/profile', icon: Users, label: 'Profile' },
 ];
