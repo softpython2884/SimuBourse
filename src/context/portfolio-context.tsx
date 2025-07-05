@@ -16,7 +16,6 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
-import { useMarketData } from './market-data-context';
 
 export interface Asset {
   name: string;
@@ -164,48 +163,59 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     const cost = asset.price * quantity;
 
     try {
-      await runTransaction(db, async (transaction) => {
+      await runTransaction(db, async (t) => {
+        // --- PHASE 1: LECTURE ---
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
-        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
+        
+        const userDoc = await t.get(userDocRef);
+        const holdingDoc = await t.get(holdingDocRef);
 
-        // --- PHASE 1: LECTURE ---
-        const userDoc = await transaction.get(userDocRef);
-        const holdingDoc = await transaction.get(holdingDocRef);
-
-        // --- PHASE 2: VALIDATION ---
-        if (!userDoc.exists() || userDoc.data().cash < cost) {
-          throw new Error('Fonds insuffisants.');
+        // --- PHASE 2: VALIDATION & PRÉPARATION ---
+        if (!userDoc.exists()) {
+          throw new Error('Utilisateur non trouvé.');
         }
         
-        // --- PHASE 3: ÉCRITURE ---
         const currentCash = userDoc.data().cash;
-        transaction.update(userDocRef, { cash: currentCash - cost });
+        if (currentCash < cost) {
+          throw new Error('Fonds insuffisants.');
+        }
+
+        const newCashValue = currentCash - cost;
+        let newHoldingData;
 
         if (holdingDoc.exists()) {
           const currentHolding = holdingDoc.data();
           const newQuantity = currentHolding.quantity + quantity;
           const newTotalCost = (currentHolding.avgCost * currentHolding.quantity) + cost;
           const newAvgCost = newTotalCost / newQuantity;
-          transaction.update(holdingDocRef, { quantity: newQuantity, avgCost: newAvgCost });
+          newHoldingData = { quantity: newQuantity, avgCost: newAvgCost };
         } else {
-          transaction.set(holdingDocRef, { 
+          newHoldingData = { 
             quantity, 
             avgCost: asset.price, 
             name: asset.name, 
             type: asset.type 
-          });
+          };
         }
 
-        transaction.set(newTransactionRef, {
-          type: 'Buy',
+        const newTransactionPayload = {
+          type: 'Buy' as const,
           asset: { name: asset.name, ticker: asset.ticker },
           quantity,
           price: asset.price,
           value: cost,
           date: Timestamp.now(),
-        });
+        };
+
+        // --- PHASE 3: ÉCRITURE ---
+        t.update(userDocRef, { cash: newCashValue });
+        t.set(holdingDocRef, newHoldingData, { merge: true });
+        
+        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
+        t.set(newTransactionRef, newTransactionPayload);
       });
+
       toast({
         title: 'Achat réussi',
         description: `Vous avez acheté ${quantity} ${asset.ticker} pour $${cost.toFixed(2)}.`,
@@ -222,50 +232,54 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const sellAsset = useCallback(async (asset: Asset, quantity: number) => {
     if (!user) return;
     const proceeds = asset.price * quantity;
+
     try {
-      await runTransaction(db, async (transaction) => {
+      await runTransaction(db, async (t) => {
+        // --- PHASE 1: LECTURE ---
         const userDocRef = doc(db, 'users', user.uid);
         const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
-        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
         
-        // --- PHASE 1: LECTURE ---
-        const userDoc = await transaction.get(userDocRef);
-        const holdingDoc = await transaction.get(holdingDocRef);
+        const userDoc = await t.get(userDocRef);
+        const holdingDoc = await t.get(holdingDocRef);
 
-        // --- PHASE 2: VALIDATION ET PRÉPARATION ---
+        // --- PHASE 2: VALIDATION & PRÉPARATION ---
         if (!userDoc.exists()) {
           throw new Error('Utilisateur non trouvé.');
         }
         if (!holdingDoc.exists()) {
-            throw new Error(`Vous n'avez pas d'actions ${asset.ticker} à vendre.`);
+          throw new Error(`Vous n'avez pas d'actions ${asset.ticker} à vendre.`);
         }
-
-        const currentCash = userDoc.data().cash;
+        
         const currentHolding = holdingDoc.data();
-
         if (currentHolding.quantity < quantity) {
           throw new Error(`Vous essayez de vendre ${quantity} ${asset.ticker} mais vous en possédez seulement ${currentHolding.quantity}.`);
         }
-        
-        // --- PHASE 3: ÉCRITURE ---
-        transaction.update(userDocRef, { cash: currentCash + proceeds });
 
+        const newCashValue = userDoc.data().cash + proceeds;
         const newQuantity = currentHolding.quantity - quantity;
-        if (newQuantity > 0.00001) { // Utiliser une petite marge pour la comparaison des flottants
-          transaction.update(holdingDocRef, { quantity: newQuantity });
-        } else {
-          transaction.delete(holdingDocRef);
-        }
-
-        transaction.set(newTransactionRef, {
-          type: 'Sell',
+        
+        const newTransactionPayload = {
+          type: 'Sell' as const,
           asset: { name: asset.name, ticker: asset.ticker },
           quantity,
           price: asset.price,
           value: proceeds,
           date: Timestamp.now(),
-        });
+        };
+
+        // --- PHASE 3: ÉCRITURE ---
+        t.update(userDocRef, { cash: newCashValue });
+
+        if (newQuantity > 0.00001) {
+          t.update(holdingDocRef, { quantity: newQuantity });
+        } else {
+          t.delete(holdingDocRef);
+        }
+
+        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
+        t.set(newTransactionRef, newTransactionPayload);
       });
+
       toast({
         title: 'Vente réussie',
         description: `Vous avez vendu ${quantity} ${asset.ticker} pour $${proceeds.toFixed(2)}.`,
