@@ -19,10 +19,11 @@ import { HistoricalData } from '@/context/market-data-context';
 import type { DetailedAsset } from '@/lib/assets';
 import { generateAssetNews, GenerateAssetNewsOutput } from '@/ai/flows/generate-asset-news';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { Loader2, TrendingDown, TrendingUp, Newspaper } from 'lucide-react';
+import { Loader2, TrendingDown, TrendingUp, Newspaper, Lock } from 'lucide-react';
 import { subDays, format, parseISO } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { useAuth } from '@/context/auth-context';
 
 type TimeRange = '1D' | '7D' | '1M' | '3M' | '1Y' | 'ALL';
 
@@ -32,6 +33,7 @@ interface AssetChartClientProps {
 }
 
 export function AssetChartClient({ asset, initialHistoricalData }: AssetChartClientProps) {
+  const { user } = useAuth();
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
   const [news, setNews] = useState<GenerateAssetNewsOutput | null>(null);
   const [isLoadingNews, setIsLoadingNews] = useState(true);
@@ -39,19 +41,23 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
   useEffect(() => {
     async function fetchNews() {
       if (!asset) return;
-      setIsLoadingNews(true);
       
+      // Ne rien faire si l'utilisateur n'est pas connecté.
+      if (!user) {
+        setIsLoadingNews(false);
+        return;
+      }
+      
+      setIsLoadingNews(true);
       const newsDocRef = doc(db, 'asset_news', asset.ticker);
       
       try {
         const newsDoc = await getDoc(newsDocRef);
         const twentyFourHoursAgo = Timestamp.now().toMillis() - (24 * 60 * 60 * 1000);
 
-        // Check if a recent news item exists in the cache
         if (newsDoc.exists() && newsDoc.data().generatedAt.toMillis() > twentyFourHoursAgo) {
           setNews(newsDoc.data() as GenerateAssetNewsOutput);
         } else {
-          // If not, generate new news and cache it
           const result = await generateAssetNews({ ticker: asset.ticker, name: asset.name });
           const dataToCache = {
               ...result,
@@ -68,7 +74,7 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
       }
     }
     fetchNews();
-  }, [asset]);
+  }, [asset, user]);
 
   const filteredData = useMemo(() => {
     const now = new Date();
@@ -83,12 +89,10 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
       case '1M':
         startDate = subDays(now, 30);
         break;
-      // For ranges longer than 30 days, we'll show all available data (which is 30 days).
       case '3M':
       case '1Y':
       case 'ALL':
       default:
-        // By returning the full dataset, the chart will display all 30 days of data.
         return initialHistoricalData;
     }
     return initialHistoricalData.filter(d => parseISO(d.date) >= startDate);
@@ -127,6 +131,47 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
         return <Newspaper className="h-5 w-5 text-muted-foreground" />;
     }
   }, [news]);
+  
+  const renderNewsContent = () => {
+    if (isLoadingNews) {
+      return (
+        <div className="flex items-center justify-center h-24">
+           <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      );
+    }
+
+    if (!user) {
+        return (
+             <Alert variant="default" className="bg-muted/50">
+                <div className="flex items-center gap-2">
+                    <Lock className="h-5 w-5 text-muted-foreground" />
+                    <AlertTitle>Contenu Exclusif</AlertTitle>
+                </div>
+                <AlertDescription className="mt-2">
+                    Connectez-vous pour accéder aux actualités et analyses de l'IA.
+                </AlertDescription>
+            </Alert>
+        )
+    }
+
+    if (news) {
+        return (
+            <Alert>
+                <div className="flex items-center gap-2">
+                    {sentimentIcon}
+                    <AlertTitle>{news.headline}</AlertTitle>
+                </div>
+                <AlertDescription className="mt-2">
+                    {news.article}
+                </AlertDescription>
+            </Alert>
+        );
+    }
+    
+    return <p className="text-sm text-muted-foreground">Aucune actualité disponible.</p>;
+  }
+
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -195,23 +240,7 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
                     <CardDescription>Dernier événement généré par l'IA.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {isLoadingNews ? (
-                         <div className="flex items-center justify-center h-24">
-                            <Loader2 className="h-8 w-8 animate-spin" />
-                         </div>
-                    ) : news ? (
-                        <Alert>
-                            <div className="flex items-center gap-2">
-                                {sentimentIcon}
-                                <AlertTitle>{news.headline}</AlertTitle>
-                            </div>
-                            <AlertDescription className="mt-2">
-                                {news.article}
-                            </AlertDescription>
-                        </Alert>
-                    ) : (
-                        <p className="text-sm text-muted-foreground">Aucune actualité disponible.</p>
-                    )}
+                    {renderNewsContent()}
                 </CardContent>
             </Card>
         </div>

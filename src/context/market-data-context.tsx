@@ -27,7 +27,6 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const historicalData = useMemo(() => {
         const dataMap = new Map<string, HistoricalData[]>();
         initialAssets.forEach(asset => {
-            // Generate 30 days of historical data with 10-minute intervals for more granular charts
             dataMap.set(asset.ticker, generateHistoricalData(asset.price, 30));
         });
         return dataMap;
@@ -43,8 +42,8 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         const interval = setInterval(() => {
             setAssets(prevAssets => 
                 prevAssets.map(asset => {
-                    // Adjusted fluctuation for 1-minute updates
-                    const fluctuation = (Math.random() - 0.495) * asset.price * 0.001; 
+                    // Increased fluctuation for more dynamic market simulation
+                    const fluctuation = (Math.random() - 0.49) * asset.price * 0.005; 
                     const newPrice = Math.max(asset.price + fluctuation, 0.01);
                     
                     const initialPrice = initialPricesRef.current.get(asset.ticker) || newPrice;
