@@ -15,12 +15,14 @@ import Link from 'next/link';
 import { Logo } from '@/components/icons';
 import { NAV_LINKS } from './sidebar';
 import { useAuth } from '@/context/auth-context';
+import { usePortfolio } from '@/context/portfolio-context';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
 export function AppHeader() {
   const { user } = useAuth();
+  const { userProfile } = usePortfolio();
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -76,7 +78,7 @@ export function AppHeader() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
+            <DropdownMenuLabel>{userProfile?.displayName || user.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/profile">Profil</Link>

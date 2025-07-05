@@ -57,7 +57,12 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
   const holdingQuantity = getHoldingQuantity(asset.ticker);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      setOpen(isOpen);
+      if (!isOpen) {
+        form.reset();
+      }
+    }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>

@@ -13,7 +13,7 @@ import {
   query,
   orderBy,
   Timestamp,
-  deleteDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
@@ -39,14 +39,25 @@ export interface Transaction {
   date: string;
 }
 
-interface PortfolioContextType {
+export interface UserProfile {
+  displayName: string;
+  email: string;
+  phoneNumber?: string;
   cash: number;
+  initialCash: number;
+}
+
+
+interface PortfolioContextType {
+  userProfile: UserProfile | null;
+  cash: number;
+  initialCash: number;
   holdings: Holding[];
   transactions: Transaction[];
   buyAsset: (asset: Asset, quantity: number) => void;
   sellAsset: (asset: Asset, quantity: number) => void;
   getHoldingQuantity: (ticker: string) => number;
-  initialCash: number;
+  updateUserProfile: (data: Partial<Pick<UserProfile, 'displayName' | 'phoneNumber'>>) => Promise<void>;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -57,16 +68,18 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [cash, setCash] = useState(INITIAL_CASH);
-  const [initialCash, setInitialCash] = useState(INITIAL_CASH);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const cash = userProfile?.cash ?? INITIAL_CASH;
+  const initialCash = userProfile?.initialCash ?? INITIAL_CASH;
+
+
   useEffect(() => {
     if (!user) {
-      setCash(INITIAL_CASH);
-      setInitialCash(INITIAL_CASH);
+      setUserProfile(null);
       setHoldings([]);
       setTransactions([]);
       setLoading(false);
@@ -78,17 +91,18 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 
     const unsubscribeUser = onSnapshot(userDocRef, async (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setCash(data.cash);
-        setInitialCash(data.initialCash);
+        setUserProfile(docSnap.data() as UserProfile);
       } else {
-        await setDoc(userDocRef, {
+        // This is a fallback in case the user doc wasn't created at signup.
+        const newUserProfile: UserProfile = {
+          displayName: user.displayName || user.email?.split('@')[0] || 'Joueur',
+          email: user.email!,
           cash: INITIAL_CASH,
           initialCash: INITIAL_CASH,
-          email: user.email,
-        });
-        setCash(INITIAL_CASH);
-        setInitialCash(INITIAL_CASH);
+          phoneNumber: '',
+        };
+        await setDoc(userDocRef, newUserProfile);
+        setUserProfile(newUserProfile);
       }
     });
 
@@ -125,6 +139,24 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user]);
 
+  const updateUserProfile = useCallback(async (data: Partial<Pick<UserProfile, 'displayName' | 'phoneNumber'>>) => {
+    if (!user) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    try {
+        await updateDoc(userDocRef, data);
+        toast({
+            title: 'Profil mis à jour',
+            description: 'Vos informations ont été enregistrées avec succès.',
+        });
+    } catch (e: any) {
+        toast({
+            variant: 'destructive',
+            title: 'Échec de la mise à jour',
+            description: e.message || 'An error occurred.',
+        });
+    }
+  }, [user, toast]);
+
   const buyAsset = useCallback(async (asset: Asset, quantity: number) => {
     if (!user) return;
     const cost = asset.price * quantity;
@@ -136,7 +168,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 
         const userDoc = await transaction.get(userDocRef);
         if (!userDoc.exists() || userDoc.data().cash < cost) {
-          throw new Error('Insufficient funds.');
+          throw new Error('Fonds insuffisants.');
         }
 
         const currentCash = userDoc.data().cash;
@@ -164,14 +196,14 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         });
       });
       toast({
-        title: 'Purchase Successful',
-        description: `You bought ${quantity} of ${asset.ticker} for $${cost.toFixed(2)}.`,
+        title: 'Achat réussi',
+        description: `Vous avez acheté ${quantity} ${asset.ticker} pour $${cost.toFixed(2)}.`,
       });
     } catch (e: any) {
       toast({
         variant: 'destructive',
-        title: 'Purchase Failed',
-        description: e.message || 'An error occurred.',
+        title: 'Échec de l\'achat',
+        description: e.message || 'Une erreur est survenue.',
       });
     }
   }, [user, toast]);
@@ -187,9 +219,9 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         const userDoc = await transaction.get(userDocRef);
         const holdingDoc = await transaction.get(holdingDocRef);
 
-        if (!userDoc.exists()) throw new Error('User not found.');
+        if (!userDoc.exists()) throw new Error('Utilisateur non trouvé.');
         if (!holdingDoc.exists() || holdingDoc.data().quantity < quantity) {
-          throw new Error(`You are trying to sell ${quantity} of ${asset.ticker} but you only own ${holdingDoc.data()?.quantity || 0}.`);
+          throw new Error(`Vous essayez de vendre ${quantity} ${asset.ticker} mais vous en possédez seulement ${holdingDoc.data()?.quantity || 0}.`);
         }
 
         const currentCash = userDoc.data().cash;
@@ -213,13 +245,13 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         });
       });
       toast({
-        title: 'Sale Successful',
-        description: `You sold ${quantity} of ${asset.ticker} for $${proceeds.toFixed(2)}.`,
+        title: 'Vente réussie',
+        description: `Vous avez vendu ${quantity} ${asset.ticker} pour $${proceeds.toFixed(2)}.`,
       });
     } catch (e: any) {
       toast({
         variant: 'destructive',
-        title: 'Sale Failed',
+        title: 'Échec de la vente',
         description: e.message || 'An error occurred.',
       });
     }
@@ -238,13 +270,15 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const contextValue = {
+    userProfile,
     cash,
+    initialCash,
     holdings,
     transactions,
     buyAsset,
     sellAsset,
     getHoldingQuantity,
-    initialCash,
+    updateUserProfile,
   };
 
   return (

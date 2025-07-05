@@ -1,12 +1,18 @@
 'use client';
 
+import { useMemo, useEffect, useState } from "react";
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/context/auth-context";
 import { usePortfolio } from "@/context/portfolio-context";
-import { useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Loader2 } from "lucide-react";
 
 // In a real app, this would come from a backend API
 const marketPrices: { [ticker: string]: number } = {
@@ -21,14 +27,37 @@ const marketPrices: { [ticker: string]: number } = {
   'TSLA': 177.46,
 };
 
+const profileFormSchema = z.object({
+  displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
+  phoneNumber: z.string().optional(),
+});
+
 
 export default function ProfileClientPage() {
-    const { user } = useAuth();
-    const { transactions, cash, holdings, initialCash } = usePortfolio();
+    const { userProfile, updateUserProfile, transactions, cash, holdings, initialCash } = usePortfolio();
+    const [isEditing, setIsEditing] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const getInitials = (email: string | null) => {
-        if (!email) return 'U';
-        return email.charAt(0).toUpperCase();
+    const form = useForm<z.infer<typeof profileFormSchema>>({
+      resolver: zodResolver(profileFormSchema),
+      defaultValues: {
+        displayName: '',
+        phoneNumber: '',
+      },
+    });
+
+    useEffect(() => {
+      if (userProfile) {
+          form.reset({
+              displayName: userProfile.displayName,
+              phoneNumber: userProfile.phoneNumber || '',
+          });
+      }
+    }, [userProfile, form]);
+
+    const getInitials = (displayName: string | undefined) => {
+        if (!displayName) return 'U';
+        return displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     }
     
     const portfolioValue = useMemo(() => {
@@ -42,19 +71,80 @@ export default function ProfileClientPage() {
     const totalGains = portfolioValue - initialCash;
     const totalGainsPercentage = initialCash > 0 ? (totalGains / initialCash) * 100 : 0;
 
+    async function onSubmit(values: z.infer<typeof profileFormSchema>) {
+      setIsSubmitting(true);
+      await updateUserProfile(values);
+      setIsSubmitting(false);
+      setIsEditing(false);
+    }
+
   return (
     <div className="grid gap-6 md:grid-cols-3">
-      <div className="md:col-span-1">
+      <div className="md:col-span-1 space-y-6">
         <Card>
-          <CardContent className="pt-6 flex flex-col items-center text-center">
+          <CardHeader>
+             <CardTitle className="flex items-center justify-between">
+                Profil
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(!isEditing)}>
+                  {isEditing ? 'Annuler' : 'Modifier'}
+                </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center text-center">
             <Avatar className="h-24 w-24 mb-4">
-              <AvatarFallback>{getInitials(user?.email || null)}</AvatarFallback>
+              <AvatarFallback>{getInitials(userProfile?.displayName)}</AvatarFallback>
             </Avatar>
-            <h2 className="text-2xl font-bold">{user?.email}</h2>
-            <p className="text-muted-foreground">Inscrit en Juillet 2024</p>
+            <h2 className="text-2xl font-bold">{userProfile?.displayName}</h2>
+            <p className="text-muted-foreground">{userProfile?.email}</p>
+            <p className="text-muted-foreground">{userProfile?.phoneNumber}</p>
           </CardContent>
         </Card>
-        <Card className="mt-6">
+        
+        {isEditing && (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Modifier le Profil</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                            <FormField
+                                control={form.control}
+                                name="displayName"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Nom d'utilisateur</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="Votre nom" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="phoneNumber"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Numéro de téléphone</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="+33 6 12 34 56 78" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Enregistrer
+                            </Button>
+                        </form>
+                    </Form>
+                </CardContent>
+            </Card>
+        )}
+
+        <Card>
           <CardHeader>
             <CardTitle>Statistiques</CardTitle>
           </CardHeader>
