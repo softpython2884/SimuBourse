@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { assets as assetsSchema } from '@/lib/db/schema';
+import { assets as assetsSchema, companies as companiesSchema } from '@/lib/db/schema';
 import { assets as initialAssets } from '@/lib/assets';
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
@@ -21,7 +21,40 @@ export async function getAssets() {
             return seededAssets.map(a => ({...a, price: parseFloat(a.price)}));
         }
 
-        return assetsInDb.map(a => ({...a, price: parseFloat(a.price)}));
+        const baseAssets = assetsInDb.map(a => ({...a, price: parseFloat(a.price)}));
+
+        const listedCompanies = await db.query.companies.findMany({
+            where: eq(companiesSchema.isListed, true),
+        });
+
+        const companyAssets = listedCompanies.map(c => {
+            const sharePrice = parseFloat(c.sharePrice);
+            const totalShares = parseFloat(c.totalShares);
+            const marketCap = sharePrice * totalShares;
+
+            let marketCapString = `$${marketCap.toLocaleString(undefined, {maximumFractionDigits: 0})}`;
+            if (marketCap >= 1e12) {
+                marketCapString = `$${(marketCap / 1e12).toFixed(2)}T`;
+            } else if (marketCap >= 1e9) {
+                marketCapString = `$${(marketCap / 1e9).toFixed(2)}B`;
+            } else if (marketCap >= 1e6) {
+                marketCapString = `$${(marketCap / 1e6).toFixed(2)}M`;
+            }
+
+
+            return {
+                ticker: c.ticker,
+                name: c.name,
+                description: c.description,
+                type: 'Company Share',
+                price: sharePrice,
+                change24h: '+0.00%', // Placeholder, as company value change is not tracked over 24h yet
+                marketCap: marketCapString,
+            }
+        });
+
+        return [...baseAssets, ...companyAssets];
+
     } catch (error) {
         console.error("Error getting assets:", error);
         return [];
@@ -46,7 +79,7 @@ export async function updatePriceFromTrade(ticker: string, tradeValue: number) {
             where: eq(assetsSchema.ticker, ticker),
         });
 
-        if (!asset) return;
+        if (!asset || asset.type === 'Company Share') return;
 
         const marketCap = parseMarketCap(asset.marketCap);
         if (marketCap === 0) return;

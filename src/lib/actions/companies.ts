@@ -10,9 +10,9 @@ import { updatePriceFromTrade } from './assets';
 import { getRigById } from '@/lib/mining';
 
 const createCompanySchema = z.object({
-  name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50),
-  industry: z.string().min(3, "L'industrie doit faire au moins 3 caractères.").max(50),
-  description: z.string().min(10, "La description doit faire au moins 10 caractères.").max(200),
+  name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50, "Le nom ne doit pas dépasser 50 caractères."),
+  industry: z.string().min(3, "L'industrie doit faire au moins 3 caractères.").max(50, "L'industrie ne doit pas dépasser 50 caractères."),
+  description: z.string().min(10, "La description doit faire au moins 10 caractères.").max(200, "La description ne doit pas dépasser 200 caractères."),
 });
 
 export async function createCompany(values: z.infer<typeof createCompanySchema>): Promise<{ success?: string; error?: string }> {
@@ -28,6 +28,7 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
     return { error: "Données invalides." };
   }
   const { name, industry, description } = validatedFields.data;
+  const ticker = name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 4).toUpperCase();
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -36,6 +37,11 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
       
       const userCash = parseFloat(user.cash);
       if (userCash < creationCost) throw new Error(`Fonds insuffisants. La création d'une entreprise coûte ${creationCost.toLocaleString()}$.`);
+
+      const existingTicker = await tx.query.companies.findFirst({ where: eq(companies.ticker, ticker) });
+      if (existingTicker) {
+        throw new Error("Une entreprise avec un ticker similaire existe déjà. Veuillez choisir un nom légèrement différent.");
+      }
 
       // Deduct cost from user
       const newUserCash = userCash - creationCost;
@@ -49,7 +55,8 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
         creatorId: session.id,
         cash: creationCost.toFixed(2),
         totalShares: '1000.00000000',
-        sharePrice: '1.00'
+        sharePrice: '1.00',
+        ticker: ticker,
       }).returning();
 
       // Add the creator as the CEO
@@ -68,8 +75,8 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
     revalidatePath('/');
     return result;
   } catch (error: any) {
-    // Check for unique constraint violation
-    if (error?.code === '23505') {
+    // Check for unique constraint violation on name
+    if (error?.code === '23505' && error.constraint === 'companies_name_key') {
         return { error: "Une entreprise avec ce nom existe déjà." };
     }
     console.error("Error creating company:", error);
@@ -236,6 +243,14 @@ export async function getCompanyById(companyId: number) {
     const companyValue = companyCash + portfolioValue + miningRigsValue + unclaimedBtcValue;
     const totalShares = parseFloat(company.totalShares);
     const sharePrice = totalShares > 0 ? companyValue / totalShares : parseFloat(company.sharePrice);
+
+    // Update the stored share price to reflect the latest calculation
+    if (Math.abs(sharePrice - parseFloat(company.sharePrice)) > 0.00001) { // Only update if there's a meaningful change
+        await db.update(companies)
+            .set({ sharePrice: sharePrice.toString() })
+            .where(eq(companies.id, company.id));
+    }
+
 
     return {
       ...company,
@@ -701,3 +716,30 @@ export async function removeMemberFromCompany(companyId: number, memberIdToRemov
         return { error: error.message || "Une erreur est survenue." };
     }
 }
+
+
+export async function listCompanyOnMarket(companyId: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) {
+      return { error: 'Non autorisé.' };
+    }
+  
+    try {
+      const member = await db.query.companyMembers.findFirst({
+        where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
+      });
+  
+      if (!member || member.role !== 'ceo') {
+        return { error: 'Seul le PDG peut mettre une entreprise en bourse.' };
+      }
+  
+      await db.update(companies).set({ isListed: true }).where(eq(companies.id, companyId));
+  
+      revalidatePath('/trading');
+      revalidatePath(`/companies/${companyId}`);
+  
+      return { success: 'Entreprise mise en bourse avec succès !' };
+    } catch (error: any) {
+      return { error: error.message || "Une erreur est survenue." };
+    }
+  }

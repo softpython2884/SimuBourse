@@ -8,6 +8,7 @@ import {
   integer,
   uniqueIndex,
   index,
+  boolean,
 } from 'drizzle-orm/pg-core';
 import { relations, desc } from 'drizzle-orm';
 
@@ -183,12 +184,14 @@ export const userMiningRigsRelations = relations(userMiningRigs, ({ one }) => ({
 export const companies = pgTable('companies', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 256 }).notNull().unique(),
+  ticker: varchar('ticker', { length: 10 }).notNull().unique(),
   industry: varchar('industry', { length: 100 }).notNull(),
   description: text('description').notNull(),
   cash: numeric('cash', { precision: 15, scale: 2 }).default('0.00').notNull(),
   creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  sharePrice: numeric('share_price', { precision: 10, scale: 2 }).default('1.00').notNull(),
+  sharePrice: numeric('share_price', { precision: 20, scale: 8 }).default('1.00').notNull(),
   totalShares: numeric('total_shares', { precision: 20, scale: 8 }).default('1000.00').notNull(),
+  isListed: boolean('is_listed').default(false).notNull(),
   unclaimedBtc: numeric('unclaimed_btc', { precision: 18, scale: 8 }).default('0').notNull(),
   lastMiningUpdateAt: timestamp('last_mining_update_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent, Package, Cpu, Settings, Server, Bitcoin } from 'lucide-react';
+import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent, Package, Cpu, Settings, Server, Bitcoin, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -14,6 +14,7 @@ import { AddCompanyCashDialog } from '@/components/add-company-cash-dialog';
 import { getRigById } from '@/lib/mining';
 import { ManageMembersDialog } from '@/components/manage-members-dialog';
 import { WithdrawCompanyCashDialog } from '@/components/withdraw-company-cash-dialog';
+import { ListCompanyButton } from '@/components/list-company-button';
 
 
 function getInitials(name: string) {
@@ -56,7 +57,14 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">{company.name}</h1>
+            <div className="flex items-center gap-3">
+                 <h1 className="text-2xl font-bold tracking-tight">{company.name} ({company.ticker})</h1>
+                 {company.isListed ? (
+                    <Badge variant="secondary">En Bourse</Badge>
+                ) : (
+                    <Badge variant="outline">Non Cotée</Badge>
+                )}
+            </div>
           <p className="text-muted-foreground">{company.description}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -68,6 +76,7 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
                     <WithdrawCompanyCashDialog companyId={company.id} companyCash={company.cash}>
                         <Button variant="outline">Retirer des fonds</Button>
                     </WithdrawCompanyCashDialog>
+                     {!company.isListed && <ListCompanyButton companyId={company.id} />}
                 </>
             )}
             <InvestDialog company={company}>
@@ -93,7 +102,7 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
                   <LineChart className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold">${company.sharePrice.toFixed(2)}</div>
+                  <div className="text-2xl font-bold">${company.sharePrice.toFixed(4)}</div>
                    <p className="text-xs text-muted-foreground">Prix par part de l'entreprise</p>
               </CardContent>
           </Card>

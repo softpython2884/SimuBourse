@@ -80,6 +80,12 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
                 
                 for (const ticker in newAssets) {
                     const asset = { ...newAssets[ticker] };
+
+                    // Prevent simulation for company shares as their price is calculated
+                    if (asset.type === 'Company Share') {
+                        continue;
+                    }
+
                     const initialPrice = initialAssets[ticker]?.price;
                     if (!initialPrice) continue;
 
