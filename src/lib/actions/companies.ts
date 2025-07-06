@@ -48,8 +48,8 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
         description,
         creatorId: session.id,
         cash: creationCost.toFixed(2),
-        totalShares: '10000.00000000',
-        sharePrice: '0.10'
+        totalShares: '1000.00000000',
+        sharePrice: '1.00'
       }).returning();
 
       // Add the creator as the CEO
