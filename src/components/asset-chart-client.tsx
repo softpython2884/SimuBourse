@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -64,7 +65,8 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
     }
 
     fetchNews();
-  }, [asset?.ticker, asset?.name, registerNewsEvent]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asset?.ticker, asset?.name]);
 
   const filteredData = useMemo(() => {
     const now = new Date();
@@ -99,28 +101,23 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
 
   const yAxisDomain = useMemo(() => {
     if (!filteredData || filteredData.length === 0) {
-      // Provide a default 4% window if there's no data
-      return [asset.price * 0.98, asset.price * 1.02];
+      return ['auto', 'auto'];
     }
     
     const prices = filteredData.map(d => d.price);
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
 
-    // If min and max are the same (or very close), create a small window around the price
-    if (maxPrice - minPrice < 1e-9) {
-      return [minPrice * 0.98, maxPrice * 1.02];
+    // If the line is flat, create a small 1% window around the price
+    if (minPrice === maxPrice) {
+      return [minPrice * 0.995, maxPrice * 1.005];
     }
 
-    // Calculate a 10% padding based on the data's range for aesthetics
+    // Add 10% padding to the top and bottom for aesthetics
     const padding = (maxPrice - minPrice) * 0.1;
-
-    // Apply the padding and ensure the bottom of the domain is not negative
-    const domainMin = Math.max(0, minPrice - padding);
-    const domainMax = maxPrice + padding;
     
-    return [domainMin, domainMax];
-  }, [filteredData, asset.price]);
+    return [minPrice - padding, maxPrice + padding];
+  }, [filteredData]);
 
   const chartConfig = {
     price: {
@@ -263,7 +260,11 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
                             />
                             <YAxis
                                 domain={yAxisDomain}
-                                hide
+                                // Instead of `hide`, we make the axis invisible but keep it for layout,
+                                // ensuring the scaling is calculated correctly.
+                                width={1}
+                                tick={false}
+                                axisLine={false}
                             />
                             <ChartTooltip
                                 cursor={false}
