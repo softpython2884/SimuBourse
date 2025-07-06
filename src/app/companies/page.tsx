@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getCompanies, Company } from '@/lib/actions/companies';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,15 +14,16 @@ export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchCompanies() {
-        setLoading(true);
-        const companiesData = await getCompanies();
-        setCompanies(companiesData);
-        setLoading(false);
-    }
-    fetchCompanies();
+  const fetchCompanies = useCallback(async () => {
+    setLoading(true);
+    const companiesData = await getCompanies();
+    setCompanies(companiesData);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    fetchCompanies();
+  }, [fetchCompanies]);
 
   if (loading) {
     return (
@@ -39,7 +40,7 @@ export default function CompaniesPage() {
           <CardTitle>Entreprises</CardTitle>
           <CardDescription>Créez ou investissez dans des entreprises, influencez la gestion et gagnez des dividendes.</CardDescription>
         </div>
-        <CreateCompanyDialog />
+        <CreateCompanyDialog onCompanyCreated={fetchCompanies} />
       </CardHeader>
       <CardContent>
         <Table>

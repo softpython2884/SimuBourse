@@ -28,7 +28,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { createCompany } from '@/lib/actions/companies';
 import { Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 
 const companyFormSchema = z.object({
   name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50, "Le nom ne doit pas dépasser 50 caractères."),
@@ -36,10 +35,13 @@ const companyFormSchema = z.object({
   description: z.string().min(10, "La description doit faire au moins 10 caractères.").max(200, "La description ne doit pas dépasser 200 caractères."),
 });
 
-export function CreateCompanyDialog() {
+interface CreateCompanyDialogProps {
+  onCompanyCreated: () => void;
+}
+
+export function CreateCompanyDialog({ onCompanyCreated }: CreateCompanyDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
 
   const form = useForm<z.infer<typeof companyFormSchema>>({
     resolver: zodResolver(companyFormSchema),
@@ -59,7 +61,7 @@ export function CreateCompanyDialog() {
       toast({ title: "Succès", description: result.success });
       setOpen(false);
       form.reset();
-      router.refresh(); // Rafraîchit les données du serveur sur la page actuelle
+      onCompanyCreated();
     }
   }
 

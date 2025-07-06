@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent } from 'lucide-react';
+import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent, Package } from 'lucide-react';
 import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -174,6 +174,46 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
             </CardContent>
         </Card>
       </div>
+
+       <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Package /> Portefeuille de l'Entreprise
+                </CardTitle>
+                <CardDescription>Actifs et biens détenus par {company.name}.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Actif</TableHead>
+                            <TableHead>Quantité</TableHead>
+                            <TableHead>Coût Moyen</TableHead>
+                            <TableHead className="text-right">Valeur de Coût</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {company.holdings.length > 0 ? company.holdings.map(holding => (
+                            <TableRow key={holding.id}>
+                                <TableCell>
+                                    <div className="font-medium">{holding.name}</div>
+                                    <div className="text-sm text-muted-foreground">{holding.ticker}</div>
+                                </TableCell>
+                                <TableCell>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</TableCell>
+                                <TableCell>${holding.avgCost.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">${(holding.quantity * holding.avgCost).toFixed(2)}</TableCell>
+                            </TableRow>
+                        )) : (
+                            <TableRow>
+                                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                                    Cette entreprise ne détient encore aucun actif.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
     </div>
   );
 }

@@ -101,6 +101,9 @@ export async function getCompanyById(companyId: number) {
             }
           },
            orderBy: (companyShares, { desc }) => [desc(companyShares.quantity)],
+        },
+        holdings: {
+           orderBy: (companyHoldings, { desc }) => [desc(companyHoldings.updatedAt)],
         }
       }
     });
@@ -116,6 +119,11 @@ export async function getCompanyById(companyId: number) {
       sharePrice: parseFloat(company.sharePrice),
       totalShares: parseFloat(company.totalShares),
       shares: company.shares.map(s => ({...s, quantity: parseFloat(s.quantity)})),
+      holdings: company.holdings.map(h => ({
+        ...h,
+        quantity: parseFloat(h.quantity),
+        avgCost: parseFloat(h.avgCost),
+      }))
     };
 
   } catch (error) {
