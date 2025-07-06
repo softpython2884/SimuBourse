@@ -1,18 +1,21 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { usePortfolio } from '@/context/portfolio-context';
 import { useMarketData } from '@/context/market-data-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TradeDialog } from '@/components/trade-dialog';
 import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 
 export default function PortfolioClientPage() {
-    const { holdings, cash, initialCash } = usePortfolio();
-    const { getAssetByTicker } = useMarketData();
+    const { holdings, cash, initialCash, loading } = usePortfolio();
+    const { getAssetByTicker, assets: marketAssets } = useMarketData();
 
     const holdingsWithMarketData = useMemo(() => {
+        if (!marketAssets.length) return []; // Don't compute until market data is ready
         return holdings.map(holding => {
             const asset = getAssetByTicker(holding.ticker);
             const currentPrice = asset?.price || holding.avgCost;
@@ -22,19 +25,27 @@ export default function PortfolioClientPage() {
             const pnlPercent = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
             return {
                 ...holding,
-                asset,
+                asset: asset!, // Asset should exist if we have a holding
                 currentPrice,
                 currentValue,
                 pnl,
                 pnlPercent
             };
         }).sort((a, b) => b.currentValue - a.currentValue);
-    }, [holdings, getAssetByTicker]);
+    }, [holdings, getAssetByTicker, marketAssets]);
     
     const assetsValue = useMemo(() => holdingsWithMarketData.reduce((sum, holding) => sum + holding.currentValue, 0), [holdingsWithMarketData]);
     const portfolioValue = assetsValue + cash;
     const totalPortfolioPnL = portfolioValue - initialCash;
     const totalPortfolioPnLPercent = initialCash > 0 ? (totalPortfolioPnL / initialCash) * 100 : 0;
+
+    if (loading) {
+        return (
+            <div className="flex h-64 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-6">
@@ -87,7 +98,7 @@ export default function PortfolioClientPage() {
                                             <div className="font-medium">{holding.name}</div>
                                             <div className="text-sm text-muted-foreground">{holding.ticker}</div>
                                         </TableCell>
-                                        <TableCell>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 5 })}</TableCell>
+                                        <TableCell>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</TableCell>
                                         <TableCell>${holding.avgCost.toFixed(2)}</TableCell>
                                         <TableCell>${holding.currentPrice.toFixed(2)}</TableCell>
                                         <TableCell>${holding.currentValue.toFixed(2)}</TableCell>
@@ -95,7 +106,10 @@ export default function PortfolioClientPage() {
                                             <div>{holding.pnl >= 0 ? '+' : '-'}${Math.abs(holding.pnl).toFixed(2)}</div>
                                             <div className="text-xs">({holding.pnlPercent.toFixed(2)}%)</div>
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="text-right space-x-2">
+                                             <Button asChild variant="outline" size="sm">
+                                                <Link href={`/trading/${holding.asset.ticker}`}>Détails</Link>
+                                             </Button>
                                             {holding.asset ? (
                                                 <TradeDialog asset={holding.asset} tradeType="Sell">
                                                     <Button variant="secondary" size="sm">Vendre</Button>

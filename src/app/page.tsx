@@ -48,7 +48,7 @@ export default function Home() {
   const btcPrice = getAssetByTicker('BTC')?.price || 0;
 
   const recentTransactions = useMemo(() => {
-    return transactions.slice(0, 3).map(tx => {
+    return transactions.slice(0, 5).map(tx => {
       return {
         description: `${tx.type === 'Buy' ? 'Achat' : 'Vente'} ${tx.quantity} ${tx.asset.ticker}`,
         details: tx.asset.name,
@@ -121,7 +121,7 @@ export default function Home() {
             <Trophy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">$0.00</div>
             <p className="text-xs text-muted-foreground">
               Aucun pari effectué
             </p>

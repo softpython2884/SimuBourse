@@ -3,7 +3,7 @@
 import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileAction, ProfileUpdateInput } from '@/lib/actions/portfolio';
+import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileAction, ProfileUpdateInput, buyAssetAction, sellAssetAction } from '@/lib/actions/portfolio';
 
 export interface Asset {
   name: string;
@@ -13,20 +13,27 @@ export interface Asset {
 }
 
 export interface Holding {
+  id: number;
+  userId: number;
   ticker: string;
+  name: string;
+  type: string;
   quantity: number;
   avgCost: number;
-  name: string;
-  type: 'Stock' | 'Crypto' | 'Commodity' | 'Forex';
+  updatedAt: Date;
 }
 
 export interface Transaction {
+  id: number;
+  userId: number;
   type: 'Buy' | 'Sell';
-  asset: { name: string, ticker: string };
+  ticker: string;
+  name: string;
   quantity: number;
   price: number;
   value: number;
-  date: string;
+  createdAt: Date;
+  asset: { name: string, ticker: string };
 }
 
 export interface UserProfile {
@@ -39,6 +46,11 @@ export interface UserProfile {
   createdAt: Date;
 }
 
+interface PortfolioData extends UserProfile {
+    holdings: Holding[];
+    transactions: Transaction[];
+}
+
 interface PortfolioContextType {
   userProfile: UserProfile | null;
   cash: number;
@@ -46,8 +58,8 @@ interface PortfolioContextType {
   holdings: Holding[];
   transactions: Transaction[];
   loading: boolean;
-  buyAsset: (asset: Asset, quantity: number) => void;
-  sellAsset: (asset: Asset, quantity: number) => void;
+  buyAsset: (asset: Asset, quantity: number) => Promise<void>;
+  sellAsset: (asset: Asset, quantity: number) => Promise<void>;
   getHoldingQuantity: (ticker: string) => number;
   updateUserProfile: (data: ProfileUpdateInput) => Promise<void>;
 }
@@ -59,21 +71,23 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchPortfolio = useCallback(async () => {
     if (!user) {
-      setUserProfile(null);
+      setPortfolioData(null);
       setLoading(false);
       return;
     }
-    
-    const profile = await getAuthenticatedUserProfile();
-    if (profile) {
-      setUserProfile(profile as UserProfile);
+    setLoading(true);
+    const data = await getAuthenticatedUserProfile();
+    if (data) {
+      // The data from the server action is already formatted
+      setPortfolioData(data);
     } else {
-      toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de charger les données du profil." });
+      toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de charger les données du portefeuille." });
+      setPortfolioData(null);
     }
     setLoading(false);
   }, [user, toast]);
@@ -93,20 +107,38 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       await fetchPortfolio(); // Refresh data
     }
   };
-  
-  // Placeholder logic for now
-  const holdings: Holding[] = [];
-  const transactions: Transaction[] = [];
-  const buyAsset = () => toast({ variant: 'destructive', title: 'Action indisponible', description: 'La fonctionnalité de trading sera bientôt réactivée.' });
-  const sellAsset = () => toast({ variant: 'destructive', title: 'Action indisponible', description: 'La fonctionnalité de trading sera bientôt réactivée.' });
-  const getHoldingQuantity = () => 0;
+
+  const buyAsset = async (asset: Asset, quantity: number) => {
+    const result = await buyAssetAction(asset, quantity);
+    if (result.error) {
+      toast({ variant: 'destructive', title: "Échec de l'achat", description: result.error });
+    } else {
+      toast({ title: 'Succès', description: result.success });
+      await fetchPortfolio();
+    }
+  }
+
+  const sellAsset = async (asset: Asset, quantity: number) => {
+    const result = await sellAssetAction(asset, quantity);
+    if (result.error) {
+      toast({ variant: 'destructive', title: 'Échec de la vente', description: result.error });
+    } else {
+      toast({ title: 'Succès', description: result.success });
+      await fetchPortfolio();
+    }
+  }
+
+  const getHoldingQuantity = (ticker: string) => {
+    const holding = portfolioData?.holdings.find(h => h.ticker === ticker);
+    return holding ? holding.quantity : 0;
+  };
 
   const value = {
-    userProfile,
-    cash: userProfile?.cash ?? 0,
-    initialCash: userProfile?.initialCash ?? INITIAL_CASH,
-    holdings,
-    transactions,
+    userProfile: portfolioData,
+    cash: portfolioData?.cash ?? 0,
+    initialCash: portfolioData?.initialCash ?? INITIAL_CASH,
+    holdings: portfolioData?.holdings ?? [],
+    transactions: portfolioData?.transactions ?? [],
     loading: authLoading || loading,
     buyAsset, sellAsset, getHoldingQuantity, updateUserProfile
   };

@@ -14,10 +14,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose,
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Loader2 } from 'lucide-react';
 
 interface TradeDialogProps {
   asset: Asset;
@@ -31,26 +31,38 @@ const formSchema = z.object({
 
 export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
   const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { buyAsset, sellAsset, cash, getHoldingQuantity } = usePortfolio();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      quantity: 0,
+      quantity: undefined,
     },
+    mode: 'onChange',
   });
 
-  const quantity = form.watch('quantity');
+  const quantity = form.watch('quantity') || 0;
   const totalValue = quantity * asset.price;
   const tradeTypeFr = tradeType === 'Buy' ? 'Acheter' : 'Vendre';
   const holdingQuantity = getHoldingQuantity(asset.ticker);
+  
+  let isTradeDisabled = false;
+  if (tradeType === 'Buy' && totalValue > cash) {
+      isTradeDisabled = true;
+  }
+  if (tradeType === 'Sell' && quantity > holdingQuantity) {
+      isTradeDisabled = true;
+  }
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true);
     if (tradeType === 'Buy') {
-      buyAsset(asset, values.quantity);
+      await buyAsset(asset, values.quantity);
     } else {
-      sellAsset(asset, values.quantity);
+      await sellAsset(asset, values.quantity);
     }
+    setIsLoading(false);
     form.reset();
     setOpen(false);
   }
@@ -70,7 +82,7 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
           </DialogTitle>
           <DialogDescription>
             Prix actuel: ${asset.price.toFixed(2)}. 
-            {tradeType === 'Buy' ? ` Fonds disponibles: $${cash.toFixed(2)}.` : ` Vous possédez: ${holdingQuantity}.`}
+            {tradeType === 'Buy' ? ` Fonds disponibles: $${cash.toFixed(2)}.` : ` Vous possédez: ${holdingQuantity.toLocaleString()}.`}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -83,24 +95,28 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
                   <FormLabel>Quantité</FormLabel>
                    <div className="relative">
                       <FormControl>
-                        <Input type="number" step="any" placeholder="0" {...field} className={tradeType === 'Buy' ? 'pr-12' : ''} />
+                        <Input type="number" step="any" placeholder="0" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
                       </FormControl>
-                      {tradeType === 'Buy' && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-1 top-1/2 -translate-y-1/2 h-7"
-                          onClick={() => {
-                            if (asset.price > 0) {
-                              const maxQuantity = Math.floor(cash / asset.price);
-                              form.setValue('quantity', maxQuantity > 0 ? maxQuantity : 0, { shouldValidate: true });
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7"
+                        onClick={() => {
+                          if (asset.price > 0) {
+                            let maxQuantity: number;
+                            if(tradeType === 'Buy') {
+                                maxQuantity = cash / asset.price;
+                                if (asset.type === 'Stock') maxQuantity = Math.floor(maxQuantity);
+                            } else {
+                                maxQuantity = holdingQuantity;
                             }
-                          }}
-                        >
-                          Max
-                        </Button>
-                      )}
+                            form.setValue('quantity', maxQuantity > 0 ? maxQuantity : 0, { shouldValidate: true });
+                          }
+                        }}
+                      >
+                        Max
+                      </Button>
                     </div>
                   <FormMessage />
                 </FormItem>
@@ -110,12 +126,11 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
               {tradeType === 'Buy' ? 'Coût total' : 'Produit total'}: ${totalValue.toFixed(2)}
             </div>
             <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="secondary">
-                  Annuler
-                </Button>
-              </DialogClose>
-              <Button type="submit">
+              <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+                Annuler
+              </Button>
+              <Button type="submit" disabled={isLoading || isTradeDisabled || !form.formState.isValid}>
+                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Confirmer {tradeTypeFr}
               </Button>
             </DialogFooter>

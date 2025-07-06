@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,6 +13,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "./ui/input";
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { useMarketData } from "@/context/market-data-context";
 
 const profileFormSchema = z.object({
   displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
@@ -21,7 +24,8 @@ const profileFormSchema = z.object({
 
 
 export default function ProfileClientPage() {
-    const { userProfile, updateUserProfile, transactions, cash, initialCash, loading } = usePortfolio();
+    const { userProfile, updateUserProfile, transactions, holdings, cash, initialCash, loading } = usePortfolio();
+    const { getAssetByTicker } = useMarketData();
 
     const form = useForm<z.infer<typeof profileFormSchema>>({
       resolver: zodResolver(profileFormSchema),
@@ -45,9 +49,16 @@ export default function ProfileClientPage() {
         return displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     }
     
-    const portfolioValue = userProfile?.cash ?? 0; // Simplified for now
-    const totalGains = userProfile ? userProfile.cash - userProfile.initialCash : 0;
-    const totalGainsPercentage = userProfile && userProfile.initialCash > 0 ? (totalGains / userProfile.initialCash) * 100 : 0;
+    const assetsValue = useMemo(() => holdings.reduce((sum, holding) => {
+        const asset = getAssetByTicker(holding.ticker);
+        const currentPrice = asset?.price || holding.avgCost;
+        return sum + (holding.quantity * currentPrice);
+    }, 0), [holdings, getAssetByTicker]);
+
+    const portfolioValue = assetsValue + cash;
+    const totalGains = portfolioValue - initialCash;
+    const totalGainsPercentage = initialCash > 0 ? (totalGains / initialCash) * 100 : 0;
+
 
     async function onProfileSubmit(values: z.infer<typeof profileFormSchema>) {
       await updateUserProfile(values);
@@ -64,7 +75,7 @@ export default function ProfileClientPage() {
     if (!userProfile) {
         return (
             <div className="text-center">
-                <p>Impossible de charger les données du profil. Veuillez vous reconnecter.</p>
+                <p>Impossible de charger les données du profil.</p>
             </div>
         )
     }
@@ -137,42 +148,33 @@ export default function ProfileClientPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
-                            Aucune transaction pour le moment.
-                          </TableCell>
-                        </TableRow>
+                        {transactions.length > 0 ? (
+                            transactions.map(tx => (
+                                <TableRow key={tx.id}>
+                                    <TableCell className={tx.type === 'Buy' ? 'text-red-500' : 'text-green-500'}>{tx.type === 'Buy' ? 'Achat' : 'Vente'}</TableCell>
+                                    <TableCell>
+                                        <div className="font-medium">{tx.name}</div>
+                                        <div className="text-sm text-muted-foreground">{tx.ticker}</div>
+                                    </TableCell>
+                                    <TableCell>{tx.quantity.toLocaleString(undefined, {maximumFractionDigits: 8})}</TableCell>
+                                    <TableCell>${tx.price.toFixed(2)}</TableCell>
+                                    <TableCell className={tx.type === 'Buy' ? 'text-red-500' : 'text-green-500'}>
+                                        {tx.type === 'Buy' ? '-' : '+'}${tx.value.toFixed(2)}
+                                    </TableCell>
+                                    <TableCell>{format(new Date(tx.createdAt), 'd MMM yyyy, HH:mm', { locale: fr })}</TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                                Aucune transaction pour le moment.
+                            </TableCell>
+                            </TableRow>
+                        )}
                     </TableBody>
                   </Table>
                 </CardContent>
               </Card>
-
-               <Card>
-                <CardHeader>
-                  <CardTitle>Gains & Pertes par Actif</CardTitle>
-                  <CardDescription>Performance de vos actifs actuels et passés.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Actif</TableHead>
-                        <TableHead>Quantité</TableHead>
-                        <TableHead>Valeur Actuelle</TableHead>
-                        <TableHead>Gains/Pertes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                     <TableBody>
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
-                             Aucun historique d'actifs.
-                          </TableCell>
-                        </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
             </div>
           </div>
       </TabsContent>
