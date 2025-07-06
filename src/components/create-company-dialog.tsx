@@ -28,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { createCompany } from '@/lib/actions/companies';
 import { Loader2 } from 'lucide-react';
+import { usePortfolio } from '@/context/portfolio-context';
 
 const companyFormSchema = z.object({
   name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50, "Le nom ne doit pas dépasser 50 caractères."),
@@ -42,6 +43,8 @@ interface CreateCompanyDialogProps {
 export function CreateCompanyDialog({ onCompanyCreated }: CreateCompanyDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const { cash } = usePortfolio();
+  const creationCost = 1000;
 
   const form = useForm<z.infer<typeof companyFormSchema>>({
     resolver: zodResolver(companyFormSchema),
@@ -77,7 +80,8 @@ export function CreateCompanyDialog({ onCompanyCreated }: CreateCompanyDialogPro
         <DialogHeader>
           <DialogTitle>Lancer une Nouvelle Entreprise</DialogTitle>
           <DialogDescription>
-            Créez votre propre entreprise virtuelle. Gérez des actifs et distribuez des dividendes à vos actionnaires.
+            La création d'une entreprise coûte {creationCost.toLocaleString()}$. Cette somme constituera sa trésorerie initiale.
+            Vous serez nommé PDG.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -125,9 +129,9 @@ export function CreateCompanyDialog({ onCompanyCreated }: CreateCompanyDialogPro
                 
                 <DialogFooter>
                     <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
-                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                    <Button type="submit" disabled={form.formState.isSubmitting || cash < creationCost}>
                         {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Créer l'entreprise
+                        Créer l'entreprise (${creationCost.toLocaleString()})
                     </Button>
                 </DialogFooter>
             </form>

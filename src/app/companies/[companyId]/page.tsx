@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { InvestDialog } from '@/components/invest-dialog';
 import { getSession } from '@/lib/session';
 import { ManageCompanyAssetsDialog } from '@/components/manage-company-assets-dialog';
+import { AddCompanyCashDialog } from '@/components/add-company-cash-dialog';
 
 
 function getInitials(name: string) {
@@ -44,9 +45,16 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
           <h1 className="text-2xl font-bold tracking-tight">{company.name}</h1>
           <p className="text-muted-foreground">{company.description}</p>
         </div>
-        <InvestDialog company={company}>
-            <Button>Investir</Button>
-        </InvestDialog>
+        <div className="flex items-center gap-2">
+            {isCEO && (
+                <AddCompanyCashDialog companyId={company.id}>
+                    <Button variant="outline">Ajouter des fonds</Button>
+                </AddCompanyCashDialog>
+            )}
+            <InvestDialog company={company}>
+                <Button>Investir</Button>
+            </InvestDialog>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

@@ -19,6 +19,8 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
   if (!session?.id) {
     return { error: "Vous devez être connecté pour créer une entreprise." };
   }
+  
+  const creationCost = 1000;
 
   const validatedFields = createCompanySchema.safeParse(values);
   if (!validatedFields.success) {
@@ -27,13 +29,26 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
   const { name, industry, description } = validatedFields.data;
 
   try {
-    await db.transaction(async (tx) => {
-      // Create the company
+    const result = await db.transaction(async (tx) => {
+      const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
+      if (!user) throw new Error("Utilisateur non trouvé.");
+      
+      const userCash = parseFloat(user.cash);
+      if (userCash < creationCost) throw new Error(`Fonds insuffisants. La création d'une entreprise coûte ${creationCost.toLocaleString()}$.`);
+
+      // Deduct cost from user
+      const newUserCash = userCash - creationCost;
+      await tx.update(users).set({ cash: newUserCash.toFixed(2) }).where(eq(users.id, session.id));
+
+      // Create the company with initial treasury
       const [newCompany] = await tx.insert(companies).values({
         name,
         industry,
         description,
         creatorId: session.id,
+        cash: creationCost.toFixed(2),
+        totalShares: '10000.00000000',
+        sharePrice: '0.10'
       }).returning();
 
       // Add the creator as the CEO
@@ -42,17 +57,20 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
         userId: session.id,
         role: 'ceo',
       });
+
+      return { success: `L'entreprise "${name}" a été créée avec succès ! ${creationCost.toLocaleString()}$ ont été transférés à la trésorerie.` };
     });
 
     revalidatePath('/companies');
-    return { success: `L'entreprise "${name}" a été créée avec succès !` };
+    revalidatePath('/portfolio');
+    return result;
   } catch (error: any) {
     // Check for unique constraint violation
     if (error?.code === '23505') {
         return { error: "Une entreprise avec ce nom existe déjà." };
     }
     console.error("Error creating company:", error);
-    return { error: "Une erreur est survenue lors de la création de l'entreprise." };
+    return { error: error.message || "Une erreur est survenue lors de la création de l'entreprise." };
   }
 }
 
@@ -128,7 +146,7 @@ export async function getCompanyById(companyId: number) {
     const companyCash = parseFloat(company.cash);
     const companyValue = companyCash + portfolioValue;
     const totalShares = parseFloat(company.totalShares);
-    const sharePrice = totalShares > 0 ? companyValue / totalShares : 0;
+    const sharePrice = totalShares > 0 ? companyValue / totalShares : parseFloat(company.sharePrice);
 
     return {
       ...company,
@@ -165,33 +183,17 @@ export async function investInCompany(companyId: number, amount: number): Promis
             if (!user) throw new Error("Utilisateur non trouvé.");
             if (parseFloat(user.cash) < amount) throw new Error("Fonds insuffisants.");
 
-            const company = await tx.query.companies.findFirst({
-                where: eq(companies.id, companyId),
-                with: { holdings: true }
-            });
-            if (!company) throw new Error("Entreprise non trouvée.");
-
-            const allAssets = await tx.query.assets.findMany();
-            const priceMap = allAssets.reduce((map, asset) => {
-                map[asset.ticker] = parseFloat(asset.price);
-                return map;
-            }, {} as Record<string, number>);
-
-            const portfolioValue = company.holdings.reduce((sum, holding) => {
-                const currentPrice = priceMap[holding.ticker] || parseFloat(holding.avgCost);
-                return sum + (parseFloat(holding.quantity) * currentPrice);
-            }, 0);
-
-            const companyValue = parseFloat(company.cash) + portfolioValue;
-            const totalShares = parseFloat(company.totalShares);
-            const preInvestmentSharePrice = totalShares > 0 ? companyValue / totalShares : parseFloat(company.sharePrice);
+            const companyData = await getCompanyById(companyId);
+            if (!companyData) throw new Error("Entreprise non trouvée.");
+            
+            const preInvestmentSharePrice = companyData.sharePrice;
 
             if (amount <= 0) throw new Error("Le montant de l'investissement doit être positif.");
             if (preInvestmentSharePrice <= 0) throw new Error("Le prix de l'action est nul, l'investissement est impossible.");
 
             const sharesToBuy = amount / preInvestmentSharePrice;
-            const newCompanyCash = parseFloat(company.cash) + amount;
-            const newTotalShares = totalShares + sharesToBuy;
+            const newCompanyCash = companyData.cash + amount;
+            const newTotalShares = companyData.totalShares + sharesToBuy;
             
             await tx.update(users).set({ cash: (parseFloat(user.cash) - amount).toFixed(2) }).where(eq(users.id, session.id));
             await tx.update(companies).set({ 
@@ -216,7 +218,7 @@ export async function investInCompany(companyId: number, amount: number): Promis
                 });
             }
             
-            return { success: `Vous avez investi ${amount.toFixed(2)}$ dans ${company.name} !` };
+            return { success: `Vous avez investi ${amount.toFixed(2)}$ dans ${companyData.name} !` };
         });
 
         revalidatePath(`/companies/${companyId}`);
@@ -341,5 +343,39 @@ export async function sellAssetForCompany(companyId: number, holdingId: number, 
     } catch (error: any) {
         console.error("Error selling asset for company:", error);
         return { error: error.message || "Une erreur est survenue lors de la vente." };
+    }
+}
+
+
+export async function addCashToCompany(companyId: number, amount: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) return { error: "Vous devez être connecté." };
+    if (amount <= 0) return { error: "Le montant doit être positif." };
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const member = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)) });
+            if (!member || member.role !== 'ceo') throw new Error("Seul le PDG peut ajouter des fonds à la trésorerie.");
+
+            const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
+            if (!user) throw new Error("Utilisateur non trouvé.");
+            if (parseFloat(user.cash) < amount) throw new Error("Fonds personnels insuffisants.");
+
+            const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId), columns: { cash: true } });
+            if (!company) throw new Error("Entreprise non trouvée.");
+
+            await tx.update(users).set({ cash: (parseFloat(user.cash) - amount).toFixed(2) }).where(eq(users.id, session.id));
+            await tx.update(companies).set({ cash: (parseFloat(company.cash) + amount).toFixed(2) }).where(eq(companies.id, companyId));
+
+            return { success: `${amount.toFixed(2)}$ ajoutés à la trésorerie de l'entreprise.` };
+        });
+
+        revalidatePath(`/companies/${companyId}`);
+        revalidatePath('/portfolio');
+        revalidatePath('/profile');
+        return result;
+
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue." };
     }
 }
