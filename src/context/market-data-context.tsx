@@ -50,7 +50,7 @@ const calculateNextPrice = (
     // Otherwise, perform a gentle random walk (jitter)
     const seed = timestamp + ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const randomValue = seededRandom(seed);
-    const volatility = 0.005; // Increased volatility for more noticeable jitter
+    const volatility = 0.002; // Increased from 0.0005 for more visible short-term fluctuation
     const changePercent = volatility * (randomValue - 0.5) * 2;
     const newPrice = previousPrice * (1 + changePercent);
     
