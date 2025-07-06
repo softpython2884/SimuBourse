@@ -32,8 +32,6 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
   const session = await getSession();
   const isCEO = company.members.some(member => member.userId === session?.id && member.role === 'ceo');
   
-  const marketCap = company.sharePrice * company.totalShares;
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -78,7 +76,7 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
                   <Briefcase className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold">${marketCap.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                  <div className="text-2xl font-bold">${company.marketCap.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                    <p className="text-xs text-muted-foreground">Valeur totale de l'entreprise</p>
               </CardContent>
           </Card>

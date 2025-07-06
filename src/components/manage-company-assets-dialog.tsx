@@ -34,7 +34,7 @@ const sellFormSchema = z.object({
 export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAssetsDialogProps) {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("buy");
-  const { assets, getAssetByTicker } = useMarketData();
+  const { assets, getAssetByTicker, refreshData } = useMarketData();
   const { toast } = useToast();
   
   const buyForm = useForm<z.infer<typeof buyFormSchema>>({
@@ -65,11 +65,12 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
         toast({ variant: 'destructive', title: 'Erreur', description: 'Actif non valide.' });
         return;
     }
-    const result = await buyAssetForCompany(company.id, selectedBuyAsset, values.quantity);
+    const result = await buyAssetForCompany(company.id, values.ticker, values.quantity);
     if (result.error) {
       toast({ variant: 'destructive', title: 'Erreur', description: result.error });
     } else if (result.success) {
       toast({ title: 'Succès', description: result.success });
+      await refreshData();
       setOpen(false);
     }
   }
@@ -83,11 +84,12 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
         sellForm.setError('quantity', { message: "Quantité insuffisante."});
         return;
     }
-    const result = await sellAssetForCompany(company.id, values.holdingId, values.quantity, selectedSellAsset.price);
+    const result = await sellAssetForCompany(company.id, values.holdingId, values.quantity);
     if (result.error) {
       toast({ variant: 'destructive', title: 'Erreur', description: result.error });
     } else if (result.success) {
       toast({ title: 'Succès', description: result.success });
+      await refreshData();
       setOpen(false);
     }
   }
@@ -186,7 +188,7 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Actif à Vendre</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value?.toString()}>
+                                    <Select onValueChange={(value) => field.onChange(parseInt(value))} defaultValue={field.value?.toString()}>
                                         <FormControl>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Sélectionnez un actif à vendre" />

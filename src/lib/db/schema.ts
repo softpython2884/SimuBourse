@@ -35,6 +35,16 @@ export const usersRelations = relations(users, ({ many }) => ({
   companyShares: many(companyShares),
 }));
 
+export const assets = pgTable('assets', {
+  ticker: varchar('ticker', { length: 10 }).primaryKey(),
+  name: varchar('name', { length: 256 }).notNull(),
+  description: text('description').notNull(),
+  type: varchar('type', { length: 50 }).notNull(),
+  price: numeric('price', { precision: 18, scale: 8 }).notNull(),
+  change24h: varchar('change_24h', { length: 20 }).notNull(),
+  marketCap: varchar('market_cap', { length: 50 }).notNull(),
+});
+
 export const holdings = pgTable('holdings', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -178,7 +188,7 @@ export const companies = pgTable('companies', {
   cash: numeric('cash', { precision: 15, scale: 2 }).default('0.00').notNull(),
   creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   sharePrice: numeric('share_price', { precision: 10, scale: 2 }).default('10.00').notNull(),
-  totalShares: numeric('total_shares', { precision: 20, scale: 0 }).default('1000000').notNull(),
+  totalShares: numeric('total_shares', { precision: 20, scale: 2 }).default('1000000').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -219,7 +229,7 @@ export const companyShares = pgTable('company_shares', {
   id: serial('id').primaryKey(),
   companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  quantity: numeric('quantity', { precision: 20, scale: 2 }).notNull(),
+  quantity: numeric('quantity', { precision: 20, scale: 8 }).notNull(),
 }, (table) => {
   return {
     companyUserSharesIdx: uniqueIndex('company_user_shares_idx').on(table.companyId, table.userId),

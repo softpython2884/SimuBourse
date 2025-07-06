@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   Card,
@@ -24,26 +23,39 @@ import {
 } from "@/components/ui/carousel";
 import { Button } from '@/components/ui/button';
 import { useMarketData } from '@/context/market-data-context';
-import type { DetailedAsset } from '@/lib/assets';
 import type { GenerateAssetNewsOutput } from '@/ai/flows/generate-asset-news';
+import { getOrGenerateAssetNews } from '@/lib/actions/news';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Loader2, TrendingDown, TrendingUp, Newspaper } from 'lucide-react';
 import { subDays, subHours, format, parseISO } from 'date-fns';
+import { AssetFromDb } from '@/lib/actions/assets';
 
 type TimeRange = '1H' | '1D';
 
 interface AssetChartClientProps {
-  asset: DetailedAsset;
+  asset: AssetFromDb;
 }
 
 export function AssetChartClient({ asset }: AssetChartClientProps) {
-  const { getHistoricalData, getNewsForTicker } = useMarketData();
+  const { getHistoricalData } = useMarketData();
   const historicalData = getHistoricalData(asset.ticker);
-  const news = getNewsForTicker(asset.ticker);
+  
+  const [news, setNews] = useState<GenerateAssetNewsOutput | undefined>(undefined);
+  const [isLoadingNews, setIsLoadingNews] = useState(true);
+
+  useEffect(() => {
+    async function fetchNews() {
+        setIsLoadingNews(true);
+        const result = await getOrGenerateAssetNews(asset.ticker, asset.name);
+        setNews(result.news);
+        setIsLoadingNews(false);
+    }
+    fetchNews();
+  }, [asset.ticker, asset.name]);
+
 
   const [timeRange, setTimeRange] = useState<TimeRange>('1D');
-  const isLoadingNews = !news;
-
+  
   const filteredData = useMemo(() => {
     const now = new Date();
     let startDate: Date;

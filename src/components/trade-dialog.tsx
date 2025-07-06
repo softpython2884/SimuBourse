@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { usePortfolio, Asset } from '@/context/portfolio-context';
+import { usePortfolio } from '@/context/portfolio-context';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,9 +18,10 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
+import { AssetFromDb } from '@/lib/actions/assets';
 
 interface TradeDialogProps {
-  asset: Asset;
+  asset: AssetFromDb;
   tradeType: 'Buy' | 'Sell';
   children: React.ReactNode;
 }
@@ -58,9 +59,9 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     if (tradeType === 'Buy') {
-      await buyAsset(asset, values.quantity);
+      await buyAsset(asset.ticker, values.quantity);
     } else {
-      await sellAsset(asset, values.quantity);
+      await sellAsset(asset.ticker, values.quantity);
     }
     setIsLoading(false);
     form.reset();

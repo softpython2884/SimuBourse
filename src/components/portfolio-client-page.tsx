@@ -9,10 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TradeDialog } from '@/components/trade-dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import type { AssetFromDb } from '@/lib/actions/assets';
 
 export default function PortfolioClientPage() {
     const { holdings, cash, initialCash, loading } = usePortfolio();
-    const { getAssetByTicker, assets: marketAssets } = useMarketData();
+    const { getAssetByTicker, assets: marketAssets, loading: marketLoading } = useMarketData();
 
     const holdingsWithMarketData = useMemo(() => {
         if (!marketAssets.length) return []; // Don't compute until market data is ready
@@ -39,7 +40,7 @@ export default function PortfolioClientPage() {
     const totalPortfolioPnL = portfolioValue - initialCash;
     const totalPortfolioPnLPercent = initialCash > 0 ? (totalPortfolioPnL / initialCash) * 100 : 0;
 
-    if (loading) {
+    if (loading || marketLoading) {
         return (
             <div className="flex h-64 items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -111,7 +112,7 @@ export default function PortfolioClientPage() {
                                                 <Link href={`/trading/${holding.asset.ticker}`}>Détails</Link>
                                              </Button>
                                             {holding.asset ? (
-                                                <TradeDialog asset={holding.asset} tradeType="Sell">
+                                                <TradeDialog asset={holding.asset as AssetFromDb} tradeType="Sell">
                                                     <Button variant="secondary" size="sm">Vendre</Button>
                                                 </TradeDialog>
                                             ) : (

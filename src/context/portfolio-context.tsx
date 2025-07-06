@@ -7,13 +7,7 @@ import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileActi
 import { buyMiningRig as buyMiningRigAction } from '@/lib/actions/mining';
 import { getRigById } from '@/lib/mining';
 import { useMarketData } from './market-data-context';
-
-export interface Asset {
-  name: string;
-  ticker: string;
-  price: number;
-  type: 'Stock' | 'Crypto' | 'Commodity' | 'Forex';
-}
+import type { AssetFromDb } from '@/lib/actions/assets';
 
 export interface Holding {
   id: number;
@@ -74,8 +68,8 @@ interface PortfolioContextType {
   unclaimedRewards: number;
   totalHashRateMhs: number;
   loading: boolean;
-  buyAsset: (asset: Asset, quantity: number) => Promise<void>;
-  sellAsset: (asset: Asset, quantity: number) => Promise<void>;
+  buyAsset: (ticker: string, quantity: number) => Promise<void>;
+  sellAsset: (ticker: string, quantity: number) => Promise<void>;
   getHoldingQuantity: (ticker: string) => number;
   updateUserProfile: (data: ProfileUpdateInput) => Promise<void>;
   buyMiningRig: (rigId: string) => Promise<void>;
@@ -87,7 +81,7 @@ const INITIAL_CASH = 100000;
 
 export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
-  const { applyTradeImpact } = useMarketData();
+  const market = useMarketData();
   const { toast } = useToast();
 
   const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null);
@@ -128,25 +122,25 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const buyAsset = async (asset: Asset, quantity: number) => {
-    const result = await buyAssetAction(asset, quantity);
+  const buyAsset = async (ticker: string, quantity: number) => {
+    const result = await buyAssetAction(ticker, quantity);
     if (result.error) {
       toast({ variant: 'destructive', title: "Échec de l'achat", description: result.error });
     } else {
       toast({ title: 'Succès', description: result.success });
-      applyTradeImpact(asset.ticker, asset.price * quantity);
       await fetchPortfolio();
+      await market.refreshData();
     }
   }
 
-  const sellAsset = async (asset: Asset, quantity: number) => {
-    const result = await sellAssetAction(asset, quantity);
+  const sellAsset = async (ticker: string, quantity: number) => {
+    const result = await sellAssetAction(ticker, quantity);
     if (result.error) {
       toast({ variant: 'destructive', title: 'Échec de la vente', description: result.error });
     } else {
       toast({ title: 'Succès', description: result.success });
-      applyTradeImpact(asset.ticker, -1 * asset.price * quantity);
       await fetchPortfolio();
+      await market.refreshData();
     }
   }
 

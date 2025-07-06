@@ -2,10 +2,11 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { companies, companyMembers, users, companyShares, companyHoldings } from '@/lib/db/schema';
+import { companies, companyMembers, users, companyShares, companyHoldings, assets as assetsSchema } from '@/lib/db/schema';
 import { getSession } from '../session';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
+import { updatePriceFromTrade } from './assets';
 
 const createCompanySchema = z.object({
   name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50),
@@ -111,13 +112,30 @@ export async function getCompanyById(companyId: number) {
     if (!company) {
         return null;
     }
+    
+    // Fetch all asset prices for valuation
+    const allAssets = await db.query.assets.findMany();
+    const priceMap = allAssets.reduce((map, asset) => {
+        map[asset.ticker] = parseFloat(asset.price);
+        return map;
+    }, {} as Record<string, number>);
 
-    // Convert numeric strings to numbers for easier use on the client
+    const portfolioValue = company.holdings.reduce((sum, holding) => {
+      const currentPrice = priceMap[holding.ticker] || parseFloat(holding.avgCost);
+      return sum + (parseFloat(holding.quantity) * currentPrice);
+    }, 0);
+
+    const companyCash = parseFloat(company.cash);
+    const companyValue = companyCash + portfolioValue;
+    const totalShares = parseFloat(company.totalShares);
+    const sharePrice = totalShares > 0 ? companyValue / totalShares : 0;
+
     return {
       ...company,
-      cash: parseFloat(company.cash),
-      sharePrice: parseFloat(company.sharePrice),
-      totalShares: parseFloat(company.totalShares),
+      cash: companyCash,
+      sharePrice: sharePrice,
+      totalShares: totalShares,
+      marketCap: companyValue,
       shares: company.shares.map(s => ({...s, quantity: parseFloat(s.quantity)})),
       holdings: company.holdings.map(h => ({
         ...h,
@@ -140,53 +158,47 @@ export async function investInCompany(companyId: number, amount: number): Promis
     if (!session?.id) {
         return { error: "Vous devez être connecté pour investir." };
     }
-    if (amount <= 0) {
-        return { error: "Le montant de l'investissement doit être positif." };
-    }
 
     try {
         const result = await db.transaction(async (tx) => {
-            // 1. Get user and company data
-            const user = await tx.query.users.findFirst({
-                where: eq(users.id, session.id),
-                columns: { cash: true }
-            });
+            const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
+            if (!user) throw new Error("Utilisateur non trouvé.");
+            if (parseFloat(user.cash) < amount) throw new Error("Fonds insuffisants.");
+
             const company = await tx.query.companies.findFirst({
                 where: eq(companies.id, companyId),
-                columns: { name: true, cash: true, sharePrice: true, totalShares: true }
+                with: { holdings: true }
             });
-
-            if (!user) throw new Error("Utilisateur non trouvé.");
             if (!company) throw new Error("Entreprise non trouvée.");
 
-            const userCash = parseFloat(user.cash);
-            if (userCash < amount) {
-                throw new Error("Fonds insuffisants.");
-            }
-            
-            const sharePrice = parseFloat(company.sharePrice);
-            const totalShares = parseFloat(company.totalShares);
-            const sharesToBuy = amount / sharePrice;
-            
-            // 2. Update balances
-            const newUserCash = userCash - amount;
-            const newCompanyCash = parseFloat(company.cash) + amount;
-            
-            await tx.update(users).set({ cash: newUserCash.toFixed(2) }).where(eq(users.id, session.id));
-            
-            // 3. Update company's share price and cash
-            const marketCap = sharePrice * totalShares;
-            const inflationFactor = (amount / (marketCap + amount)) * 0.1; // Max 10% influence on price per trade
-            const newSharePrice = sharePrice * (1 + inflationFactor);
-            const newTotalShares = totalShares + sharesToBuy;
+            const allAssets = await tx.query.assets.findMany();
+            const priceMap = allAssets.reduce((map, asset) => {
+                map[asset.ticker] = parseFloat(asset.price);
+                return map;
+            }, {} as Record<string, number>);
 
+            const portfolioValue = company.holdings.reduce((sum, holding) => {
+                const currentPrice = priceMap[holding.ticker] || parseFloat(holding.avgCost);
+                return sum + (parseFloat(holding.quantity) * currentPrice);
+            }, 0);
+
+            const companyValue = parseFloat(company.cash) + portfolioValue;
+            const totalShares = parseFloat(company.totalShares);
+            const preInvestmentSharePrice = totalShares > 0 ? companyValue / totalShares : parseFloat(company.sharePrice);
+
+            if (amount <= 0) throw new Error("Le montant de l'investissement doit être positif.");
+            if (preInvestmentSharePrice <= 0) throw new Error("Le prix de l'action est nul, l'investissement est impossible.");
+
+            const sharesToBuy = amount / preInvestmentSharePrice;
+            const newCompanyCash = parseFloat(company.cash) + amount;
+            const newTotalShares = totalShares + sharesToBuy;
+            
+            await tx.update(users).set({ cash: (parseFloat(user.cash) - amount).toFixed(2) }).where(eq(users.id, session.id));
             await tx.update(companies).set({ 
                 cash: newCompanyCash.toFixed(2),
-                sharePrice: newSharePrice.toFixed(2),
                 totalShares: newTotalShares.toString(),
             }).where(eq(companies.id, companyId));
 
-            // 4. Update user's share ownership
             const existingShares = await tx.query.companyShares.findFirst({
                 where: and(eq(companyShares.userId, session.id), eq(companyShares.companyId, companyId))
             });
@@ -218,59 +230,31 @@ export async function investInCompany(companyId: number, amount: number): Promis
     }
 }
 
-const assetSchema = z.object({
-  name: z.string(),
-  ticker: z.string(),
-  price: z.number(),
-  type: z.enum(['Stock', 'Crypto', 'Commodity', 'Forex']),
-});
-
-export async function buyAssetForCompany(companyId: number, asset: z.infer<typeof assetSchema>, quantity: number): Promise<{ success?: string; error?: string }> {
+export async function buyAssetForCompany(companyId: number, ticker: string, quantity: number): Promise<{ success?: string; error?: string }> {
     const session = await getSession();
-    if (!session?.id) {
-        return { error: "Vous devez être connecté pour effectuer cette action." };
-    }
-
-    if (quantity <= 0) {
-        return { error: "La quantité doit être positive." };
-    }
+    if (!session?.id) return { error: "Vous devez être connecté pour effectuer cette action." };
+    if (quantity <= 0) return { error: "La quantité doit être positive." };
 
     try {
-        const cost = asset.price * quantity;
+        const asset = await db.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
+        if (!asset) return { error: "Actif non trouvé." };
 
+        const price = parseFloat(asset.price);
+        const cost = price * quantity;
+        
         const result = await db.transaction(async (tx) => {
-            // 1. Authorization: Check if user is CEO
-            const member = await tx.query.companyMembers.findFirst({
-                where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id))
-            });
+            const member = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)) });
+            if (!member || member.role !== 'ceo') throw new Error("Seul le PDG peut gérer le portefeuille de l'entreprise.");
 
-            if (!member || member.role !== 'ceo') {
-                throw new Error("Seul le PDG peut gérer le portefeuille de l'entreprise.");
-            }
-
-            // 2. Check company cash
-            const company = await tx.query.companies.findFirst({
-                where: eq(companies.id, companyId),
-                columns: { cash: true }
-            });
-
-            if (!company) {
-                throw new Error("Entreprise non trouvée.");
-            }
+            const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId), columns: { cash: true } });
+            if (!company) throw new Error("Entreprise non trouvée.");
 
             const companyCash = parseFloat(company.cash);
-            if (companyCash < cost) {
-                throw new Error("Trésorerie de l'entreprise insuffisante.");
-            }
+            if (companyCash < cost) throw new Error("Trésorerie de l'entreprise insuffisante.");
             
-            // 3. Update balances
-            const newCompanyCash = companyCash - cost;
-            await tx.update(companies).set({ cash: newCompanyCash.toFixed(2) }).where(eq(companies.id, companyId));
+            await tx.update(companies).set({ cash: (companyCash - cost).toFixed(2) }).where(eq(companies.id, companyId));
 
-            // 4. Update company's holdings
-            const existingHolding = await tx.query.companyHoldings.findFirst({
-                where: and(eq(companyHoldings.companyId, companyId), eq(companyHoldings.ticker, asset.ticker))
-            });
+            const existingHolding = await tx.query.companyHoldings.findFirst({ where: and(eq(companyHoldings.companyId, companyId), eq(companyHoldings.ticker, asset.ticker)) });
 
             if (existingHolding) {
                 const existingQuantity = parseFloat(existingHolding.quantity);
@@ -288,12 +272,16 @@ export async function buyAssetForCompany(companyId: number, asset: z.infer<typeo
                     name: asset.name,
                     type: asset.type,
                     quantity: quantity.toString(),
-                    avgCost: asset.price.toString(),
+                    avgCost: price.toString(),
                 });
             }
 
             return { success: `L'entreprise a acheté ${quantity} ${asset.ticker}.` };
         });
+
+        if (result.success) {
+            await updatePriceFromTrade(ticker, cost);
+        }
 
         revalidatePath(`/companies/${companyId}`);
         return result;
@@ -304,60 +292,37 @@ export async function buyAssetForCompany(companyId: number, asset: z.infer<typeo
     }
 }
 
-export async function sellAssetForCompany(companyId: number, holdingId: number, quantity: number, currentPrice: number): Promise<{ success?: string; error?: string }> {
+export async function sellAssetForCompany(companyId: number, holdingId: number, quantity: number): Promise<{ success?: string; error?: string }> {
     const session = await getSession();
-    if (!session?.id) {
-        return { error: "Vous devez être connecté pour effectuer cette action." };
-    }
-
-    if (quantity <= 0) {
-        return { error: "La quantité doit être positive." };
-    }
+    if (!session?.id) return { error: "Vous devez être connecté pour effectuer cette action." };
+    if (quantity <= 0) return { error: "La quantité doit être positive." };
 
     try {
-        const proceeds = currentPrice * quantity;
+        const holding = await db.query.companyHoldings.findFirst({ where: and(eq(companyHoldings.id, holdingId), eq(companyHoldings.companyId, companyId)) });
+        if (!holding) throw new Error("Actif non détenu par l'entreprise.");
+            
+        const asset = await db.query.assets.findFirst({ where: eq(assetsSchema.ticker, holding.ticker) });
+        if (!asset) return { error: "Actif non trouvé sur le marché." };
+
+        const price = parseFloat(asset.price);
+        const proceeds = price * quantity;
 
         const result = await db.transaction(async (tx) => {
-            // 1. Authorization: Check if user is CEO
-            const member = await tx.query.companyMembers.findFirst({
-                where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id))
-            });
+            const member = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)) });
+            if (!member || member.role !== 'ceo') throw new Error("Seul le PDG peut gérer le portefeuille de l'entreprise.");
 
-            if (!member || member.role !== 'ceo') {
-                throw new Error("Seul le PDG peut gérer le portefeuille de l'entreprise.");
-            }
-
-            // 2. Find the holding and check quantity
-            const holding = await tx.query.companyHoldings.findFirst({
-                where: and(eq(companyHoldings.id, holdingId), eq(companyHoldings.companyId, companyId))
-            });
-
-            if (!holding) {
-                throw new Error("Actif non détenu par l'entreprise.");
-            }
-            
             const holdingQuantity = parseFloat(holding.quantity);
-            if (holdingQuantity < quantity) {
-                throw new Error("Quantité d'actifs de l'entreprise insuffisante pour la vente.");
-            }
+            if (holdingQuantity < quantity) throw new Error("Quantité d'actifs de l'entreprise insuffisante pour la vente.");
 
-            // 3. Update company cash
-            const company = await tx.query.companies.findFirst({
-                where: eq(companies.id, companyId),
-                columns: { cash: true }
-            });
+            const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId), columns: { cash: true } });
             if (!company) throw new Error("Entreprise non trouvée.");
 
-            const newCompanyCash = parseFloat(company.cash) + proceeds;
-            await tx.update(companies).set({ cash: newCompanyCash.toFixed(2) }).where(eq(companies.id, companyId));
+            await tx.update(companies).set({ cash: (parseFloat(company.cash) + proceeds).toFixed(2) }).where(eq(companies.id, companyId));
 
-            // 4. Update or delete company's holding
             const newQuantity = holdingQuantity - quantity;
-            if (newQuantity < 1e-9) { // Use a small epsilon for float comparison
-                // If selling all, delete the holding
+            if (newQuantity < 1e-9) { 
                 await tx.delete(companyHoldings).where(eq(companyHoldings.id, holding.id));
             } else {
-                // Otherwise, update quantity
                 await tx.update(companyHoldings)
                     .set({ quantity: newQuantity.toString(), updatedAt: new Date() })
                     .where(eq(companyHoldings.id, holding.id));
@@ -365,6 +330,10 @@ export async function sellAssetForCompany(companyId: number, holdingId: number, 
 
             return { success: `L'entreprise a vendu ${quantity} ${holding.ticker} pour ${proceeds.toFixed(2)}$.` };
         });
+        
+        if (result.success) {
+            await updatePriceFromTrade(holding.ticker, -proceeds);
+        }
 
         revalidatePath(`/companies/${companyId}`);
         return result;

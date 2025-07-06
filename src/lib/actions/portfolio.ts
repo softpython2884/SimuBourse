@@ -3,10 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { users, holdings, transactions } from '@/lib/db/schema';
+import { users, holdings, transactions, assets as assetsSchema } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { getSession } from '@/lib/session';
 import { getRigById } from '../mining';
+import { updatePriceFromTrade } from './assets';
 
 const profileUpdateSchema = z.object({
     displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
@@ -124,20 +125,21 @@ export async function getAuthenticatedUserProfile() {
 }
 
 
-const assetSchema = z.object({
-  name: z.string(),
-  ticker: z.string(),
-  price: z.number(),
-  type: z.enum(['Stock', 'Crypto', 'Commodity', 'Forex']),
-});
-
-export async function buyAssetAction(asset: z.infer<typeof assetSchema>, quantity: number): Promise<{ success?: string; error?: string }> {
+export async function buyAssetAction(ticker: string, quantity: number): Promise<{ success?: string; error?: string }> {
     const session = await getSession();
     if (!session?.id) return { error: 'Non autorisé.' };
-
-    const cost = asset.price * quantity;
-
+    
     try {
+        const asset = await db.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
+        if (!asset) {
+            return { error: "Actif non trouvé." };
+        }
+        
+        const price = parseFloat(asset.price);
+        const cost = price * quantity;
+
+        if (cost <= 0) return { error: "Le coût de la transaction doit être positif."}
+
         const result = await db.transaction(async (tx) => {
             const user = await tx.query.users.findFirst({
                 where: eq(users.id, session.id),
@@ -173,7 +175,7 @@ export async function buyAssetAction(asset: z.infer<typeof assetSchema>, quantit
                     name: asset.name,
                     type: asset.type,
                     quantity: quantity.toString(),
-                    avgCost: asset.price.toString(),
+                    avgCost: price.toString(),
                 });
             }
 
@@ -183,16 +185,17 @@ export async function buyAssetAction(asset: z.infer<typeof assetSchema>, quantit
                 ticker: asset.ticker,
                 name: asset.name,
                 quantity: quantity.toString(),
-                price: asset.price.toString(),
+                price: price.toString(),
                 value: cost.toFixed(2),
             });
             
             return { success: `Achat de ${quantity} ${asset.ticker} réussi !` };
         });
 
-        revalidatePath('/portfolio');
-        revalidatePath('/profile');
-        revalidatePath('/');
+        if (result.success) {
+            await updatePriceFromTrade(ticker, cost);
+        }
+
         return result;
 
     } catch (error: any) {
@@ -200,13 +203,21 @@ export async function buyAssetAction(asset: z.infer<typeof assetSchema>, quantit
     }
 }
 
-export async function sellAssetAction(asset: z.infer<typeof assetSchema>, quantity: number): Promise<{ success?: string; error?: string }> {
+export async function sellAssetAction(ticker: string, quantity: number): Promise<{ success?: string; error?: string }> {
     const session = await getSession();
     if (!session?.id) return { error: 'Non autorisé.' };
     
-    const proceeds = asset.price * quantity;
-
     try {
+        const asset = await db.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
+        if (!asset) {
+            return { error: "Actif non trouvé." };
+        }
+        
+        const price = parseFloat(asset.price);
+        const proceeds = price * quantity;
+
+        if (proceeds <= 0) return { error: "Le produit de la transaction doit être positif."}
+
         const result = await db.transaction(async (tx) => {
             const user = await tx.query.users.findFirst({
                 where: eq(users.id, session.id),
@@ -241,16 +252,17 @@ export async function sellAssetAction(asset: z.infer<typeof assetSchema>, quanti
                 ticker: asset.ticker,
                 name: asset.name,
                 quantity: quantity.toString(),
-                price: asset.price.toString(),
+                price: price.toString(),
                 value: proceeds.toFixed(2),
             });
             
             return { success: `Vente de ${quantity} ${asset.ticker} réussie !` };
         });
 
-        revalidatePath('/portfolio');
-        revalidatePath('/profile');
-        revalidatePath('/');
+        if (result.success) {
+            await updatePriceFromTrade(ticker, -proceeds); // Negative value for sell impact
+        }
+        
         return result;
 
     } catch (error: any) {
