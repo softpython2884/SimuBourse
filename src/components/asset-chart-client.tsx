@@ -59,6 +59,7 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
   const filteredData = useMemo(() => {
     const now = new Date();
     let startDate: Date;
+
     switch (timeRange) {
       case '1D':
         startDate = subDays(now, 1);
@@ -70,11 +71,19 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
         startDate = subDays(now, 30);
         break;
       case '3M':
+        startDate = subDays(now, 90);
+        break;
       case '1Y':
+        startDate = subDays(now, 365);
+        break;
       case 'ALL':
-      default:
         return initialHistoricalData;
+      default:
+        // Default to 1M if something is wrong
+        startDate = subDays(now, 30);
+        break;
     }
+    // Filter the data based on the calculated start date
     return initialHistoricalData.filter(d => parseISO(d.date) >= startDate);
   }, [timeRange, initialHistoricalData]);
 

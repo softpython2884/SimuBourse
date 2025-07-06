@@ -65,9 +65,9 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         for(const ticker in initialAssetsMap) {
             const asset = initialAssetsMap[ticker];
             const data: HistoricalDataPoint[] = [];
-            // Pre-fill with some historical data for the last 24h
-            for (let i = 288; i > 0; i--) { // 288 points = 1 point every 5 minutes for 24h
-                const timestamp = now - i * 5 * 60000;
+            // Pre-fill with daily data for the past year
+            for (let i = 365; i > 0; i--) {
+                const timestamp = now - i * 24 * 60 * 60000; // Daily points
                 const price = calculateDeterministicPrice(asset.price, asset.ticker, timestamp);
                 data.push({ date: new Date(timestamp).toISOString(), price });
             }
@@ -107,10 +107,8 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
 
                     const newPrice = calculateDeterministicPrice(initialAssetsMap[ticker].price, ticker, now);
                     const newPoint = { date: new Date(now).toISOString(), price: newPrice };
-                    const history = [...(newHist[ticker] || []), newPoint];
-                    
-                    // Keep history from growing too large in memory
-                    newHist[ticker] = history.slice(-1500); 
+                    // Append new point without removing old historical data
+                    newHist[ticker] = [...(newHist[ticker] || []), newPoint];
                 }
                 return newHist;
             });
