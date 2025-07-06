@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent, Package, Cpu } from 'lucide-react';
+import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent, Package, Cpu, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -12,6 +12,7 @@ import { getSession } from '@/lib/session';
 import { ManageCompanyAssetsDialog } from '@/components/manage-company-assets-dialog';
 import { AddCompanyCashDialog } from '@/components/add-company-cash-dialog';
 import { getRigById } from '@/lib/mining';
+import { ManageMembersDialog } from '@/components/manage-members-dialog';
 
 
 function getInitials(name: string) {
@@ -153,9 +154,16 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
             </CardContent>
         </Card>
         <Card>
-            <CardHeader>
-                <CardTitle>Membres de l'Équipe</CardTitle>
-                <CardDescription>Liste des membres et de leurs rôles au sein de {company.name}.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Membres de l'Équipe</CardTitle>
+                  <CardDescription>Liste des membres et de leurs rôles au sein de {company.name}.</CardDescription>
+                </div>
+                 {isCEO && (
+                    <ManageMembersDialog company={company}>
+                      <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4" /> Gérer</Button>
+                    </ManageMembersDialog>
+                )}
             </CardHeader>
             <CardContent>
                 <Table>

@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { companies, companyMembers, users, companyShares, companyHoldings, assets as assetsSchema, companyMiningRigs } from '@/lib/db/schema';
 import { getSession } from '../session';
 import { revalidatePath } from 'next/cache';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, or, ilike, notInArray } from 'drizzle-orm';
 import { updatePriceFromTrade } from './assets';
 import { getRigById } from '@/lib/mining';
 
@@ -482,5 +482,84 @@ export async function buyMiningRigForCompany(companyId: number, rigId: string): 
     } catch (error: any) {
         console.error("Error buying mining rig for company:", error);
         return { error: error.message || "Une erreur est survenue lors de l'achat." };
+    }
+}
+
+
+// Member Management
+export async function searchUsersForCompany(companyId: number, query: string): Promise<{id: number, displayName: string, email: string}[]> {
+  if (!query || query.length < 2) return [];
+
+  const existingMembers = await db.query.companyMembers.findMany({
+    where: eq(companyMembers.companyId, companyId),
+    columns: { userId: true }
+  });
+  const existingMemberIds = existingMembers.map(m => m.userId);
+
+  const potentialUsers = await db.query.users.findMany({
+    where: and(
+        notInArray(users.id, existingMemberIds),
+        or(
+            ilike(users.displayName, `%${query}%`),
+            ilike(users.email, `%${query}%`)
+        )
+    ),
+    limit: 5,
+    columns: { id: true, displayName: true, email: true }
+  });
+
+  return potentialUsers;
+}
+
+
+export async function addMemberToCompany(companyId: number, userId: number, role: 'manager' | 'member'): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) return { error: "Non autorisé." };
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const requesterMember = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)) });
+            if (!requesterMember || requesterMember.role !== 'ceo') throw new Error("Seul le PDG peut ajouter des membres.");
+
+            const alreadyMember = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, userId)) });
+            if (alreadyMember) throw new Error("Cet utilisateur est déjà membre de l'entreprise.");
+
+            const userToAdd = await tx.query.users.findFirst({ where: eq(users.id, userId), columns: { displayName: true } });
+            if (!userToAdd) throw new Error("Utilisateur à ajouter non trouvé.");
+
+            await tx.insert(companyMembers).values({ companyId, userId, role });
+
+            return { success: `${userToAdd.displayName} a été ajouté à l'entreprise.` };
+        });
+        
+        revalidatePath(`/companies/${companyId}`);
+        return result;
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue." };
+    }
+}
+
+export async function removeMemberFromCompany(companyId: number, memberIdToRemove: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) return { error: "Non autorisé." };
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const requesterMember = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)) });
+            if (!requesterMember || requesterMember.role !== 'ceo') throw new Error("Seul le PDG peut supprimer des membres.");
+            
+            const memberToRemove = await tx.query.companyMembers.findFirst({ where: eq(companyMembers.id, memberIdToRemove), with: { user: { columns: { displayName: true } } } });
+            if (!memberToRemove) throw new Error("Membre non trouvé.");
+            if (memberToRemove.role === 'ceo') throw new Error("Le PDG ne peut pas être supprimé.");
+
+            await tx.delete(companyMembers).where(eq(companyMembers.id, memberIdToRemove));
+
+            return { success: `${memberToRemove.user.displayName} a été retiré de l'entreprise.` };
+        });
+        
+        revalidatePath(`/companies/${companyId}`);
+        return result;
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue." };
     }
 }

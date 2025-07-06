@@ -31,7 +31,7 @@ export async function getAssets() {
 export type AssetFromDb = Awaited<ReturnType<typeof getAssets>>[0];
 
 const parseMarketCap = (mc: string): number => {
-    if (!mc || typeof mc !== 'string') return 0;
+    if (!mc || typeof mc !== 'string' || mc.toLowerCase() === 'n/a') return 0;
     const value = parseFloat(mc.replace(/[^0-9.]/g, ''));
     if (mc.toLowerCase().includes('t')) return value * 1e12;
     if (mc.toLowerCase().includes('b')) return value * 1e9;
