@@ -15,6 +15,7 @@ import { getRigById } from '@/lib/mining';
 import { ManageMembersDialog } from '@/components/manage-members-dialog';
 import { WithdrawCompanyCashDialog } from '@/components/withdraw-company-cash-dialog';
 import { ListCompanyButton } from '@/components/list-company-button';
+import { claimCompanyBtc } from '@/lib/actions/companies';
 
 
 function getInitials(name: string) {
@@ -47,6 +48,8 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
     const rigData = getRigById(ownedRig.rigId);
     return total + (rigData?.hashRateMhs || 0) * ownedRig.quantity;
   }, 0);
+
+  const claimCompanyBtcWithId = claimCompanyBtc.bind(null, company.id);
   
   return (
     <div className="space-y-6">
@@ -150,6 +153,11 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
               <CardContent>
                   <div className="text-2xl font-bold">{company.unclaimedBtc.toFixed(8)} BTC</div>
                   <p className="text-xs text-muted-foreground">Généré par les opérations de minage</p>
+                  {isCEO && company.unclaimedBtc > 1e-9 && (
+                    <form action={claimCompanyBtcWithId}>
+                      <Button size="sm" className="mt-4 w-full" type="submit">Réclamer les BTC</Button>
+                    </form>
+                  )}
               </CardContent>
           </Card>
       </div>

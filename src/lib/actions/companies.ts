@@ -62,7 +62,6 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
         role: 'ceo',
       });
       
-      // The creator is also the first shareholder
       await tx.insert(companyShares).values({
         companyId: newCompany.id,
         userId: session.id,
@@ -86,77 +85,71 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
 }
 
 export async function getCompaniesForUserDashboard() {
-  const session = await getSession();
+    const session = await getSession();
 
-  const allCompanies = await db.query.companies.findMany({
-      orderBy: (companies, { desc }) => [desc(companies.createdAt)],
-  });
+    const allCompanies = await db.query.companies.findMany({
+        orderBy: (companies, { desc }) => [desc(companies.createdAt)],
+    });
 
-  const companiesWithMarketData = allCompanies.map(company => {
-      const cash = parseFloat(company.cash);
-      const totalShares = parseFloat(company.totalShares);
-      const sharePrice = parseFloat(company.sharePrice);
-      const marketCap = totalShares * sharePrice;
-      
-      return {
-          ...company,
-          cash: cash,
-          marketCap: marketCap,
-          sharePrice: sharePrice,
-          totalShares: totalShares,
-      }
-  });
+    const companiesWithMarketData = allCompanies.map(company => {
+        const cash = parseFloat(company.cash);
+        const totalShares = parseFloat(company.totalShares);
+        const sharePrice = parseFloat(company.sharePrice);
+        const marketCap = totalShares * sharePrice;
 
+        return {
+            ...company,
+            cash: cash,
+            marketCap: marketCap,
+            sharePrice: sharePrice,
+            totalShares: totalShares,
+        }
+    });
 
-  if (!session?.id) {
-    return {
-      managedCompanies: [],
-      investedCompanies: [],
-      otherCompanies: companiesWithMarketData,
-    };
-  }
-
-  const [userMemberships, userShares] = await Promise.all([
-    db.query.companyMembers.findMany({ where: eq(companyMembers.userId, session.id) }),
-    db.query.companyShares.findMany({ where: eq(companyShares.userId, session.id) }),
-  ]);
-
-  const managedCompanyIds = new Set(userMemberships.map(m => m.companyId));
-  const investedCompanyIds = new Set(userShares.map(s => s.companyId));
-
-  const managedCompanies: any[] = [];
-  const investedCompanies: any[] = [];
-  const otherCompanies: any[] = [];
-
-  companiesWithMarketData.forEach(company => {
-    const isManaged = managedCompanyIds.has(company.id);
-    const isInvested = investedCompanyIds.has(company.id);
-
-    if (isManaged) {
-      const membership = userMemberships.find(m => m.companyId === company.id)!;
-      const shareData = userShares.find(s => s.companyId === company.id);
-      const sharesHeld = parseFloat(shareData?.quantity || '0');
-      
-      managedCompanies.push({ 
-        ...company, 
-        role: membership.role,
-        sharesHeld: sharesHeld,
-        sharesValue: sharesHeld * company.sharePrice,
-      });
-    } else if (isInvested) {
-      const share = userShares.find(s => s.companyId === company.id)!;
-      const sharesHeld = parseFloat(share.quantity);
-      investedCompanies.push({ 
-          ...company, 
-          sharesHeld: sharesHeld,
-          sharesValue: sharesHeld * company.sharePrice,
-      });
-    } else {
-      otherCompanies.push(company);
+    if (!session?.id) {
+        return {
+            managedCompanies: [],
+            investedCompanies: [],
+            otherCompanies: companiesWithMarketData,
+        };
     }
-  });
 
-  return { managedCompanies, investedCompanies, otherCompanies };
+    const [userMemberships, userShares] = await Promise.all([
+        db.query.companyMembers.findMany({ where: eq(companyMembers.userId, session.id) }),
+        db.query.companyShares.findMany({ where: eq(companyShares.userId, session.id) }),
+    ]);
+
+    const sharesByCompanyId = new Map(userShares.map(s => [s.companyId, s]));
+    const membershipsByCompanyId = new Map(userMemberships.map(m => [m.companyId, m]));
+
+    const managedCompanies: any[] = [];
+    const investedCompanies: any[] = [];
+    const otherCompanies: any[] = [];
+
+    for (const company of companiesWithMarketData) {
+        const membership = membershipsByCompanyId.get(company.id);
+        const shareData = sharesByCompanyId.get(company.id);
+        const sharesHeld = parseFloat(shareData?.quantity || '0');
+
+        if (membership) {
+            managedCompanies.push({
+                ...company,
+                role: membership.role,
+                sharesHeld: sharesHeld,
+                sharesValue: sharesHeld * company.sharePrice,
+            });
+        } else if (shareData) {
+            investedCompanies.push({
+                ...company,
+                sharesHeld: sharesHeld,
+                sharesValue: sharesHeld * company.sharePrice,
+            });
+        } else {
+            otherCompanies.push(company);
+        }
+    }
+
+    return { managedCompanies, investedCompanies, otherCompanies };
 }
 
 export type ManagedCompany = Awaited<ReturnType<typeof getCompaniesForUserDashboard>>['managedCompanies'][0];
@@ -680,7 +673,7 @@ export async function applyMarketImpactToCompany(ticker: string, tradeValue: num
         revalidatePath('/');
         revalidatePath('/companies', 'layout');
 
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Error applying market impact to ${ticker}:`, error);
     }
 }
@@ -788,5 +781,75 @@ export async function sellAssetForCompany(companyId: number, holdingId: number, 
     } catch (error: any) {
         console.error("Error selling asset for company:", error);
         return { error: error.message || "Une erreur est survenue lors de la vente." };
+    }
+}
+
+export async function claimCompanyBtc(companyId: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) return { error: "Non autorisé." };
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const member = await tx.query.companyMembers.findFirst({
+                where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id))
+            });
+            if (!member || member.role !== 'ceo') {
+                throw new Error("Seul le PDG peut réclamer les récompenses de minage.");
+            }
+
+            const company = await tx.query.companies.findFirst({
+                where: eq(companies.id, companyId),
+                columns: { unclaimedBtc: true }
+            });
+            if (!company) throw new Error("Entreprise non trouvée.");
+
+            const amountBtc = parseFloat(company.unclaimedBtc);
+            if (amountBtc < 1e-9) { // Avoid claiming dust
+                throw new Error("Pas assez de BTC à réclamer.");
+            }
+
+            const btcAsset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, 'BTC') });
+            if (!btcAsset) throw new Error("L'actif BTC n'a pas été trouvé dans le système.");
+
+            const existingHolding = await tx.query.companyHoldings.findFirst({
+                where: and(eq(companyHoldings.companyId, companyId), eq(companyHoldings.ticker, 'BTC'))
+            });
+
+            if (existingHolding) {
+                const newQuantity = parseFloat(existingHolding.quantity) + amountBtc;
+                // We don't change the average cost as these are mined "for free" (in-game)
+                await tx.update(companyHoldings)
+                    .set({ quantity: newQuantity.toString(), updatedAt: new Date() })
+                    .where(eq(companyHoldings.id, existingHolding.id));
+            } else {
+                await tx.insert(companyHoldings).values({
+                    companyId: companyId,
+                    ticker: 'BTC',
+                    name: 'Bitcoin',
+                    type: 'Crypto',
+                    quantity: amountBtc.toString(),
+                    avgCost: '0',
+                });
+            }
+
+            // Reset unclaimed BTC for the company
+            await tx.update(companies)
+                .set({ unclaimedBtc: '0', lastMiningUpdateAt: new Date() })
+                .where(eq(companies.id, companyId));
+            
+            return { success: `Vous avez réclamé ${amountBtc.toFixed(8)} BTC pour l'entreprise.` };
+        });
+
+        revalidatePath(`/companies/${companyId}`);
+        return result;
+
+    } catch (error: any) {
+        console.error("Error claiming company BTC: ", error);
+        // This is a server action called from a form, so we can't easily return the error to a toast.
+        // It will fail and the user will see the old value. They can try again.
+        // For a better UX, we would need a client component with state management.
+        // But for now, this is a safe failure mode.
+        // To show an error, we would have to redirect with a query param or similar.
+        return { error: error.message || "Une erreur est survenue lors de la réclamation des récompenses." };
     }
 }
