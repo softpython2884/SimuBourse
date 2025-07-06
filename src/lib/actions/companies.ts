@@ -2,11 +2,10 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { companies, companyMembers } from '@/lib/db/schema';
+import { companies, companyMembers, users, companyShares } from '@/lib/db/schema';
 import { getSession } from '../session';
 import { revalidatePath } from 'next/cache';
-import { eq } from 'drizzle-orm';
-import { notFound } from 'next/navigation';
+import { eq, and } from 'drizzle-orm';
 
 const createCompanySchema = z.object({
   name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50),
@@ -91,6 +90,17 @@ export async function getCompanyById(companyId: number) {
             }
           },
            orderBy: (companyMembers, { asc }) => [asc(companyMembers.id)],
+        },
+        shares: {
+          with: {
+            user: {
+              columns: {
+                displayName: true,
+                id: true,
+              }
+            }
+          },
+           orderBy: (companyShares, { desc }) => [desc(companyShares.quantity)],
         }
       }
     });
@@ -103,6 +113,9 @@ export async function getCompanyById(companyId: number) {
     return {
       ...company,
       cash: parseFloat(company.cash),
+      sharePrice: parseFloat(company.sharePrice),
+      totalShares: parseFloat(company.totalShares),
+      shares: company.shares.map(s => ({...s, quantity: parseFloat(s.quantity)})),
     };
 
   } catch (error) {
@@ -112,3 +125,86 @@ export async function getCompanyById(companyId: number) {
 }
 
 export type CompanyWithDetails = NonNullable<Awaited<ReturnType<typeof getCompanyById>>>;
+
+
+export async function investInCompany(companyId: number, amount: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) {
+        return { error: "Vous devez être connecté pour investir." };
+    }
+    if (amount <= 0) {
+        return { error: "Le montant de l'investissement doit être positif." };
+    }
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            // 1. Get user and company data
+            const user = await tx.query.users.findFirst({
+                where: eq(users.id, session.id),
+                columns: { cash: true }
+            });
+            const company = await tx.query.companies.findFirst({
+                where: eq(companies.id, companyId),
+                columns: { name: true, cash: true, sharePrice: true, totalShares: true }
+            });
+
+            if (!user) throw new Error("Utilisateur non trouvé.");
+            if (!company) throw new Error("Entreprise non trouvée.");
+
+            const userCash = parseFloat(user.cash);
+            if (userCash < amount) {
+                throw new Error("Fonds insuffisants.");
+            }
+            
+            const sharePrice = parseFloat(company.sharePrice);
+            const sharesToBuy = amount / sharePrice;
+            
+            // 2. Update balances
+            const newUserCash = userCash - amount;
+            const newCompanyCash = parseFloat(company.cash) + amount;
+            
+            await tx.update(users).set({ cash: newUserCash.toFixed(2) }).where(eq(users.id, session.id));
+            
+            // 3. Update company's share price and cash
+            // A simple model: price increases with investment, weighted by market cap.
+            const marketCap = sharePrice * parseFloat(company.totalShares);
+            // The inflation factor is scaled: a larger investment relative to market cap has more impact.
+            const inflationFactor = (amount / (marketCap + amount)) * 0.1; // Max 10% influence on price per trade
+            const newSharePrice = sharePrice * (1 + inflationFactor);
+
+            await tx.update(companies).set({ 
+                cash: newCompanyCash.toFixed(2),
+                sharePrice: newSharePrice.toFixed(2)
+            }).where(eq(companies.id, companyId));
+
+            // 4. Update user's share ownership
+            const existingShares = await tx.query.companyShares.findFirst({
+                where: and(eq(companyShares.userId, session.id), eq(companyShares.companyId, companyId))
+            });
+
+            if (existingShares) {
+                const newQuantity = parseFloat(existingShares.quantity) + sharesToBuy;
+                await tx.update(companyShares)
+                    .set({ quantity: newQuantity.toString() })
+                    .where(eq(companyShares.id, existingShares.id));
+            } else {
+                await tx.insert(companyShares).values({
+                    userId: session.id,
+                    companyId: companyId,
+                    quantity: sharesToBuy.toString()
+                });
+            }
+            
+            return { success: `Vous avez investi ${amount.toFixed(2)}$ dans ${company.name} !` };
+        });
+
+        revalidatePath(`/companies/${companyId}`);
+        revalidatePath('/portfolio');
+        revalidatePath('/profile');
+        revalidatePath('/');
+        return result;
+
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue lors de l'investissement." };
+    }
+}
