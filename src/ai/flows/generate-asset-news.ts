@@ -20,6 +20,7 @@ const NewsItemSchema = z.object({
   headline: z.string().describe('A plausible, short news headline (less than 15 words).'),
   article: z.string().describe('A brief, 2-3 sentence news article expanding on the headline.'),
   sentiment: z.enum(['positive', 'negative', 'neutral']).describe('The overall sentiment of the news regarding the asset.'),
+  impactScore: z.number().int().min(-10).max(10).describe('An integer from -10 to +10 representing the news\'s market impact. -10 is a catastrophic event (e.g., bankruptcy). +10 is a massive breakthrough (e.g., revolutionary tech). 0 is neutral.'),
 });
 
 const GenerateAssetNewsOutputSchema = z.array(NewsItemSchema);
@@ -41,7 +42,13 @@ Ticker: {{ticker}}
 
 The news can be positive (e.g., breakthrough product, beating earnings expectations), negative (e.g., product recall, regulatory fines, missed targets), or neutral (e.g., analyst rating update).
 
-For each news item, create a concise headline, a brief article (2-3 sentences), and determine the sentiment.
+For each news item, create a concise headline, a brief article (2-3 sentences), determine the sentiment, and provide an impactScore.
+The impactScore is an integer from -10 to +10 representing the market impact.
+- A score of -10 is a catastrophic event (e.g., bankruptcy filing, major fraud uncovered).
+- A score of +10 is a massive positive event (e.g., revolutionary product launch, major government contract).
+- A score of 0 is neutral news (e.g., minor analyst update).
+- Scores like -2 or +3 represent everyday news (e.g., missed/beat earnings slightly).
+
 Output in JSON format as an array of 3 objects.`,
 });
 

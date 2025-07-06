@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { DetailedAsset, assets as initialAssetsList } from '@/lib/assets';
-import type { GenerateAssetNewsOutput } from '@/ai/flows/generate-asset-news';
 
 export type HistoricalDataPoint = {
     date: string;
@@ -14,7 +13,7 @@ type AssetsMap = { [ticker: string]: DetailedAsset };
 type HistoricalDataMap = { [ticker:string]: HistoricalDataPoint[] };
 
 interface NewsEvent {
-    sentiment: 'positive' | 'negative' | 'neutral';
+    impactScore: number;
     timestamp: number;
 }
 
@@ -23,7 +22,7 @@ interface MarketDataContextType {
     getAssetByTicker: (ticker: string) => DetailedAsset | undefined;
     getHistoricalData: (ticker: string) => HistoricalDataPoint[];
     loading: boolean;
-    registerNewsEvent: (ticker: string, sentiment: 'positive' | 'negative' | 'neutral') => void;
+    registerNewsEvent: (ticker: string, impactScore: number) => void;
 }
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
@@ -37,33 +36,24 @@ const calculateNextPrice = (
     previousPrice: number, 
     ticker: string, 
     timestamp: number, 
-    initialPrice: number,
     event?: NewsEvent
 ) => {
     // If a news event just occurred, apply a one-time price shock.
     if (event) {
-        let shock = 0;
-        // Positive news causes a 2% to 6% jump
-        if (event.sentiment === 'positive') shock = (Math.random() * 0.04) + 0.02; 
-        // Negative news causes a 2% to 6% drop
-        if (event.sentiment === 'negative') shock = -((Math.random() * 0.04) + 0.02);
-        
-        const shockedPrice = previousPrice * (1 + shock);
+        // impactScore is -10 to 10. We'll map this to a percentage change.
+        // Let's say max impact is a 5% change. So, impactScore * 0.5%.
+        const shockPercentage = event.impactScore * 0.005;
+        const shockedPrice = previousPrice * (1 + shockPercentage);
         return shockedPrice > 0 ? shockedPrice : 0.01;
     }
 
-    // Otherwise, perform the normal random walk simulation.
+    // Otherwise, perform a very gentle random walk (jitter)
     const seed = timestamp + ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const randomValue = seededRandom(seed);
-
-    const drift = 0.000001;
-    const volatility = 0.015; // Significantly increased for more noticeable swings
-    const meanReversionFactor = 0.00005; // Weakened to allow more price drift
-
-    const changePercent = drift + volatility * (randomValue - 0.5) * 2;
-    let newPrice = previousPrice * (1 + changePercent);
-    newPrice = newPrice * (1 - meanReversionFactor) + initialPrice * meanReversionFactor;
-
+    const volatility = 0.0005; // Very low volatility for the jitter between news
+    const changePercent = volatility * (randomValue - 0.5) * 2;
+    const newPrice = previousPrice * (1 + changePercent);
+    
     return newPrice > 0 ? newPrice : 0.01;
 };
 
@@ -86,11 +76,10 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const newsEventsRef = useRef(newsEvents);
     newsEventsRef.current = newsEvents;
 
-    const registerNewsEvent = useCallback((ticker: string, sentiment: 'positive' | 'negative' | 'neutral') => {
-        if (sentiment === 'neutral') return;
+    const registerNewsEvent = useCallback((ticker: string, impactScore: number) => {
         setNewsEvents(prev => ({
             ...prev,
-            [ticker]: { sentiment, timestamp: Date.now() },
+            [ticker]: { impactScore, timestamp: Date.now() },
         }));
     }, []);
 
@@ -102,13 +91,14 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         for(const ticker in initialAssetsMap) {
             const asset = initialAssetsMap[ticker];
             const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
-            let currentPrice = asset.price * (1 + (seededRandom(ticker.charCodeAt(0)) - 0.5) * 0.4); 
+            let currentPrice = asset.price;
             
             const totalHours = 365 * 24;
             const data: HistoricalDataPoint[] = [];
             for (let i = 0; i < totalHours; i++) {
                 const timestamp = oneYearAgo + i * 60 * 60 * 1000;
-                currentPrice = calculateNextPrice(currentPrice, asset.ticker, timestamp, asset.price);
+                // Generate initial history with only the jitter
+                currentPrice = calculateNextPrice(currentPrice, asset.ticker, timestamp);
                 data.push({ date: new Date(timestamp).toISOString(), price: currentPrice });
             }
             
@@ -142,11 +132,10 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
 
             for (const ticker in newAssetsMap) {
                 const currentAsset = newAssetsMap[ticker];
-                const initialAsset = initialAssetsMap[ticker];
-                if (!currentAsset || !initialAsset) continue;
+                if (!currentAsset) continue;
 
                 const eventForTicker = updatedNewsEvents[ticker];
-                const newPrice = calculateNextPrice(currentAsset.price, ticker, now, initialAsset.price, eventForTicker);
+                const newPrice = calculateNextPrice(currentAsset.price, ticker, now, eventForTicker);
 
                 if (eventForTicker) {
                     delete updatedNewsEvents[ticker];
@@ -155,7 +144,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
                 
                 const newPoint = { date: new Date(now).toISOString(), price: newPrice };
                 const updatedHistory = [...(newHistoricalDataMap[ticker] || []), newPoint];
-                if (updatedHistory.length > 8760 + 17280) { 
+                if (updatedHistory.length > 8760 * 2) { // Keep a bit more than a year of hourly data
                     updatedHistory.shift();
                 }
                 newHistoricalDataMap[ticker] = updatedHistory;
@@ -165,7 +154,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
                     const currTime = new Date(curr.date).getTime();
                     const prevTime = new Date(prev.date).getTime();
                     return Math.abs(currTime - twentyFourHoursAgo) < Math.abs(prevTime - twentyFourHoursAgo) ? curr : prev;
-                }, updatedHistory[0]);
+                }, updatedHistory[0] || newPoint);
                 
                 const price24hAgo = closestPoint.price;
                 const changePercent = price24hAgo > 0 ? ((newPrice - price24hAgo) / price24hAgo) * 100 : 0;

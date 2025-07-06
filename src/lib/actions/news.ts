@@ -29,6 +29,7 @@ export async function getOrGenerateAssetNews(
                 headline: news.headline,
                 article: news.article,
                 sentiment: news.sentiment as 'positive' | 'negative' | 'neutral',
+                impactScore: news.impactScore,
             }));
             return { news: newsItems, source: 'cache' };
         }
@@ -39,7 +40,10 @@ export async function getOrGenerateAssetNews(
              await db.insert(aiNews).values(
                 generatedNews.map(item => ({
                     ticker,
-                    ...item,
+                    headline: item.headline,
+                    article: item.article,
+                    sentiment: item.sentiment,
+                    impactScore: item.impactScore,
                 }))
             );
         }
@@ -51,7 +55,8 @@ export async function getOrGenerateAssetNews(
         const errorNews = [{
             headline: 'Erreur de chargement des actualités',
             article: 'Impossible de récupérer ou de générer les dernières actualités pour cet actif.',
-            sentiment: 'neutral' as const
+            sentiment: 'neutral' as const,
+            impactScore: 0,
         }];
         return { news: errorNews, source: 'generated' };
     }

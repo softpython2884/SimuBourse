@@ -74,6 +74,7 @@ export const aiNews = pgTable('ai_news', {
   headline: text('headline').notNull(),
   article: text('article').notNull(),
   sentiment: varchar('sentiment', { length: 10, enum: ['positive', 'negative', 'neutral'] }).notNull(),
+  impactScore: integer('impact_score').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => {
   return {

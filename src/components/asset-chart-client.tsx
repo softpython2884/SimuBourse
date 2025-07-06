@@ -58,15 +58,16 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
       if (source === 'generated' && freshNews) {
         freshNews.forEach(item => {
             if (item.sentiment !== 'neutral') {
-                registerNewsEvent(asset.ticker, item.sentiment);
+                registerNewsEvent(asset.ticker, item.impactScore);
             }
         });
       }
     }
 
+    // We only want to fetch news once when the component mounts for a specific asset
     fetchNews();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asset?.ticker, asset?.name]);
+  }, [asset?.ticker]);
 
   const filteredData = useMemo(() => {
     const now = new Date();
