@@ -113,11 +113,15 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
       return [minPrice * 0.995, maxPrice * 1.005];
     }
 
-    // Add 10% padding to the top and bottom for aesthetics
-    const padding = (maxPrice - minPrice) * 0.1;
+    const priceRange = maxPrice - minPrice;
+    
+    // For the 1D view, which can have smaller variations, we use a larger
+    // padding multiplier to ensure the chart feels "zoomed in".
+    const paddingMultiplier = timeRange === '1D' ? 0.4 : 0.1;
+    const padding = priceRange * paddingMultiplier;
     
     return [minPrice - padding, maxPrice + padding];
-  }, [filteredData]);
+  }, [filteredData, timeRange]);
 
   const chartConfig = {
     price: {
