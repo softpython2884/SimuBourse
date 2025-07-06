@@ -265,8 +265,13 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
                 if (sharesHeld < quantity) throw new Error("Vous ne possédez pas assez de parts pour cette vente.");
                 if (parseFloat(company.cash) < tradeValue) throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter ces parts.");
 
+                const newTotalShares = parseFloat(company.totalShares) - quantity;
+
                 // Debit company, credit user
-                await tx.update(companies).set({ cash: (parseFloat(company.cash) - tradeValue).toFixed(2) }).where(eq(companies.id, company.id));
+                await tx.update(companies).set({ 
+                    cash: (parseFloat(company.cash) - tradeValue).toFixed(2),
+                    totalShares: newTotalShares.toString(),
+                }).where(eq(companies.id, company.id));
                 await tx.update(users).set({ cash: (parseFloat(user.cash) + tradeValue).toFixed(2) }).where(eq(users.id, session.id));
 
                 // Remove shares from user

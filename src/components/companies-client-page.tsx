@@ -15,7 +15,7 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
     return (
         <TableRow>
             <TableCell>
-                <div className="font-medium">{company.name}</div>
+                <div className="font-medium">{company.name} ({company.ticker})</div>
                 <div className="text-sm text-muted-foreground">{company.industry}</div>
             </TableCell>
             {type === 'managed' && (
@@ -40,16 +40,22 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
                   <Link href={`/companies/${company.id}`}>Détails</Link>
                 </Button>
                 {type === 'invested' && (
-                    <SellSharesDialog
+                   company.isListed ? (
+                     <Button asChild variant="secondary" size="sm">
+                       <Link href={`/trading/${company.ticker}`}>Trader</Link>
+                     </Button>
+                   ) : (
+                     <SellSharesDialog
                         companyId={company.id}
                         companyName={company.name}
                         sharePrice={company.sharePrice}
                         sharesHeld={company.sharesHeld}
-                    >
-                        <Button size="sm" variant="destructive">Vendre</Button>
-                    </SellSharesDialog>
+                     >
+                       <Button size="sm" variant="destructive">Vendre</Button>
+                     </SellSharesDialog>
+                   )
                 )}
-                {type !== 'managed' && (
+                {type !== 'managed' && !company.isListed && (
                     <InvestDialog company={company as CompanyWithDetails}>
                         <Button size="sm">Investir</Button>
                     </InvestDialog>

@@ -71,10 +71,10 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
     revalidatePath('/');
     return result;
   } catch (error: any) {
+    console.error("Error creating company:", error);
     if (error?.code === '23505' && error.constraint === 'companies_name_key') {
         return { error: "Une entreprise avec ce nom existe déjà." };
     }
-    console.error("Error creating company:", error);
     return { error: error.message || "Une erreur est survenue lors de la création de l'entreprise." };
   }
 }
@@ -312,6 +312,67 @@ export async function investInCompany(companyId: number, amount: number): Promis
     }
 }
 
+export async function sellShares(companyId: number, quantity: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) {
+        return { error: "Vous devez être connecté pour vendre des parts." };
+    }
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const company = await tx.query.companies.findFirst({
+                where: eq(companies.id, companyId)
+            });
+            if (!company) throw new Error("Entreprise non trouvée.");
+            if (company.isListed) throw new Error("Les actions des entreprises cotées doivent être vendues sur le marché.");
+
+            const sharePrice = parseFloat(company.sharePrice);
+            if (quantity <= 0) throw new Error("La quantité doit être positive.");
+
+            const userShareHolding = await tx.query.companyShares.findFirst({
+                where: and(eq(companyShares.userId, session.id), eq(companyShares.companyId, companyId))
+            });
+            const sharesHeld = parseFloat(userShareHolding?.quantity || '0');
+            if (sharesHeld < quantity) throw new Error("Vous ne possédez pas assez de parts.");
+            
+            const proceeds = sharePrice * quantity;
+            const companyCash = parseFloat(company.cash);
+            if(companyCash < proceeds) throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter ces parts.");
+
+            const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
+            if (!user) throw new Error("Utilisateur non trouvé.");
+            
+            const newTotalShares = parseFloat(company.totalShares) - quantity;
+
+            await tx.update(users).set({ cash: (parseFloat(user.cash) + proceeds).toFixed(2) }).where(eq(users.id, session.id));
+            await tx.update(companies).set({ 
+                cash: (companyCash - proceeds).toFixed(2),
+                totalShares: newTotalShares.toString(),
+            }).where(eq(companies.id, companyId));
+
+            const newSharesHeld = sharesHeld - quantity;
+            if (newSharesHeld < 1e-9) {
+                await tx.delete(companyShares).where(eq(companyShares.id, userShareHolding!.id));
+            } else {
+                await tx.update(companyShares).set({ quantity: newSharesHeld.toString() }).where(eq(companyShares.id, userShareHolding!.id));
+            }
+
+            return { success: `Vous avez vendu ${quantity.toFixed(4)} parts de ${company.name} pour ${proceeds.toFixed(2)}$.` };
+        });
+
+        revalidatePath('/companies');
+        revalidatePath(`/companies/${companyId}`);
+        revalidatePath('/portfolio');
+        revalidatePath('/profile');
+        revalidatePath('/');
+        return result;
+
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue lors de la vente." };
+    }
+}
+
+
 export async function addCashToCompany(companyId: number, amount: number): Promise<{ success?: string; error?: string }> {
     const session = await getSession();
     if (!session?.id) return { error: "Vous devez être connecté." };
@@ -440,7 +501,7 @@ export async function searchUsersForCompany(companyId: number, query: string): P
 
   const potentialUsers = await db.query.users.findMany({
     where: and(
-        notInArray(users.id, existingMemberIds),
+        notInArray(users.id, existingMemberIds.length > 0 ? existingMemberIds : [0]),
         or(
             ilike(users.displayName, `%${query}%`),
             ilike(users.email, `%${query}%`)
