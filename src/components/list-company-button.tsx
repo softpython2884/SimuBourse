@@ -16,11 +16,13 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
   } from "@/components/ui/alert-dialog"
+import { useMarketData } from '@/context/market-data-context';
 
 export function ListCompanyButton({ companyId }: { companyId: number }) {
     const { toast } = useToast();
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
+    const { refreshData } = useMarketData();
 
     const handleList = async () => {
         setIsLoading(true);
@@ -29,6 +31,7 @@ export function ListCompanyButton({ companyId }: { companyId: number }) {
             toast({ variant: 'destructive', title: 'Erreur', description: result.error });
         } else {
             toast({ title: 'Succès !', description: result.success });
+            await refreshData();
             router.refresh();
         }
         setIsLoading(false);

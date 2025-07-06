@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { sellShares } from '@/lib/actions/companies';
 import { useRouter } from 'next/navigation';
+import { usePortfolio } from '@/context/portfolio-context';
 
 interface SellSharesDialogProps {
   companyId: number;
@@ -29,6 +30,8 @@ export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHel
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  const { refreshPortfolio } = usePortfolio();
+  
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -49,6 +52,7 @@ export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHel
       toast({ variant: 'destructive', title: 'Erreur', description: result.error });
     } else if (result.success) {
       toast({ title: 'Succès', description: result.success });
+      await refreshPortfolio();
       router.refresh();
       setOpen(false);
       form.reset();
