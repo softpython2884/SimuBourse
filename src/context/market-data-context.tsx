@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
@@ -45,8 +46,8 @@ const calculateNextPrice = (
     // If a news event just occurred, apply a one-time price shock.
     if (event) {
         // impactScore is -10 to 10. We'll map this to a percentage change.
-        // Let's say max impact is a 2.5% change. So, impactScore * 0.25%.
-        const shockPercentage = event.impactScore * 0.0025;
+        // A max impact is a 4% change. So, impactScore * 0.4%.
+        const shockPercentage = event.impactScore * 0.004;
         const shockedPrice = previousPrice * (1 + shockPercentage);
         return shockedPrice > 0 ? shockedPrice : 0.01;
     }
@@ -56,7 +57,7 @@ const calculateNextPrice = (
     const randomValue = seededRandom(seed);
     
     // A moderate volatility to ensure the chart isn't flat, but not chaotic either.
-    const volatility = 0.001; 
+    const volatility = 0.0005; 
     
     // A tiny positive drift to counteract the downward pressure of a multiplicative
     // random walk and to simulate a generally bullish market over the long term.
