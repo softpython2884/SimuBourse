@@ -236,6 +236,7 @@ export const companyShares = pgTable('company_shares', {
   companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   quantity: numeric('quantity', { precision: 20, scale: 8 }).notNull(),
+  avgCost: numeric('avg_cost', { precision: 20, scale: 8 }).default('0').notNull(),
 }, (table) => {
   return {
     companyUserSharesIdx: uniqueIndex('company_user_shares_idx').on(table.companyId, table.userId),

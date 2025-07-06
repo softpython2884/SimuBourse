@@ -12,20 +12,21 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import type { AssetFromDb } from '@/lib/actions/assets';
 import { SellSharesDialog } from './sell-shares-dialog';
-import { InvestDialog } from './invest-dialog';
-import type { CompanyWithDetails } from '@/lib/actions/companies';
 
 export default function PortfolioClientPage() {
-    const { holdings, cash, initialCash, loading } = usePortfolio();
+    const { holdings, cash, initialCash, loading, userProfile } = usePortfolio();
     const { getAssetByTicker, assets: marketAssets, loading: marketLoading } = useMarketData();
 
     const holdingsWithMarketData = useMemo(() => {
-        if (marketLoading && !marketAssets.length) return []; 
+        if (marketLoading && !marketAssets.length && !userProfile) return []; 
+        
         return holdings.map(holding => {
             const isCompany = holding.type === 'Company Share';
             const asset = !isCompany ? getAssetByTicker(holding.ticker) : undefined;
             
-            const currentPrice = isCompany ? holding.avgCost : (asset?.price || holding.avgCost);
+            const currentPrice = isCompany 
+                ? (holding.company?.sharePrice || holding.avgCost) 
+                : (asset?.price || holding.avgCost);
             
             const currentValue = holding.quantity * currentPrice;
             const totalCost = holding.quantity * holding.avgCost;
@@ -41,7 +42,7 @@ export default function PortfolioClientPage() {
                 pnlPercent
             };
         }).sort((a, b) => b.currentValue - a.currentValue);
-    }, [holdings, getAssetByTicker, marketAssets, marketLoading]);
+    }, [holdings, getAssetByTicker, marketAssets, marketLoading, userProfile]);
     
     const assetsValue = useMemo(() => holdingsWithMarketData.reduce((sum, holding) => sum + holding.currentValue, 0), [holdingsWithMarketData]);
     const portfolioValue = assetsValue + cash;
@@ -94,6 +95,7 @@ export default function PortfolioClientPage() {
                                 <TableHead>Quantité</TableHead>
                                 <TableHead>Prix Actuel</TableHead>
                                 <TableHead>Valeur Actuelle</TableHead>
+                                <TableHead>Gains/Pertes</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -108,6 +110,10 @@ export default function PortfolioClientPage() {
                                         <TableCell>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</TableCell>
                                         <TableCell>${holding.currentPrice.toFixed(holding.currentPrice > 10 ? 2 : 4)}</TableCell>
                                         <TableCell>${holding.currentValue.toFixed(2)}</TableCell>
+                                        <TableCell className={holding.pnl >= 0 ? 'text-green-500' : 'text-red-500'}>
+                                            <div className="font-semibold">{holding.pnl >= 0 ? '+' : '-'}${Math.abs(holding.pnl).toFixed(2)}</div>
+                                            <div className="text-xs">({holding.pnlPercent.toFixed(2)}%)</div>
+                                        </TableCell>
                                         <TableCell className="text-right space-x-2">
                                             {holding.isCompanyShare ? (
                                                 <>
@@ -143,7 +149,7 @@ export default function PortfolioClientPage() {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
+                                    <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
                                         Vous ne possédez aucun actif pour le moment.
                                     </TableCell>
                                 </TableRow>

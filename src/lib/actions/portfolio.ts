@@ -114,7 +114,7 @@ export async function getAuthenticatedUserProfile() {
                 type: 'Company Share',
                 isCompanyShare: true,
                 quantity: parseFloat(cs.quantity),
-                avgCost: sharePrice, // Using current price as avgCost for simplicity here
+                avgCost: parseFloat(cs.avgCost),
                 updatedAt: new Date(cs.company.createdAt),
                 company: {
                     ...cs.company,

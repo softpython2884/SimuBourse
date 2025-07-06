@@ -18,6 +18,13 @@ export interface Holding {
   avgCost: number;
   updatedAt: Date;
   isCompanyShare: boolean;
+  company?: {
+      id: number;
+      name: string;
+      ticker: string;
+      isListed: boolean;
+      sharePrice: number;
+  } | null;
 }
 
 export interface Transaction {
@@ -98,7 +105,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     const data = await getAuthenticatedUserProfile();
     if (data) {
-      setPortfolioData(data);
+      setPortfolioData(data as any);
       setUnclaimedRewards(data.unclaimedBtc);
     } else {
       toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de charger les données du portefeuille." });

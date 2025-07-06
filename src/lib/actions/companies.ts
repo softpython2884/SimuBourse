@@ -79,6 +79,7 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
         companyId: newCompany.id,
         userId: session.id,
         quantity: '1000.00000000',
+        avgCost: '1.00',
       });
 
       return { success: `L'entreprise "${name}" a été créée avec succès ! ${creationCost.toLocaleString()}$ ont été transférés à la trésorerie.` };
@@ -109,10 +110,16 @@ export async function getCompaniesForUserDashboard() {
         orderBy: (companies, { desc }) => [desc(companies.createdAt)],
     });
 
-    const companiesWithMarketData = allCompanies.map(company => {
-        const cash = parseFloat(company.cash);
+    const companiesWithMarketData = await Promise.all(allCompanies.map(async (company) => {
+        const nav = await getCompanyNAV(company.id, db);
         const totalShares = parseFloat(company.totalShares);
-        const sharePrice = parseFloat(company.sharePrice);
+        const sharePrice = totalShares > 0 ? nav / totalShares : 0;
+        
+        // Update share price in DB if it has changed
+        if (Math.abs(sharePrice - parseFloat(company.sharePrice)) > 1e-9) {
+            await db.update(companies).set({ sharePrice: sharePrice.toString() }).where(eq(companies.id, company.id));
+        }
+
         const marketCap = totalShares * sharePrice;
 
         const historicalData: CompanyHistoricalPoint[] = [];
@@ -137,14 +144,15 @@ export async function getCompaniesForUserDashboard() {
 
         return {
             ...company,
-            cash: cash,
+            cash: parseFloat(company.cash),
             marketCap: marketCap,
             sharePrice: sharePrice,
             totalShares: totalShares,
             historicalData,
             change24h,
         }
-    });
+    }));
+
 
     if (!session?.id) {
         return {
@@ -171,9 +179,6 @@ export async function getCompaniesForUserDashboard() {
         const shareData = sharesByCompanyId.get(company.id);
         const sharesHeld = parseFloat(shareData?.quantity || '0');
 
-        const isManaged = !!membership;
-        const isInvested = sharesHeld > 0;
-        
         const companyData = {
             ...company,
             sharesHeld: sharesHeld,
@@ -181,9 +186,9 @@ export async function getCompaniesForUserDashboard() {
             role: membership?.role,
         };
 
-        if (isManaged) {
+        if (membership) {
             managedCompanies.push(companyData);
-        } else if (isInvested) {
+        } else if (sharesHeld > 0) {
             investedCompanies.push(companyData);
         } else {
             otherCompanies.push(companyData);
@@ -265,9 +270,11 @@ export async function getCompanyById(companyId: number) {
         }
     }
     
-    // Calculate market cap based on the stored share price, not NAV
-    const sharePrice = parseFloat(company.sharePrice);
+    // Recalculate share price based on NAV
+    const nav = await getCompanyNAV(companyId, db);
     const totalShares = parseFloat(company.totalShares);
+    const sharePrice = totalShares > 0 ? nav / totalShares : 0;
+    
     const marketCap = sharePrice * totalShares;
 
     const miningRigsValue = company.miningRigs.reduce((total, ownedRig) => {
@@ -301,7 +308,7 @@ export async function getCompanyById(companyId: number) {
 export type CompanyWithDetails = NonNullable<Awaited<ReturnType<typeof getCompanyById>>>;
 
 // Universal function to calculate a company's Net Asset Value (NAV)
-async function getCompanyNAV(companyId: number, tx: any) {
+export async function getCompanyNAV(companyId: number, tx: any) {
     const company = await tx.query.companies.findFirst({
         where: eq(companies.id, companyId),
         with: { holdings: true, miningRigs: true }
@@ -373,16 +380,6 @@ export async function buyAssetForCompany(companyId: number, ticker: string, quan
                     avgCost: asset.price,
                 });
             }
-
-            // Recalculate NAV and new share price because asset values can change
-            const companyData = await tx.query.companies.findFirst({where: eq(companies.id, companyId)});
-            const nav = await getCompanyNAV(companyId, tx);
-            const totalShares = parseFloat(companyData!.totalShares);
-            if (totalShares > 0) {
-                const newSharePrice = nav / totalShares;
-                await tx.update(companies).set({ sharePrice: newSharePrice.toString() }).where(eq(companies.id, companyId));
-            }
-
             return { success: `L'entreprise a acheté ${quantity} de ${ticker}.` };
         });
 
@@ -423,15 +420,6 @@ export async function sellAssetForCompany(companyId: number, holdingId: number, 
             } else {
                 await tx.delete(companyHoldings).where(eq(companyHoldings.id, holdingId));
             }
-
-            const companyData = await tx.query.companies.findFirst({where: eq(companies.id, companyId)});
-            const nav = await getCompanyNAV(companyId, tx);
-            const totalShares = parseFloat(companyData!.totalShares);
-            if (totalShares > 0) {
-                const newSharePrice = nav / totalShares;
-                await tx.update(companies).set({ sharePrice: newSharePrice.toString() }).where(eq(companies.id, companyId));
-            }
-
             return { success: `L'entreprise a vendu ${quantity} de ${asset.ticker}.` };
         });
 
@@ -473,14 +461,6 @@ export async function buyMiningRigForCompany(companyId: number, rigId: string): 
                 await tx.insert(companyMiningRigs).values({ companyId, rigId, quantity: 1 });
             }
             
-            const companyData = await tx.query.companies.findFirst({where: eq(companies.id, companyId)});
-            const newNav = await getCompanyNAV(companyId, tx);
-            const totalShares = parseFloat(companyData!.totalShares);
-            if (totalShares > 0) {
-                const newSharePrice = newNav / totalShares;
-                await tx.update(companies).set({ sharePrice: newSharePrice.toString() }).where(eq(companies.id, companyId));
-            }
-            
             return { success: `L'entreprise a acheté un ${rigToBuy.name}.` };
         });
 
@@ -508,7 +488,11 @@ export async function investInCompany(companyId: number, amount: number): Promis
             const companyData = await tx.query.companies.findFirst({ where: eq(companies.id, companyId) });
             if (!companyData) throw new Error("Entreprise non trouvée.");
             
-            const sharePrice = parseFloat(companyData.sharePrice);
+            // Recalculate share price based on NAV before transaction
+            const currentNav = await getCompanyNAV(companyId, tx);
+            const currentTotalShares = parseFloat(companyData.totalShares);
+            const sharePrice = currentTotalShares > 0 ? currentNav / currentTotalShares : 1; // Fallback to 1 if no shares
+            
             if (sharePrice <= 0) throw new Error("Prix de l'action non valide, impossible d'investir.");
 
             const sharesToBuy = amount / sharePrice;
@@ -520,10 +504,22 @@ export async function investInCompany(companyId: number, amount: number): Promis
             });
 
             if (existingShares) {
-                const newQuantity = parseFloat(existingShares.quantity) + sharesToBuy;
-                await tx.update(companyShares).set({ quantity: newQuantity.toString() }).where(eq(companyShares.id, existingShares.id));
+                const oldQuantity = parseFloat(existingShares.quantity);
+                const oldAvgCost = parseFloat(existingShares.avgCost);
+                const newTotalQuantity = oldQuantity + sharesToBuy;
+                const newAvgCost = ((oldAvgCost * oldQuantity) + amount) / newTotalQuantity;
+
+                await tx.update(companyShares).set({ 
+                    quantity: newTotalQuantity.toString(),
+                    avgCost: newAvgCost.toString(),
+                }).where(eq(companyShares.id, existingShares.id));
             } else {
-                await tx.insert(companyShares).values({ userId: session.id, companyId: companyId, quantity: sharesToBuy.toString() });
+                await tx.insert(companyShares).values({ 
+                    userId: session.id, 
+                    companyId: companyId, 
+                    quantity: sharesToBuy.toString(),
+                    avgCost: sharePrice.toString(),
+                });
             }
 
             // Update company state
@@ -534,11 +530,6 @@ export async function investInCompany(companyId: number, amount: number): Promis
                 cash: newCompanyCash.toString(),
                 totalShares: newTotalShares.toString(),
             }).where(eq(companies.id, companyId));
-
-            // Recalculate NAV and new share price
-            const newNav = await getCompanyNAV(companyId, tx);
-            const newSharePrice = newNav / newTotalShares;
-            await tx.update(companies).set({ sharePrice: newSharePrice.toString() }).where(eq(companies.id, companyId));
             
             await tx.insert(transactions).values({
                 userId: session.id,
@@ -575,15 +566,17 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
             const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId) });
             if (!company) throw new Error("Entreprise non trouvée.");
 
-            const sharePrice = parseFloat(company.sharePrice);
-            const proceeds = sharePrice * quantity;
-
             const userShareHolding = await tx.query.companyShares.findFirst({
                 where: and(eq(companyShares.userId, session.id), eq(companyShares.companyId, companyId))
             });
             const sharesHeld = parseFloat(userShareHolding?.quantity || '0');
             if (sharesHeld < quantity) throw new Error("Vous ne possédez pas assez de parts.");
-            
+
+            const currentNav = await getCompanyNAV(companyId, tx);
+            const currentTotalShares = parseFloat(company.totalShares);
+            const sharePrice = currentTotalShares > 0 ? currentNav / currentTotalShares : 0;
+            const proceeds = sharePrice * quantity;
+
             const companyCash = parseFloat(company.cash);
             if(companyCash < proceeds) throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter ces parts.");
 
@@ -606,11 +599,6 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
                 cash: newCompanyCash.toString(),
                 totalShares: newTotalShares.toString(),
             }).where(eq(companies.id, companyId));
-
-             // Recalculate NAV and new share price
-            const newNav = await getCompanyNAV(companyId, tx);
-            const newSharePrice = newTotalShares > 0 ? newNav / newTotalShares : 0;
-            await tx.update(companies).set({ sharePrice: newSharePrice.toString() }).where(eq(companies.id, companyId));
 
              await tx.insert(transactions).values({
                 userId: session.id,
@@ -655,15 +643,6 @@ export async function addCashToCompany(companyId: number, amount: number): Promi
             await tx.update(users).set({ cash: (parseFloat(user.cash) - amount).toString() }).where(eq(users.id, session.id));
             await tx.update(companies).set({ cash: sql`${companies.cash} + ${amount}` }).where(eq(companies.id, companyId));
             
-            // Recalculate NAV and new share price
-            const company = await tx.query.companies.findFirst({where: eq(companies.id, companyId)});
-            const newNav = await getCompanyNAV(companyId, tx);
-            const totalShares = parseFloat(company!.totalShares);
-            if (totalShares > 0) {
-                const newSharePrice = newNav / totalShares;
-                await tx.update(companies).set({ sharePrice: newSharePrice.toString() }).where(eq(companies.id, companyId));
-            }
-
             return { success: `${amount.toFixed(2)}$ ajoutés à la trésorerie de l'entreprise.` };
         });
 
@@ -697,16 +676,7 @@ export async function withdrawFromCompanyTreasury(companyId: number, amount: num
             
             await tx.update(companies).set({ cash: sql`${companies.cash} - ${amount}` }).where(eq(companies.id, companyId));
             await tx.update(users).set({ cash: (parseFloat(user.cash) + amount).toString() }).where(eq(users.id, session.id));
-
-            // Recalculate NAV and new share price
-            const fullCompany = await tx.query.companies.findFirst({where: eq(companies.id, companyId)});
-            const newNav = await getCompanyNAV(companyId, tx);
-            const totalShares = parseFloat(fullCompany!.totalShares);
-            if (totalShares > 0) {
-                const newSharePrice = newNav / totalShares;
-                await tx.update(companies).set({ sharePrice: newSharePrice.toString() }).where(eq(companies.id, companyId));
-            }
-
+            
             return { success: `${amount.toFixed(2)}$ retirés de la trésorerie de l'entreprise.` };
         });
 
@@ -815,22 +785,15 @@ export async function listCompanyOnMarket(companyId: number): Promise<{ success?
             if (!company) throw new Error("Entreprise non trouvée.");
             if (company.isListed) throw new Error("L'entreprise est déjà cotée.");
             
-            // Recalculate NAV and share price one last time before listing
-            const nav = await getCompanyNAV(companyId, tx);
-            const totalShares = parseFloat(company.totalShares);
-            const sharePrice = totalShares > 0 ? nav / totalShares : 0;
-        
             await tx.update(companies).set({ 
                 isListed: true,
-                sharePrice: sharePrice.toString()
             }).where(eq(companies.id, companyId));
         
             return { success: 'Entreprise mise en bourse avec succès !' };
         });
 
-      revalidatePath('/trading');
+      revalidatePath(`/companies`);
       revalidatePath(`/companies/${companyId}`);
-      revalidatePath('/companies');
   
       return result;
     } catch (error: any) {
