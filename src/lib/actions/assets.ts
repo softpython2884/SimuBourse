@@ -17,11 +17,10 @@ export async function getAssets() {
                 price: asset.price.toString(),
             }));
             await db.insert(assetsSchema).values(assetsToInsert);
-            const seededAssets = await db.query.assets.findMany();
-            return seededAssets.map(a => ({...a, price: parseFloat(a.price)}));
+            // After seeding, we continue to fetch all assets including the newly seeded ones.
         }
 
-        const baseAssets = assetsInDb.map(a => ({...a, price: parseFloat(a.price)}));
+        const baseAssets = (await db.query.assets.findMany()).map(a => ({...a, price: parseFloat(a.price)}));
 
         const listedCompanies = await db.query.companies.findMany({
             where: eq(companiesSchema.isListed, true),
@@ -50,7 +49,7 @@ export async function getAssets() {
                 price: sharePrice,
                 change24h: '+0.00%', // Placeholder, as company value change is not tracked over 24h yet
                 marketCap: marketCapString,
-            }
+            };
         });
 
         return [...baseAssets, ...companyAssets];
@@ -82,13 +81,21 @@ export async function updatePriceFromTrade(ticker: string, tradeValue: number) {
         if (!asset || asset.type === 'Company Share') return;
 
         const marketCap = parseMarketCap(asset.marketCap);
-        if (marketCap === 0) return;
+        const currentPrice = parseFloat(asset.price);
+
+        // Guards to prevent invalid calculations or division by zero.
+        if (marketCap <= 0 || currentPrice <= 0) return;
 
         const IMPACT_CONSTANT = 0.05; 
         const impactPercentage = (tradeValue / marketCap) * IMPACT_CONSTANT;
         
-        const currentPrice = parseFloat(asset.price);
         const newPrice = currentPrice * (1 + impactPercentage);
+        
+        // Final sanity check to prevent writing bad data (NaN, Infinity, negative) to the DB
+        if (isNaN(newPrice) || !isFinite(newPrice) || newPrice <= 0) {
+            console.warn(`Prevented invalid price update for ${ticker}. New price would be: ${newPrice}`);
+            return;
+        }
 
         await db.update(assetsSchema)
             .set({ price: newPrice.toString() })
