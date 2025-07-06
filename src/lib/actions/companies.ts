@@ -61,6 +61,13 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
         userId: session.id,
         role: 'ceo',
       });
+      
+      // The creator is also the first shareholder
+      await tx.insert(companyShares).values({
+        companyId: newCompany.id,
+        userId: session.id,
+        quantity: '1000.00000000',
+      });
 
       return { success: `L'entreprise "${name}" a été créée avec succès ! ${creationCost.toLocaleString()}$ ont été transférés à la trésorerie.` };
     });
@@ -71,7 +78,6 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
     revalidatePath('/');
     return result;
   } catch (error: any) {
-    console.error("Error creating company:", error);
     if (error?.code === '23505' && error.constraint === 'companies_name_key') {
         return { error: "Une entreprise avec ce nom existe déjà." };
     }
@@ -123,12 +129,23 @@ export async function getCompaniesForUserDashboard() {
   const otherCompanies: any[] = [];
 
   companiesWithMarketData.forEach(company => {
-    if (managedCompanyIds.has(company.id)) {
-      const membership = userMemberships.find(m => m.companyId === company.id);
-      managedCompanies.push({ ...company, role: membership?.role });
-    } else if (investedCompanyIds.has(company.id)) {
-      const share = userShares.find(s => s.companyId === company.id);
-      const sharesHeld = parseFloat(share?.quantity || '0');
+    const isManaged = managedCompanyIds.has(company.id);
+    const isInvested = investedCompanyIds.has(company.id);
+
+    if (isManaged) {
+      const membership = userMemberships.find(m => m.companyId === company.id)!;
+      const shareData = userShares.find(s => s.companyId === company.id);
+      const sharesHeld = parseFloat(shareData?.quantity || '0');
+      
+      managedCompanies.push({ 
+        ...company, 
+        role: membership.role,
+        sharesHeld: sharesHeld,
+        sharesValue: sharesHeld * company.sharePrice,
+      });
+    } else if (isInvested) {
+      const share = userShares.find(s => s.companyId === company.id)!;
+      const sharesHeld = parseFloat(share.quantity);
       investedCompanies.push({ 
           ...company, 
           sharesHeld: sharesHeld,
@@ -262,17 +279,18 @@ export async function investInCompany(companyId: number, amount: number): Promis
             if (!user) throw new Error("Utilisateur non trouvé.");
             if (parseFloat(user.cash) < amount) throw new Error("Fonds insuffisants.");
 
-            const companyData = await getCompanyById(companyId);
+            const companyData = await tx.query.companies.findFirst({ where: eq(companies.id, companyId) });
             if (!companyData || companyData.isListed) throw new Error("L'investissement direct n'est possible que pour les entreprises non cotées.");
             
-            const preInvestmentSharePrice = companyData.sharePrice;
+            const sharePrice = parseFloat(companyData.sharePrice);
+            const totalShares = parseFloat(companyData.totalShares);
+            const companyCash = parseFloat(companyData.cash);
 
             if (amount <= 0) throw new Error("Le montant de l'investissement doit être positif.");
-            if (preInvestmentSharePrice <= 0) throw new Error("Le prix de l'action est nul, l'investissement est impossible.");
 
-            const sharesToBuy = amount / preInvestmentSharePrice;
-            const newCompanyCash = companyData.cash + amount;
-            const newTotalShares = companyData.totalShares + sharesToBuy;
+            const sharesToBuy = amount / sharePrice;
+            const newCompanyCash = companyCash + amount;
+            const newTotalShares = totalShares + sharesToBuy;
             
             await tx.update(users).set({ cash: (parseFloat(user.cash) - amount).toFixed(2) }).where(eq(users.id, session.id));
             await tx.update(companies).set({ 

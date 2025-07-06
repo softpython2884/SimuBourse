@@ -12,62 +12,67 @@ import { SellSharesDialog } from '@/components/sell-shares-dialog';
 
 
 function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'invested' | 'other' }) {
+    const hasShares = company.sharesHeld > 0;
+
     return (
         <TableRow>
+            {/* Column 1: Entreprise */}
             <TableCell>
                 <div className="font-medium">{company.name} ({company.ticker})</div>
                 <div className="text-sm text-muted-foreground">{company.industry}</div>
             </TableCell>
-            {type === 'managed' && (
-                 <TableCell>
-                    <Badge variant="secondary">{company.role.toUpperCase()}</Badge>
-                </TableCell>
-            )}
-            {type === 'invested' && (
-                <>
-                    <TableCell className="font-mono">{company.sharesHeld.toFixed(4)}</TableCell>
-                    <TableCell className="font-mono">${company.sharesValue.toFixed(2)}</TableCell>
-                </>
-            )}
-            {(type === 'managed' || type === 'other') && (
+
+            {/* Columns 2 & 3 based on type */}
+            {type === 'managed' && <>
+                <TableCell><Badge variant="secondary">{company.role.toUpperCase()}</Badge></TableCell>
+                <TableCell className="font-mono">{hasShares ? company.sharesHeld.toFixed(4) : '-'}</TableCell>
+                <TableCell className="font-mono">{hasShares ? `$${company.sharesValue.toFixed(2)}` : '-'}</TableCell>
+            </>}
+            {type === 'invested' && <>
+                <TableCell className="font-mono">{company.sharesHeld.toFixed(4)}</TableCell>
+                <TableCell className="font-mono">${company.sharesValue.toFixed(2)}</TableCell>
+            </>}
+            {type === 'other' && <>
                 <TableCell className="font-mono">${company.cash.toFixed(2)}</TableCell>
-            )}
-             {type === 'other' && (
-                <TableCell className="font-mono">${company.marketCap.toLocaleString(undefined, { maximumFractionDigits: 0})}</TableCell>
-            )}
+                <TableCell className="font-mono">${company.marketCap.toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+            </>}
+
+            {/* Actions Column */}
             <TableCell className="text-right space-x-2">
                 <Button asChild variant="outline" size="sm">
-                  <Link href={`/companies/${company.id}`}>Détails</Link>
+                    <Link href={`/companies/${company.id}`}>Détails</Link>
                 </Button>
-                {type === 'invested' && (
-                   company.isListed ? (
-                     <Button asChild variant="secondary" size="sm">
-                       <Link href={`/trading/${company.ticker}`}>Trader</Link>
-                     </Button>
-                   ) : (
-                     <SellSharesDialog
-                        companyId={company.id}
-                        companyName={company.name}
-                        sharePrice={company.sharePrice}
-                        sharesHeld={company.sharesHeld}
-                     >
-                       <Button size="sm" variant="destructive">Vendre</Button>
-                     </SellSharesDialog>
-                   )
+
+                {hasShares && (
+                    company.isListed ? (
+                        <Button asChild variant="secondary" size="sm">
+                            <Link href={`/trading/${company.ticker}`}>Trader</Link>
+                        </Button>
+                    ) : (
+                        <SellSharesDialog
+                            companyId={company.id}
+                            companyName={company.name}
+                            sharePrice={company.sharePrice}
+                            sharesHeld={company.sharesHeld}
+                        >
+                            <Button size="sm" variant="destructive">Vendre</Button>
+                        </SellSharesDialog>
+                    )
                 )}
-                {type !== 'managed' && !company.isListed && (
+
+                {type === 'other' && !company.isListed && (
                     <InvestDialog company={company as CompanyWithDetails}>
                         <Button size="sm">Investir</Button>
                     </InvestDialog>
                 )}
             </TableCell>
         </TableRow>
-    )
+    );
 }
 
 function CompanyTable({ title, description, companies, type }: { title: string, description: string, companies: any[], type: 'managed' | 'invested' | 'other' }) {
     const headers = {
-        managed: ["Entreprise", "Mon Rôle", "Trésorerie", ""],
+        managed: ["Entreprise", "Mon Rôle", "Mes Parts", "Valeur des Parts", ""],
         invested: ["Entreprise", "Parts Détenues", "Valeur des Parts", ""],
         other: ["Entreprise", "Trésorerie", "Cap. Boursière", ""]
     }
@@ -125,7 +130,7 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
             {managedCompanies.length > 0 && (
                 <CompanyTable 
                     title="Mes Entreprises (Dirigeant)"
-                    description="Les entreprises que vous gérez directement."
+                    description="Les entreprises que vous gérez directement. Vous pouvez également y détenir des parts."
                     companies={managedCompanies}
                     type="managed"
                 />
@@ -134,7 +139,7 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
             {investedCompanies.length > 0 && (
                 <CompanyTable
                     title="Mes Investissements"
-                    description="Les entreprises dans lesquelles vous détenez des parts."
+                    description="Les entreprises dans lesquelles vous détenez des parts mais que vous ne gérez pas."
                     companies={investedCompanies}
                     type="invested"
                 />
