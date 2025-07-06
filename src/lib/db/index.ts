@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
-import *d from 'dotenv';
+import * as d from 'dotenv';
 d.config({ path: '.env' });
 
 if (!process.env.DATABASE_URL) {
