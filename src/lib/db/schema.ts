@@ -7,8 +7,9 @@ import {
   numeric,
   integer,
   uniqueIndex,
+  index,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, desc } from 'drizzle-orm';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -66,3 +67,16 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+export const aiNews = pgTable('ai_news', {
+  id: serial('id').primaryKey(),
+  ticker: varchar('ticker', { length: 10 }).notNull(),
+  headline: text('headline').notNull(),
+  article: text('article').notNull(),
+  sentiment: varchar('sentiment', { length: 10, enum: ['positive', 'negative', 'neutral'] }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    tickerCreatedAtIdx: index('ticker_created_at_idx').on(table.ticker, desc(table.createdAt)),
+  }
+});

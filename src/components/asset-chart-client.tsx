@@ -24,11 +24,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { HistoricalData } from '@/context/market-data-context';
 import type { DetailedAsset } from '@/lib/assets';
-import { generateAssetNews, GenerateAssetNewsOutput } from '@/ai/flows/generate-asset-news';
+import type { GenerateAssetNewsOutput } from '@/ai/flows/generate-asset-news';
+import { getOrGenerateAssetNews } from '@/lib/actions/news';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { Loader2, TrendingDown, TrendingUp, Newspaper, Lock } from 'lucide-react';
+import { Loader2, TrendingDown, TrendingUp, Newspaper } from 'lucide-react';
 import { subDays, format, parseISO } from 'date-fns';
-import { useAuth } from '@/context/auth-context';
 
 type TimeRange = '1D' | '7D' | '1M' | '3M' | '1Y' | 'ALL';
 
@@ -38,35 +38,23 @@ interface AssetChartClientProps {
 }
 
 export function AssetChartClient({ asset, initialHistoricalData }: AssetChartClientProps) {
-  const { user } = useAuth();
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
   const [news, setNews] = useState<GenerateAssetNewsOutput>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(true);
 
   useEffect(() => {
-    async function manageNews() {
-        if (!asset) return;
-        setIsLoadingNews(true);
-        // L'authentification est nécessaire pour éviter les abus de l'API Genkit.
-        // Puisque l'authentification est en cours de migration, nous désactivons temporairement la génération de nouvelles.
-        if (user) {
-            try {
-                // La mise en cache avec Firestore a été supprimée. 
-                // Pour l'instant, nous générons toujours de nouvelles actualités.
-                // Une solution de mise en cache avec PostgreSQL sera envisagée.
-                const result = await generateAssetNews({ ticker: asset.ticker, name: asset.name });
-                setNews(result);
-            } catch (error) {
-                console.error("Failed to generate AI news:", error);
-                setNews([{ headline: 'Erreur de chargement', article: 'Impossible de récupérer les actualités.', sentiment: 'neutral' }]);
-            }
-        } else {
-             setNews([]);
-        }
-        setIsLoadingNews(false);
+    async function fetchNews() {
+      if (!asset?.ticker) return;
+
+      setIsLoadingNews(true);
+      setNews([]);
+      const freshNews = await getOrGenerateAssetNews(asset.ticker, asset.name);
+      setNews(freshNews);
+      setIsLoadingNews(false);
     }
-    manageNews();
-  }, [asset, user]);
+
+    fetchNews();
+  }, [asset?.ticker, asset?.name]);
 
   const filteredData = useMemo(() => {
     const now = new Date();
@@ -127,16 +115,16 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
   const renderNewsContent = () => {
     if (isLoadingNews) {
       return (
-        <div className="flex items-center justify-center h-32">
+        <div className="flex h-[140px] items-center justify-center">
            <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       );
     }
 
     if (news && news.length > 0) {
-        if (news.length === 1 && news[0].headline === 'Erreur de chargement') {
+        if (news.length === 1 && news[0].headline.includes('Erreur de chargement')) {
              return (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="h-full flex flex-col justify-center min-h-[140px]">
                     <div className="flex items-center gap-2">
                         {sentimentIcon(news[0].sentiment)}
                         <AlertTitle>{news[0].headline}</AlertTitle>
@@ -177,13 +165,13 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
     }
     
     return (
-         <Alert variant="default" className="bg-muted/50">
+        <Alert variant="default" className="bg-muted/50 h-full flex flex-col justify-center min-h-[140px]">
             <div className="flex items-center gap-2">
-                <Lock className="h-5 w-5 text-muted-foreground" />
-                <AlertTitle>Générer les actualités du jour</AlertTitle>
+                <Newspaper className="h-5 w-5 text-muted-foreground" />
+                <AlertTitle>Aucune actualité récente</AlertTitle>
             </div>
             <AlertDescription className="mt-2">
-                Connectez-vous pour générer l'analyse de l'IA pour cet actif. La connexion est en cours de migration.
+                Il n'y a pas d'actualité générée par l'IA pour cet actif pour le moment.
             </AlertDescription>
         </Alert>
     )
