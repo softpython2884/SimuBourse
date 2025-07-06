@@ -79,9 +79,15 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
                      {!company.isListed && <ListCompanyButton companyId={company.id} />}
                 </>
             )}
-            <InvestDialog company={company}>
-                <Button>Investir</Button>
-            </InvestDialog>
+            {company.isListed ? (
+                 <Button asChild>
+                    <Link href={`/trading/${company.ticker}`}>Trader sur le marché</Link>
+                </Button>
+            ) : (
+                <InvestDialog company={company}>
+                    <Button>Investir</Button>
+                </InvestDialog>
+            )}
         </div>
       </div>
 
