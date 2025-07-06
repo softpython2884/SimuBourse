@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { buyAssetForCompany, sellAssetForCompany } from '@/lib/actions/companies';
 import type { CompanyWithDetails } from '@/lib/actions/companies';
+import { useRouter } from 'next/navigation';
 
 interface ManageCompanyAssetsDialogProps {
   company: CompanyWithDetails;
@@ -34,8 +35,9 @@ const sellFormSchema = z.object({
 export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAssetsDialogProps) {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("buy");
-  const { assets, getAssetByTicker, refreshData } = useMarketData();
+  const { assets, getAssetByTicker } = useMarketData();
   const { toast } = useToast();
+  const router = useRouter();
   
   const buyForm = useForm<z.infer<typeof buyFormSchema>>({
     resolver: zodResolver(buyFormSchema),
@@ -70,7 +72,7 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
       toast({ variant: 'destructive', title: 'Erreur', description: result.error });
     } else if (result.success) {
       toast({ title: 'Succès', description: result.success });
-      await refreshData();
+      router.refresh();
       setOpen(false);
     }
   }
@@ -89,7 +91,7 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
       toast({ variant: 'destructive', title: 'Erreur', description: result.error });
     } else if (result.success) {
       toast({ title: 'Succès', description: result.success });
-      await refreshData();
+      router.refresh();
       setOpen(false);
     }
   }

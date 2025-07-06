@@ -17,7 +17,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -29,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { createCompany } from '@/lib/actions/companies';
 import { Loader2 } from 'lucide-react';
 import { usePortfolio } from '@/context/portfolio-context';
+import { useRouter } from 'next/navigation';
 
 const companyFormSchema = z.object({
   name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50, "Le nom ne doit pas dépasser 50 caractères."),
@@ -36,14 +36,11 @@ const companyFormSchema = z.object({
   description: z.string().min(10, "La description doit faire au moins 10 caractères.").max(200, "La description ne doit pas dépasser 200 caractères."),
 });
 
-interface CreateCompanyDialogProps {
-  onCompanyCreated: () => void;
-}
-
-export function CreateCompanyDialog({ onCompanyCreated }: CreateCompanyDialogProps) {
+export function CreateCompanyDialog() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const { cash } = usePortfolio();
+  const router = useRouter();
   const creationCost = 1000;
 
   const form = useForm<z.infer<typeof companyFormSchema>>({
@@ -64,7 +61,7 @@ export function CreateCompanyDialog({ onCompanyCreated }: CreateCompanyDialogPro
       toast({ title: "Succès", description: result.success });
       setOpen(false);
       form.reset();
-      onCompanyCreated();
+      router.refresh();
     }
   }
 
@@ -80,7 +77,7 @@ export function CreateCompanyDialog({ onCompanyCreated }: CreateCompanyDialogPro
         <DialogHeader>
           <DialogTitle>Lancer une Nouvelle Entreprise</DialogTitle>
           <DialogDescription>
-            La création d'une entreprise coûte {creationCost.toLocaleString()}$. Cette somme constituera sa trésorerie initiale.
+            La création d'une entreprise coûte ${creationCost.toLocaleString()}. Cette somme constituera sa trésorerie initiale.
             Vous serez nommé PDG.
           </DialogDescription>
         </DialogHeader>

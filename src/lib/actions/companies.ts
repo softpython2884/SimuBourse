@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { companies, companyMembers, users, companyShares, companyHoldings, assets as assetsSchema } from '@/lib/db/schema';
 import { getSession } from '../session';
 import { revalidatePath } from 'next/cache';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { updatePriceFromTrade } from './assets';
 
 const createCompanySchema = z.object({
@@ -74,19 +74,72 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
   }
 }
 
-export async function getCompanies() {
-  try {
-    const allCompanies = await db.query.companies.findMany({
-        orderBy: (companies, { desc }) => [desc(companies.createdAt)],
-    });
-    return allCompanies;
-  } catch (error) {
-    console.error("Error fetching companies:", error);
-    return [];
+export async function getCompaniesForUserDashboard() {
+  const session = await getSession();
+
+  const allCompanies = await db.query.companies.findMany({
+      orderBy: (companies, { desc }) => [desc(companies.createdAt)],
+  });
+
+  const companiesWithMarketData = allCompanies.map(company => {
+      const cash = parseFloat(company.cash);
+      const totalShares = parseFloat(company.totalShares);
+      const sharePrice = parseFloat(company.sharePrice);
+      const marketCap = totalShares * sharePrice;
+      
+      return {
+          ...company,
+          cash: cash,
+          marketCap: marketCap,
+          sharePrice: sharePrice,
+          totalShares: totalShares,
+      }
+  });
+
+
+  if (!session?.id) {
+    return {
+      managedCompanies: [],
+      investedCompanies: [],
+      otherCompanies: companiesWithMarketData,
+    };
   }
+
+  const [userMemberships, userShares] = await Promise.all([
+    db.query.companyMembers.findMany({ where: eq(companyMembers.userId, session.id) }),
+    db.query.companyShares.findMany({ where: eq(companyShares.userId, session.id) }),
+  ]);
+
+  const managedCompanyIds = new Set(userMemberships.map(m => m.companyId));
+  const investedCompanyIds = new Set(userShares.map(s => s.companyId));
+
+  const managedCompanies: any[] = [];
+  const investedCompanies: any[] = [];
+  const otherCompanies: any[] = [];
+
+  companiesWithMarketData.forEach(company => {
+    if (managedCompanyIds.has(company.id)) {
+      const membership = userMemberships.find(m => m.companyId === company.id);
+      managedCompanies.push({ ...company, role: membership?.role });
+    } else if (investedCompanyIds.has(company.id)) {
+      const share = userShares.find(s => s.companyId === company.id);
+      const sharesHeld = parseFloat(share?.quantity || '0');
+      investedCompanies.push({ 
+          ...company, 
+          sharesHeld: sharesHeld,
+          sharesValue: sharesHeld * company.sharePrice,
+      });
+    } else {
+      otherCompanies.push(company);
+    }
+  });
+
+  return { managedCompanies, investedCompanies, otherCompanies };
 }
 
-export type Company = Awaited<ReturnType<typeof getCompanies>>[0];
+export type ManagedCompany = Awaited<ReturnType<typeof getCompaniesForUserDashboard>>['managedCompanies'][0];
+export type InvestedCompany = Awaited<ReturnType<typeof getCompaniesForUserDashboard>>['investedCompanies'][0];
+export type OtherCompany = Awaited<ReturnType<typeof getCompaniesForUserDashboard>>['otherCompanies'][0];
 
 
 export async function getCompanyById(companyId: number) {
