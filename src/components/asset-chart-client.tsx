@@ -78,6 +78,25 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
     return initialHistoricalData.filter(d => parseISO(d.date) >= startDate);
   }, [timeRange, initialHistoricalData]);
 
+  const yAxisDomain = useMemo(() => {
+    if (!filteredData || filteredData.length === 0) {
+      const price = asset.price;
+      return [price * 0.95, price * 1.05];
+    }
+    const prices = filteredData.map(d => d.price);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+
+    if (min === max) {
+      return [min * 0.95, max * 1.05];
+    }
+
+    // Add 20% padding to the top and bottom of the price range
+    const padding = (max - min) * 0.2;
+
+    return [Math.max(0, min - padding), max + padding];
+  }, [filteredData, asset.price]);
+
   const chartConfig = {
     price: {
       label: 'Price',
@@ -218,7 +237,7 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
                                 tickFormatter={formatXAxis}
                             />
                             <YAxis
-                                domain={['dataMin', 'dataMax']}
+                                domain={yAxisDomain}
                                 hide
                             />
                             <ChartTooltip
