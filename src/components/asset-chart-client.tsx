@@ -30,7 +30,7 @@ import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Loader2, TrendingDown, TrendingUp, Newspaper } from 'lucide-react';
 import { subDays, subHours, format, parseISO } from 'date-fns';
 
-type TimeRange = '1H' | '1D' | '7D' | '1M' | '3M' | '1Y' | 'ALL';
+type TimeRange = '1H' | '1D';
 
 interface AssetChartClientProps {
   asset: DetailedAsset;
@@ -41,7 +41,7 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
   const historicalData = getHistoricalData(asset.ticker);
   const news = getNewsForTicker(asset.ticker);
 
-  const [timeRange, setTimeRange] = useState<TimeRange>('1M');
+  const [timeRange, setTimeRange] = useState<TimeRange>('1D');
   const isLoadingNews = !news;
 
   const filteredData = useMemo(() => {
@@ -53,25 +53,8 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
         startDate = subHours(now, 1);
         break;
       case '1D':
-        startDate = subDays(now, 1);
-        break;
-      case '7D':
-        startDate = subDays(now, 7);
-        break;
-      case '1M':
-        startDate = subDays(now, 30);
-        break;
-      case '3M':
-        startDate = subDays(now, 90);
-        break;
-      case '1Y':
-        startDate = subDays(now, 365);
-        break;
-      case 'ALL':
-        return historicalData;
       default:
-        // Default to 1M if something is wrong
-        startDate = subDays(now, 30);
+        startDate = subDays(now, 1);
         break;
     }
     // Filter the data based on the calculated start date
@@ -118,19 +101,8 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
 
   const formatXAxis = (tickItem: string) => {
     const date = parseISO(tickItem);
-    switch (timeRange) {
-      case '1H':
-      case '1D':
-        return format(date, 'HH:mm');
-      case '7D':
-        return format(date, 'EEE d');
-      case '1M':
-      case '3M':
-      case '1Y':
-      case 'ALL':
-      default:
-        return format(date, 'MMM d');
-    }
+    // Both 1H and 1D show time, so no switch needed
+    return format(date, 'HH:mm');
   };
   
   const sentimentIcon = (sentiment: 'positive' | 'negative' | 'neutral') => {
@@ -222,7 +194,7 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
                         </CardDescription>
                     </div>
                     <div className="flex gap-1">
-                        {(['1H', '1D', '7D', '1M', '3M', '1Y', 'ALL'] as TimeRange[]).map((range) => (
+                        {(['1H', '1D'] as TimeRange[]).map((range) => (
                             <Button
                             key={range}
                             size="sm"
