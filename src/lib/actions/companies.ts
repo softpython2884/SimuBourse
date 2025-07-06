@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -43,11 +44,8 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
         throw new Error("Une entreprise avec un ticker similaire existe déjà. Veuillez choisir un nom légèrement différent.");
       }
 
-      // Deduct cost from user
-      const newUserCash = userCash - creationCost;
-      await tx.update(users).set({ cash: newUserCash.toFixed(2) }).where(eq(users.id, session.id));
+      await tx.update(users).set({ cash: (userCash - creationCost).toFixed(2) }).where(eq(users.id, session.id));
 
-      // Create the company with initial treasury
       const [newCompany] = await tx.insert(companies).values({
         name,
         industry,
@@ -59,7 +57,6 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
         ticker: ticker,
       }).returning();
 
-      // Add the creator as the CEO
       await tx.insert(companyMembers).values({
         companyId: newCompany.id,
         userId: session.id,
@@ -75,7 +72,6 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
     revalidatePath('/');
     return result;
   } catch (error: any) {
-    // Check for unique constraint violation on name
     if (error?.code === '23505' && error.constraint === 'companies_name_key') {
         return { error: "Une entreprise avec ce nom existe déjà." };
     }
@@ -195,7 +191,6 @@ export async function getCompanyById(companyId: number) {
         return null;
     }
     
-    // --- OFFLINE MINING CALCULATION FOR COMPANY ---
     const totalCompanyHashRate = company.miningRigs.reduce((total, ownedRig) => {
         const rigData = getRigById(ownedRig.rigId);
         return total + (rigData?.hashRateMhs || 0) * ownedRig.quantity;
@@ -209,7 +204,7 @@ export async function getCompanyById(companyId: number) {
         const secondsElapsed = (now.getTime() - lastUpdate.getTime()) / 1000;
 
         if (secondsElapsed > 1) {
-            const BTC_PER_MHS_PER_SECOND = 7.7e-12; // Same as user's
+            const BTC_PER_MHS_PER_SECOND = 7.7e-12;
             const earnedOffline = totalCompanyHashRate * BTC_PER_MHS_PER_SECOND * secondsElapsed;
             finalUnclaimedBtc += earnedOffline;
             
@@ -218,9 +213,7 @@ export async function getCompanyById(companyId: number) {
                 .where(eq(companies.id, company.id));
         }
     }
-    // --- END CALCULATION ---
 
-    // Fetch all asset prices for valuation
     const allAssets = await db.query.assets.findMany();
     const priceMap = allAssets.reduce((map, asset) => {
         map[asset.ticker] = parseFloat(asset.price);
@@ -244,8 +237,7 @@ export async function getCompanyById(companyId: number) {
     const totalShares = parseFloat(company.totalShares);
     const sharePrice = totalShares > 0 ? companyValue / totalShares : parseFloat(company.sharePrice);
 
-    // Update the stored share price to reflect the latest calculation
-    if (Math.abs(sharePrice - parseFloat(company.sharePrice)) > 0.00001) { // Only update if there's a meaningful change
+    if (Math.abs(sharePrice - parseFloat(company.sharePrice)) > 0.00001) {
         await db.update(companies)
             .set({ sharePrice: sharePrice.toString() })
             .where(eq(companies.id, company.id));
@@ -328,6 +320,7 @@ export async function investInCompany(companyId: number, amount: number): Promis
             return { success: `Vous avez investi ${amount.toFixed(2)}$ dans ${companyData.name} !` };
         });
 
+        revalidatePath(`/companies`);
         revalidatePath(`/companies/${companyId}`);
         revalidatePath('/portfolio');
         revalidatePath('/profile');
@@ -353,7 +346,7 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
             const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
             if (!user) throw new Error("Utilisateur non trouvé.");
 
-            const companyData = await getCompanyById(companyId); // This function calculates current share price
+            const companyData = await getCompanyById(companyId);
             if (!companyData) throw new Error("Entreprise non trouvée.");
 
             const userShareHolding = await tx.query.companyShares.findFirst({
@@ -370,7 +363,6 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
                 throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter ces parts.");
             }
             
-            // Perform transaction
             const newCompanyCash = companyData.cash - proceeds;
             const newTotalShares = companyData.totalShares - quantity;
             const newUserCash = parseFloat(user.cash) + proceeds;
@@ -383,7 +375,7 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
             await tx.update(users).set({ cash: newUserCash.toFixed(2) }).where(eq(users.id, session.id));
             
             const newSharesHeld = sharesHeld - quantity;
-            if (newSharesHeld < 1e-9) { // If selling all shares
+            if (newSharesHeld < 1e-9) {
                 await tx.delete(companyShares).where(eq(companyShares.id, userShareHolding!.id));
             } else {
                 await tx.update(companyShares)
@@ -639,7 +631,6 @@ export async function buyMiningRigForCompany(companyId: number, rigId: string): 
 }
 
 
-// Member Management
 export async function searchUsersForCompany(companyId: number, query: string): Promise<{id: number, displayName: string, email: string}[]> {
   if (!query || query.length < 2) return [];
 
@@ -742,4 +733,42 @@ export async function listCompanyOnMarket(companyId: number): Promise<{ success?
     } catch (error: any) {
       return { error: error.message || "Une erreur est survenue." };
     }
-  }
+}
+
+export async function getListedCompaniesForSimulation() {
+    const listedCompanies = await db.query.companies.findMany({
+        where: eq(companies.isListed, true),
+        with: {
+            holdings: {
+                columns: {
+                    ticker: true,
+                    quantity: true,
+                }
+            },
+            miningRigs: {
+                columns: {
+                    rigId: true,
+                    quantity: true,
+                }
+            }
+        }
+    });
+
+    return listedCompanies.map(c => {
+        const miningRigsValue = c.miningRigs.reduce((total, ownedRig) => {
+            const rigData = getRigById(ownedRig.rigId);
+            return total + (rigData?.price || 0) * ownedRig.quantity;
+        }, 0);
+
+        return {
+            ticker: c.ticker,
+            cash: parseFloat(c.cash),
+            totalShares: parseFloat(c.totalShares),
+            unclaimedBtc: parseFloat(c.unclaimedBtc),
+            initialSharePrice: parseFloat(c.sharePrice),
+            holdings: c.holdings.map(h => ({ ticker: h.ticker, quantity: parseFloat(h.quantity) })),
+            miningRigsValue: miningRigsValue,
+        };
+    });
+}
+export type CompanyForSimulation = Awaited<ReturnType<typeof getListedCompaniesForSimulation>>[0];

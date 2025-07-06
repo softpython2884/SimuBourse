@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 import { getAssets, AssetFromDb } from '@/lib/actions/assets';
-import { parseISO, subDays } from 'date-fns';
+import { getListedCompaniesForSimulation, CompanyForSimulation } from '@/lib/actions/companies';
+import { subDays } from 'date-fns';
 
 export type HistoricalDataPoint = {
     date: string;
@@ -26,12 +27,16 @@ const MarketDataContext = createContext<MarketDataContextType | undefined>(undef
 export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [assets, setAssets] = useState<AssetsMap>({});
-    const [initialAssets, setInitialAssets] = useState<AssetsMap>({}); // To store original prices for % change
+    const [initialAssets, setInitialAssets] = useState<AssetsMap>({});
     const [historicalData, setHistoricalData] = useState<HistoricalDataMap>({});
+    const [listedCompanies, setListedCompanies] = useState<CompanyForSimulation[]>([]);
 
     const initializeMarket = useCallback(async () => {
         setLoading(true);
-        const assetsData = await getAssets();
+        const [assetsData, companiesData] = await Promise.all([
+            getAssets(),
+            getListedCompaniesForSimulation()
+        ]);
         
         const assetsMap = assetsData.reduce((acc, asset) => {
             acc[asset.ticker] = asset;
@@ -42,18 +47,16 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
 
         setAssets(assetsMap);
         setInitialAssets(initialAssetsMap);
+        setListedCompanies(companiesData);
 
-        // Generate a flat historical baseline for all assets for charting
         const now = Date.now();
         const initialHist: HistoricalDataMap = {};
         for (const ticker in assetsMap) {
             const asset = assetsMap[ticker];
             const oneDayAgo = subDays(now, 1);
             const data: HistoricalDataPoint[] = [];
-             // Generate 48 points for smoother chart
             for (let i = 0; i < 48; i++) {
-                const timestamp = oneDayAgo.getTime() + i * 30 * 60 * 1000; // 30 min intervals
-                // Add some randomness to the historical data to make it look real
+                const timestamp = oneDayAgo.getTime() + i * 30 * 60 * 1000;
                 const priceFluctuation = asset.price * (1 + (Math.random() - 0.5) * 0.1);
                 data.push({ date: new Date(timestamp).toISOString(), price: priceFluctuation });
             }
@@ -69,7 +72,6 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         initializeMarket();
     }, [initializeMarket]);
     
-    // EFFECT FOR MARKET SIMULATION
     useEffect(() => {
         if (loading || Object.keys(initialAssets).length === 0) return;
 
@@ -78,32 +80,65 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
                 const newAssets = { ...currentAssets };
                 const updatedTickers: { [ticker: string]: number } = {};
                 
+                // First, simulate regular assets
                 for (const ticker in newAssets) {
                     const asset = { ...newAssets[ticker] };
-
-                    // Prevent simulation for company shares as their price is calculated
-                    if (asset.type === 'Company Share') {
-                        continue;
-                    }
+                    if (asset.type === 'Company Share') continue;
 
                     const initialPrice = initialAssets[ticker]?.price;
                     if (!initialPrice) continue;
 
-                    // Simulate price change
                     const volatility = asset.type === 'Crypto' || asset.type === 'Forex' ? 0.015 : 0.005;
                     const changeFactor = 1 + (Math.random() - 0.5) * 2 * volatility;
                     asset.price *= changeFactor;
                     updatedTickers[ticker] = asset.price;
+                    
+                    if (isNaN(asset.price) || !isFinite(asset.price) || asset.price <= 0) {
+                        asset.price = initialPrice;
+                    }
 
-                    // Update 24h change
                     const change = asset.price - initialPrice;
                     const changePercent = (change / initialPrice) * 100;
                     asset.change24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
                     
                     newAssets[ticker] = asset;
                 }
+
+                // Now, update company share prices based on their holdings and other factors
+                for (const company of listedCompanies) {
+                    const holdingsValue = company.holdings.reduce((sum, holding) => {
+                        const assetPrice = newAssets[holding.ticker]?.price || 0;
+                        return sum + (assetPrice * holding.quantity);
+                    }, 0);
+
+                    const btcPrice = newAssets['BTC']?.price || 0;
+                    const unclaimedBtcValue = company.unclaimedBtc * btcPrice;
+                    const totalCompanyValue = company.cash + holdingsValue + company.miningRigsValue + unclaimedBtcValue;
+                    
+                    let newSharePrice = totalCompanyValue / company.totalShares;
+                    const noise = 1 + (Math.random() - 0.5) * 0.001; // +/- 0.05% noise
+                    newSharePrice *= noise;
+
+                    updatedTickers[company.ticker] = newSharePrice;
+                    
+                    const companyAsset = newAssets[company.ticker];
+                    if (companyAsset) {
+                         const initialCompanyPrice = initialAssets[company.ticker]?.price || company.initialSharePrice;
+                         const change = newSharePrice - initialCompanyPrice;
+                         const changePercent = initialCompanyPrice > 0 ? (change / initialCompanyPrice) * 100 : 0;
+                         
+                         companyAsset.price = newSharePrice;
+                         companyAsset.change24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+                         
+                         const marketCap = newSharePrice * company.totalShares;
+                         let marketCapString = `$${marketCap.toLocaleString(undefined, {maximumFractionDigits: 0})}`;
+                         if (marketCap >= 1e12) marketCapString = `$${(marketCap / 1e12).toFixed(2)}T`;
+                         else if (marketCap >= 1e9) marketCapString = `$${(marketCap / 1e9).toFixed(2)}B`;
+                         else if (marketCap >= 1e6) marketCapString = `$${(marketCap / 1e6).toFixed(2)}M`;
+                         companyAsset.marketCap = marketCapString;
+                    }
+                }
                 
-                // Now update historical data based on the new prices
                 setHistoricalData(currentHistData => {
                     const newHistData = { ...currentHistData };
                     for (const ticker in updatedTickers) {
@@ -117,10 +152,10 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
                 
                 return newAssets;
             });
-        }, 3000); // Update every 3 seconds
+        }, 3000);
 
         return () => clearInterval(simulationInterval);
-    }, [loading, initialAssets]);
+    }, [loading, initialAssets, listedCompanies]);
 
     const getAssetByTicker = useCallback((ticker: string): AssetFromDb | undefined => {
         return assets[ticker];
