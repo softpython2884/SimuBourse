@@ -22,7 +22,7 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { Button } from '@/components/ui/button';
-import { HistoricalData } from '@/context/market-data-context';
+import { useMarketData } from '@/context/market-data-context';
 import type { DetailedAsset } from '@/lib/assets';
 import type { GenerateAssetNewsOutput } from '@/ai/flows/generate-asset-news';
 import { getOrGenerateAssetNews } from '@/lib/actions/news';
@@ -34,10 +34,12 @@ type TimeRange = '1D' | '7D' | '1M' | '3M' | '1Y' | 'ALL';
 
 interface AssetChartClientProps {
   asset: DetailedAsset;
-  initialHistoricalData: HistoricalData[];
 }
 
-export function AssetChartClient({ asset, initialHistoricalData }: AssetChartClientProps) {
+export function AssetChartClient({ asset }: AssetChartClientProps) {
+  const { getHistoricalData } = useMarketData();
+  const historicalData = getHistoricalData(asset.ticker);
+
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
   const [news, setNews] = useState<GenerateAssetNewsOutput>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(true);
@@ -77,15 +79,15 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
         startDate = subDays(now, 365);
         break;
       case 'ALL':
-        return initialHistoricalData;
+        return historicalData;
       default:
         // Default to 1M if something is wrong
         startDate = subDays(now, 30);
         break;
     }
     // Filter the data based on the calculated start date
-    return initialHistoricalData.filter(d => parseISO(d.date) >= startDate);
-  }, [timeRange, initialHistoricalData]);
+    return historicalData.filter(d => parseISO(d.date) >= startDate);
+  }, [timeRange, historicalData]);
 
   const yAxisDomain = useMemo(() => {
     if (!filteredData || filteredData.length === 0) {

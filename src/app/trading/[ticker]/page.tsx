@@ -14,9 +14,8 @@ export default function AssetDetailPage() {
   const params = useParams();
   const ticker = params.ticker as string;
   
-  const { getAssetByTicker, getHistoricalData, loading } = useMarketData();
+  const { getAssetByTicker, loading } = useMarketData();
   const asset = getAssetByTicker(ticker);
-  const historicalData = getHistoricalData(ticker);
 
   if (loading && !asset) {
     return (
@@ -88,7 +87,7 @@ export default function AssetDetailPage() {
           </CardContent>
         </Card>
       </div>
-      <AssetChartClient asset={asset} initialHistoricalData={historicalData} />
+      <AssetChartClient asset={asset} />
       <Card>
         <CardHeader>
             <CardTitle>À propos de {asset.name}</CardTitle>
