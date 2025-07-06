@@ -21,31 +21,32 @@ interface MarketDataContextType {
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
 
-// Helper function for deterministic price simulation
-const calculateDeterministicPrice = (initialPrice: number, ticker: string, timestamp: number) => {
-    // A combination of sine waves to create a pseudo-random but deterministic walk
-    const timeFactor1 = timestamp / 60000;  // Slow wave (1 minute cycle)
-    const timeFactor2 = timestamp / 20000;  // Medium wave (20 second cycle)
-    const timeFactor3 = timestamp / 5000;   // Fast wave for jitter (5 second cycle)
+// A pseudo-random number generator that can be seeded for deterministic results
+const seededRandom = (seed: number) => {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+};
 
-    const tickerFactor1 = ticker.charCodeAt(0) / 10;
-    const tickerFactor2 = ticker.length;
-    
-    // Base trend
-    const sin1 = Math.sin(timeFactor1 + tickerFactor1);
-    // Medium variations
-    const sin2 = Math.sin(timeFactor2 + tickerFactor2);
-    // Small, quick jitter
-    const sin3 = Math.sin(timeFactor3 + tickerFactor1 + tickerFactor2);
+// More realistic price simulation using a random walk model
+const calculateNextPrice = (previousPrice: number, ticker: string, timestamp: number, initialPrice: number) => {
+    const seed = timestamp + ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const randomValue = seededRandom(seed);
 
-    // Combine the waves with different weights
-    const noise = (sin1 * 0.02) + (sin2 * 0.015) + (sin3 * 0.005);
-    
-    // Force a "mean reversion" to prevent prices from drifting too far
-    const reversionStrength = 0.05; 
-    const drift = noise - (reversionStrength * noise);
+    // Parameters for a simplified Geometric Brownian Motion
+    const drift = 0.0000001; // A very slight upward trend over time
+    const volatility = 0.0005; // The "randomness" or fluctuation
 
-    return initialPrice * (1 + drift);
+    // Calculate the percentage change
+    const changePercent = drift + volatility * (randomValue - 0.5) * 5;
+
+    let newPrice = previousPrice * (1 + changePercent);
+
+    // Add a mean-reversion component to pull the price back towards its initial value over the long term
+    // This prevents prices from drifting into absurd values in our simulation.
+    const meanReversionFactor = 0.0001; 
+    newPrice = newPrice * (1 - meanReversionFactor) + initialPrice * meanReversionFactor;
+
+    return newPrice > 0 ? newPrice : 0.01; // Ensure price is not negative
 };
 
 const initialAssetsMap = initialAssetsList.reduce((acc, asset) => {
@@ -62,17 +63,36 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         const now = Date.now();
         const initialHist: HistoricalDataMap = {};
+        const newAssetsMap: AssetsMap = { ...initialAssetsMap };
+
+        // Generate more realistic historical data
         for(const ticker in initialAssetsMap) {
             const asset = initialAssetsMap[ticker];
+            
+            // Generate hourly data for the past year sequentially
+            const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
+            // Start the random walk from a point +/- 20% of the initial price one year ago
+            let currentPrice = asset.price * (1 + (seededRandom(ticker.charCodeAt(0)) - 0.5) * 0.4); 
+            
+            const totalHours = 365 * 24;
             const data: HistoricalDataPoint[] = [];
-            // Pre-fill with daily data for the past year
-            for (let i = 365; i > 0; i--) {
-                const timestamp = now - i * 24 * 60 * 60000; // Daily points
-                const price = calculateDeterministicPrice(asset.price, asset.ticker, timestamp);
-                data.push({ date: new Date(timestamp).toISOString(), price });
+            for (let i = 0; i < totalHours; i++) {
+                const timestamp = oneYearAgo + i * 60 * 60 * 1000;
+                currentPrice = calculateNextPrice(currentPrice, asset.ticker, timestamp, asset.price);
+                data.push({ date: new Date(timestamp).toISOString(), price: currentPrice });
             }
+            
             initialHist[ticker] = data;
+
+            // Update the asset's current price to the last generated price
+            const lastPrice = data[data.length - 1]?.price || asset.price;
+            const price24hAgo = data[data.length - 25]?.price || lastPrice; // 24 hours + 1 buffer point
+            const changePercent = ((lastPrice - price24hAgo) / price24hAgo) * 100;
+            const change24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+            newAssetsMap[ticker] = { ...asset, price: lastPrice, change24h };
         }
+
+        setAssets(newAssetsMap);
         setHistoricalData(initialHist);
         setLoading(false);
     }, []);
@@ -87,15 +107,12 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
             setAssets(prevAssets => {
                 const newAssets = { ...prevAssets };
                 for (const ticker in newAssets) {
+                    const currentAsset = newAssets[ticker];
                     const initialAsset = initialAssetsMap[ticker];
-                    if (!initialAsset) continue;
+                    if (!currentAsset || !initialAsset) continue;
                     
-                    const newPrice = calculateDeterministicPrice(initialAsset.price, ticker, now);
-                    const price24hAgo = calculateDeterministicPrice(initialAsset.price, ticker, now - 86400000);
-                    const changePercent = ((newPrice - price24hAgo) / price24hAgo) * 100;
-                    const newChange24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
-
-                    newAssets[ticker] = { ...newAssets[ticker], price: newPrice, change24h: newChange24h };
+                    const newPrice = calculateNextPrice(currentAsset.price, ticker, now, initialAsset.price);
+                    newAssets[ticker] = { ...currentAsset, price: newPrice };
                 }
                 return newAssets;
             });
@@ -103,12 +120,14 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
             setHistoricalData(prevHist => {
                 const newHist = { ...prevHist };
                 for (const ticker in newHist) {
-                    if (!initialAssetsMap[ticker]) continue;
-
-                    const newPrice = calculateDeterministicPrice(initialAssetsMap[ticker].price, ticker, now);
+                    const lastPrice = newHist[ticker][newHist[ticker].length - 1]?.price || initialAssetsMap[ticker].price;
+                    const newPrice = calculateNextPrice(lastPrice, ticker, now, initialAssetsMap[ticker].price);
                     const newPoint = { date: new Date(now).toISOString(), price: newPrice };
-                    // Append new point without removing old historical data
-                    newHist[ticker] = [...(newHist[ticker] || []), newPoint];
+                    const updatedHistory = [...(newHist[ticker] || []), newPoint];
+                    if (updatedHistory.length > 8760) { // Keep ~1 year of hourly data + some live ticks
+                         updatedHistory.shift();
+                    }
+                    newHist[ticker] = updatedHistory;
                 }
                 return newHist;
             });
