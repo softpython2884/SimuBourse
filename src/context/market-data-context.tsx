@@ -27,9 +27,13 @@ interface MarketDataContextType {
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
 
+// A mulberry32 pseudo-random number generator. It's simple and provides better
+// distribution than Math.sin() for this kind of simulation.
 const seededRandom = (seed: number) => {
-    const x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
+    let t = seed + 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
 };
 
 const calculateNextPrice = (
@@ -41,8 +45,8 @@ const calculateNextPrice = (
     // If a news event just occurred, apply a one-time price shock.
     if (event) {
         // impactScore is -10 to 10. We'll map this to a percentage change.
-        // Let's say max impact is a 5% change. So, impactScore * 0.5%.
-        const shockPercentage = event.impactScore * 0.005;
+        // Let's say max impact is a 2.5% change. So, impactScore * 0.25%.
+        const shockPercentage = event.impactScore * 0.0025;
         const shockedPrice = previousPrice * (1 + shockPercentage);
         return shockedPrice > 0 ? shockedPrice : 0.01;
     }
@@ -50,8 +54,15 @@ const calculateNextPrice = (
     // Otherwise, perform a gentle random walk (jitter)
     const seed = timestamp + ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const randomValue = seededRandom(seed);
-    const volatility = 0.002; // Increased from 0.0005 for more visible short-term fluctuation
-    const changePercent = volatility * (randomValue - 0.5) * 2;
+    
+    // A moderate volatility to ensure the chart isn't flat, but not chaotic either.
+    const volatility = 0.001; 
+    
+    // A tiny positive drift to counteract the downward pressure of a multiplicative
+    // random walk and to simulate a generally bullish market over the long term.
+    const drift = 0.00000002; // Corresponds to ~10-15% annual growth
+    
+    const changePercent = drift + volatility * (randomValue - 0.5) * 2;
     const newPrice = previousPrice * (1 + changePercent);
     
     return newPrice > 0 ? newPrice : 0.01;
