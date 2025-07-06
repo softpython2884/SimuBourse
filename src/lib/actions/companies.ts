@@ -303,3 +303,74 @@ export async function buyAssetForCompany(companyId: number, asset: z.infer<typeo
         return { error: error.message || "Une erreur est survenue lors de l'achat." };
     }
 }
+
+export async function sellAssetForCompany(companyId: number, holdingId: number, quantity: number, currentPrice: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) {
+        return { error: "Vous devez être connecté pour effectuer cette action." };
+    }
+
+    if (quantity <= 0) {
+        return { error: "La quantité doit être positive." };
+    }
+
+    try {
+        const proceeds = currentPrice * quantity;
+
+        const result = await db.transaction(async (tx) => {
+            // 1. Authorization: Check if user is CEO
+            const member = await tx.query.companyMembers.findFirst({
+                where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id))
+            });
+
+            if (!member || member.role !== 'ceo') {
+                throw new Error("Seul le PDG peut gérer le portefeuille de l'entreprise.");
+            }
+
+            // 2. Find the holding and check quantity
+            const holding = await tx.query.companyHoldings.findFirst({
+                where: and(eq(companyHoldings.id, holdingId), eq(companyHoldings.companyId, companyId))
+            });
+
+            if (!holding) {
+                throw new Error("Actif non détenu par l'entreprise.");
+            }
+            
+            const holdingQuantity = parseFloat(holding.quantity);
+            if (holdingQuantity < quantity) {
+                throw new Error("Quantité d'actifs de l'entreprise insuffisante pour la vente.");
+            }
+
+            // 3. Update company cash
+            const company = await tx.query.companies.findFirst({
+                where: eq(companies.id, companyId),
+                columns: { cash: true }
+            });
+            if (!company) throw new Error("Entreprise non trouvée.");
+
+            const newCompanyCash = parseFloat(company.cash) + proceeds;
+            await tx.update(companies).set({ cash: newCompanyCash.toFixed(2) }).where(eq(companies.id, companyId));
+
+            // 4. Update or delete company's holding
+            const newQuantity = holdingQuantity - quantity;
+            if (newQuantity < 1e-9) { // Use a small epsilon for float comparison
+                // If selling all, delete the holding
+                await tx.delete(companyHoldings).where(eq(companyHoldings.id, holding.id));
+            } else {
+                // Otherwise, update quantity
+                await tx.update(companyHoldings)
+                    .set({ quantity: newQuantity.toString(), updatedAt: new Date() })
+                    .where(eq(companyHoldings.id, holding.id));
+            }
+
+            return { success: `L'entreprise a vendu ${quantity} ${holding.ticker} pour ${proceeds.toFixed(2)}$.` };
+        });
+
+        revalidatePath(`/companies/${companyId}`);
+        return result;
+
+    } catch (error: any) {
+        console.error("Error selling asset for company:", error);
+        return { error: error.message || "Une erreur est survenue lors de la vente." };
+    }
+}
