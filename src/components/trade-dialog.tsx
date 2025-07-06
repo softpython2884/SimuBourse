@@ -95,7 +95,14 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
                   <FormLabel>Quantité</FormLabel>
                    <div className="relative">
                       <FormControl>
-                        <Input type="number" step="any" placeholder="0" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
+                        <Input
+                            type="number"
+                            step="any"
+                            placeholder="0"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
+                        />
                       </FormControl>
                       <Button
                         type="button"
