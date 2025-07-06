@@ -473,6 +473,40 @@ export async function addCashToCompany(companyId: number, amount: number): Promi
     }
 }
 
+export async function withdrawFromCompanyTreasury(companyId: number, amount: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) return { error: "Vous devez être connecté." };
+    if (amount <= 0) return { error: "Le montant doit être positif." };
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const member = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)) });
+            if (!member || member.role !== 'ceo') throw new Error("Seul le PDG peut retirer des fonds de la trésorerie.");
+
+            const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId), columns: { cash: true } });
+            if (!company) throw new Error("Entreprise non trouvée.");
+            if (parseFloat(company.cash) < amount) throw new Error("Trésorerie de l'entreprise insuffisante.");
+            
+            const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
+            if (!user) throw new Error("Utilisateur non trouvé.");
+
+            await tx.update(companies).set({ cash: (parseFloat(company.cash) - amount).toFixed(2) }).where(eq(companies.id, companyId));
+            await tx.update(users).set({ cash: (parseFloat(user.cash) + amount).toFixed(2) }).where(eq(users.id, session.id));
+
+            return { success: `${amount.toFixed(2)}$ retirés de la trésorerie de l'entreprise.` };
+        });
+
+        revalidatePath(`/companies/${companyId}`);
+        revalidatePath('/portfolio');
+        revalidatePath('/profile');
+        revalidatePath('/');
+        return result;
+
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue." };
+    }
+}
+
 export async function buyMiningRigForCompany(companyId: number, rigId: string): Promise<{ success?: string; error?: string }> {
     const session = await getSession();
     if (!session?.id) return { error: "Non autorisé." };

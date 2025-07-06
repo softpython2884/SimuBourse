@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { resetAiNews, resetAllCompanies, resetAllUsers } from '@/lib/actions/admin';
-import { Loader2, Trash2 } from 'lucide-react';
+import { resetAiNews, resetAllCompanies, resetAllUsers, addCryptoToUserByEmail } from '@/lib/actions/admin';
+import { Loader2, Trash2, Coins } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,12 +18,28 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+
+const addCryptoSchema = z.object({
+  email: z.string().email({ message: 'Adresse e-mail invalide.' }),
+  ticker: z.string().min(1, 'Ticker requis.').transform(v => v.toUpperCase()),
+  quantity: z.coerce.number().positive('La quantité doit être positive.'),
+});
 
 
 export default function AdminPage() {
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
     const { toast } = useToast();
     const router = useRouter();
+
+    const cryptoForm = useForm<z.infer<typeof addCryptoSchema>>({
+        resolver: zodResolver(addCryptoSchema),
+        defaultValues: { email: '', ticker: '', quantity: undefined },
+    });
 
     const handleAction = async (action: () => Promise<{ success?: string; error?: string }>, actionName: string) => {
         setLoadingAction(actionName);
@@ -47,8 +63,72 @@ export default function AdminPage() {
         setLoadingAction(null);
     };
 
+    async function handleGrantCrypto(values: z.infer<typeof addCryptoSchema>) {
+        setLoadingAction('grantCrypto');
+        const result = await addCryptoToUserByEmail(values);
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+        } else {
+            toast({ title: 'Succès', description: result.success });
+            cryptoForm.reset();
+        }
+        setLoadingAction(null);
+    }
+
     return (
         <div className="space-y-6">
+             <Card>
+                <CardHeader>
+                    <CardTitle>Accorder des Cryptos</CardTitle>
+                    <CardDescription>Ajouter directement des actifs crypto au portefeuille d'un utilisateur.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Form {...cryptoForm}>
+                        <form onSubmit={cryptoForm.handleSubmit(handleGrantCrypto)} className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <FormField
+                                    control={cryptoForm.control}
+                                    name="email"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Email de l'utilisateur</FormLabel>
+                                            <FormControl><Input placeholder="utilisateur@exemple.com" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={cryptoForm.control}
+                                    name="ticker"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Ticker Crypto</FormLabel>
+                                            <FormControl><Input placeholder="BTC, ETH, etc." {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                 <FormField
+                                    control={cryptoForm.control}
+                                    name="quantity"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Quantité</FormLabel>
+                                            <FormControl><Input type="number" step="any" placeholder="0.5" {...field} value={field.value ?? ''} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                            <Button type="submit" disabled={loadingAction !== null}>
+                                {loadingAction === 'grantCrypto' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Coins className="mr-2 h-4 w-4" />}
+                                Accorder la Crypto
+                            </Button>
+                        </form>
+                    </Form>
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader>
                     <CardTitle>Panneau d'Administration</CardTitle>

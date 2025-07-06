@@ -13,6 +13,7 @@ import { ManageCompanyAssetsDialog } from '@/components/manage-company-assets-di
 import { AddCompanyCashDialog } from '@/components/add-company-cash-dialog';
 import { getRigById } from '@/lib/mining';
 import { ManageMembersDialog } from '@/components/manage-members-dialog';
+import { WithdrawCompanyCashDialog } from '@/components/withdraw-company-cash-dialog';
 
 
 function getInitials(name: string) {
@@ -60,9 +61,14 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
         </div>
         <div className="flex items-center gap-2">
             {isCEO && (
-                <AddCompanyCashDialog companyId={company.id}>
-                    <Button variant="outline">Ajouter des fonds</Button>
-                </AddCompanyCashDialog>
+                <>
+                    <AddCompanyCashDialog companyId={company.id}>
+                        <Button variant="outline">Ajouter des fonds</Button>
+                    </AddCompanyCashDialog>
+                    <WithdrawCompanyCashDialog companyId={company.id} companyCash={company.cash}>
+                        <Button variant="outline">Retirer des fonds</Button>
+                    </WithdrawCompanyCashDialog>
+                </>
             )}
             <InvestDialog company={company}>
                 <Button>Investir</Button>
