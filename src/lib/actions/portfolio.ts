@@ -7,7 +7,7 @@ import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSession } from '@/lib/session';
 
-export const profileUpdateSchema = z.object({
+const profileUpdateSchema = z.object({
     displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
     phoneNumber: z.string().optional(),
 });
