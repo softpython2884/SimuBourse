@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { users, holdings, transactions } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { getSession } from '@/lib/session';
+import { getRigById } from '../mining';
 
 const profileUpdateSchema = z.object({
     displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
@@ -64,7 +65,32 @@ export async function getAuthenticatedUserProfile() {
 
         if (!userProfile) return null;
 
-        // Drizzle returns numerics as strings, convert them back
+        // --- OFFLINE MINING CALCULATION ---
+        const totalHashRateMhs = userProfile.miningRigs.reduce((total, rig) => {
+            const rigData = getRigById(rig.rigId);
+            return total + (rigData?.hashRateMhs || 0) * rig.quantity;
+        }, 0);
+
+        let finalUnclaimedBtc = parseFloat(userProfile.unclaimedBtc);
+
+        if (totalHashRateMhs > 0) {
+            const now = new Date();
+            const lastUpdate = new Date(userProfile.lastMiningUpdateAt);
+            const secondsElapsed = (now.getTime() - lastUpdate.getTime()) / 1000;
+            
+            if (secondsElapsed > 1) {
+                const BTC_PER_MHS_PER_SECOND = 7.7e-12;
+                const earnedOffline = totalHashRateMhs * BTC_PER_MHS_PER_SECOND * secondsElapsed;
+                finalUnclaimedBtc += earnedOffline;
+                
+                await db.update(users)
+                  .set({ unclaimedBtc: finalUnclaimedBtc.toString(), lastMiningUpdateAt: now })
+                  .where(eq(users.id, session.id));
+            }
+        }
+        // --- END CALCULATION ---
+
+
         const formattedHoldings = userProfile.holdings.map(h => ({
             ...h,
             quantity: parseFloat(h.quantity),
@@ -78,7 +104,6 @@ export async function getAuthenticatedUserProfile() {
             price: parseFloat(t.price),
             value: parseFloat(t.value),
             createdAt: new Date(t.createdAt),
-            // Reformat the asset object to match the context expectation
             asset: { name: t.name, ticker: t.ticker }
         }));
 
@@ -87,6 +112,7 @@ export async function getAuthenticatedUserProfile() {
             createdAt: new Date(userProfile.createdAt),
             cash: parseFloat(userProfile.cash),
             initialCash: parseFloat(userProfile.initialCash),
+            unclaimedBtc: finalUnclaimedBtc,
             holdings: formattedHoldings,
             transactions: formattedTransactions,
             miningRigs: userProfile.miningRigs,
@@ -125,11 +151,8 @@ export async function buyAssetAction(asset: z.infer<typeof assetSchema>, quantit
                 throw new Error("Fonds insuffisants.");
             }
 
-            // Deduct cash
-            const newCash = userCash - cost;
-            await tx.update(users).set({ cash: newCash.toFixed(2) }).where(eq(users.id, session.id));
+            await tx.update(users).set({ cash: (userCash - cost).toFixed(2) }).where(eq(users.id, session.id));
 
-            // Update holdings
             const existingHolding = await tx.query.holdings.findFirst({
                 where: and(eq(holdings.userId, session.id), eq(holdings.ticker, asset.ticker)),
             });
@@ -154,7 +177,6 @@ export async function buyAssetAction(asset: z.infer<typeof assetSchema>, quantit
                 });
             }
 
-            // Record transaction
             await tx.insert(transactions).values({
                 userId: session.id,
                 type: 'Buy',
@@ -202,13 +224,10 @@ export async function sellAssetAction(asset: z.infer<typeof assetSchema>, quanti
                 throw new Error("Quantité d'actifs insuffisante pour la vente.");
             }
 
-            // Add cash
-            const newCash = parseFloat(user.cash) + proceeds;
-            await tx.update(users).set({ cash: newCash.toFixed(2) }).where(eq(users.id, session.id));
+            await tx.update(users).set({ cash: (parseFloat(user.cash) + proceeds).toFixed(2) }).where(eq(users.id, session.id));
 
-            // Update holdings
             const newQuantity = holdingQuantity - quantity;
-            if (newQuantity > 1e-9) { // Use a small epsilon for float comparison
+            if (newQuantity > 1e-9) { 
                 await tx.update(holdings)
                     .set({ quantity: newQuantity.toString(), updatedAt: new Date() })
                     .where(eq(holdings.id, existingHolding.id));
@@ -216,7 +235,6 @@ export async function sellAssetAction(asset: z.infer<typeof assetSchema>, quanti
                 await tx.delete(holdings).where(eq(holdings.id, existingHolding.id));
             }
 
-            // Record transaction
             await tx.insert(transactions).values({
                 userId: session.id,
                 type: 'Sell',
@@ -257,8 +275,6 @@ export async function claimMiningRewards(amountBtc: number): Promise<{ success?:
                     .set({ quantity: newQuantity.toString(), updatedAt: new Date() })
                     .where(eq(holdings.id, existingHolding.id));
             } else {
-                // If the user has no BTC, create a new holding.
-                // Mined crypto has no cost basis in this simulation, so avgCost is 0.
                 await tx.insert(holdings).values({
                     userId: session.id,
                     ticker: 'BTC',
@@ -269,10 +285,16 @@ export async function claimMiningRewards(amountBtc: number): Promise<{ success?:
                 });
             }
 
+            // Reset mining counters in the database
+            await tx.update(users)
+                .set({ unclaimedBtc: '0', lastMiningUpdateAt: new Date() })
+                .where(eq(users.id, session.id));
+
             return { success: `Vous avez réclamé ${amountBtc.toFixed(8)} BTC.` };
         });
 
         revalidatePath('/portfolio');
+        revalidatePath('/mining');
         return result;
     } catch (error: any) {
         return { error: error.message || "Une erreur est survenue lors de la réclamation des récompenses." };

@@ -53,6 +53,7 @@ export interface UserProfile {
   phoneNumber?: string | null;
   cash: number;
   initialCash: number;
+  unclaimedBtc: number;
   createdAt: Date;
 }
 
@@ -101,6 +102,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     const data = await getAuthenticatedUserProfile();
     if (data) {
       setPortfolioData(data);
+      setUnclaimedRewards(data.unclaimedBtc);
     } else {
       toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de charger les données du portefeuille." });
       setPortfolioData(null);
@@ -157,7 +159,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 
   const claimRewardsNow = async () => {
     const rewardsToClaim = unclaimedRewards;
-    if (rewardsToClaim < 1e-9) { // Don't claim dust
+    if (rewardsToClaim < 1e-9) { 
         toast({
             variant: 'destructive',
             title: 'Erreur',
@@ -166,14 +168,14 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
 
-    setUnclaimedRewards(0); // Optimistic UI update
+    setUnclaimedRewards(0);
 
     const result = await claimMiningRewardsAction(rewardsToClaim);
     if (result.success) {
         toast({ title: 'Succès', description: result.success });
-        await fetchPortfolio(); // Refresh portfolio data
+        await fetchPortfolio();
     } else if (result.error) {
-        setUnclaimedRewards(prev => prev + rewardsToClaim); // Rollback on failure
+        setUnclaimedRewards(rewardsToClaim); // Rollback on failure
         toast({ variant: 'destructive', title: "Erreur de Réclamation", description: result.error });
     }
   };
@@ -188,7 +190,6 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       return total + (rigData?.hashRateMhs || 0) * rig.quantity;
   }, 0) || 0;
 
-  // This effect will run the mining simulation
   useEffect(() => {
     if (!user || loading || totalHashRateMhs === 0) return;
 
@@ -197,7 +198,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     const miningInterval = setInterval(() => {
         const earnedThisTick = totalHashRateMhs * BTC_PER_MHS_PER_SECOND;
         setUnclaimedRewards(prev => prev + earnedThisTick);
-    }, 1000); // every second
+    }, 1000);
 
     return () => clearInterval(miningInterval);
   }, [user, loading, totalHashRateMhs]);

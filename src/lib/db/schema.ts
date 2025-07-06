@@ -19,6 +19,8 @@ export const users = pgTable('users', {
   phoneNumber: varchar('phone_number', { length: 50 }),
   cash: numeric('cash', { precision: 15, scale: 2 }).default('100000.00').notNull(),
   initialCash: numeric('initial_cash', { precision: 15, scale: 2 }).default('100000.00').notNull(),
+  unclaimedBtc: numeric('unclaimed_btc', { precision: 18, scale: 8 }).default('0').notNull(),
+  lastMiningUpdateAt: timestamp('last_mining_update_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
