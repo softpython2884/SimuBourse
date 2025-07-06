@@ -3,7 +3,7 @@
 import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileAction, ProfileUpdateInput, buyAssetAction, sellAssetAction, claimMiningRewards } from '@/lib/actions/portfolio';
+import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileAction, ProfileUpdateInput, buyAssetAction, sellAssetAction, claimMiningRewards as claimMiningRewardsAction } from '@/lib/actions/portfolio';
 import { buyMiningRig as buyMiningRigAction } from '@/lib/actions/mining';
 import { getRigById } from '@/lib/mining';
 
@@ -77,6 +77,7 @@ interface PortfolioContextType {
   getHoldingQuantity: (ticker: string) => number;
   updateUserProfile: (data: ProfileUpdateInput) => Promise<void>;
   buyMiningRig: (rigId: string) => Promise<void>;
+  claimRewardsNow: () => Promise<void>;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -154,6 +155,29 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
+  const claimRewardsNow = async () => {
+    const rewardsToClaim = unclaimedRewards;
+    if (rewardsToClaim < 1e-9) { // Don't claim dust
+        toast({
+            variant: 'destructive',
+            title: 'Erreur',
+            description: 'Aucune récompense significative à réclamer.'
+        });
+        return;
+    }
+
+    setUnclaimedRewards(0); // Optimistic UI update
+
+    const result = await claimMiningRewardsAction(rewardsToClaim);
+    if (result.success) {
+        toast({ title: 'Succès', description: result.success });
+        await fetchPortfolio(); // Refresh portfolio data
+    } else if (result.error) {
+        setUnclaimedRewards(prev => prev + rewardsToClaim); // Rollback on failure
+        toast({ variant: 'destructive', title: "Erreur de Réclamation", description: result.error });
+    }
+  };
+
   const getHoldingQuantity = (ticker: string) => {
     const holding = portfolioData?.holdings.find(h => h.ticker === ticker);
     return holding ? holding.quantity : 0;
@@ -178,30 +202,6 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     return () => clearInterval(miningInterval);
   }, [user, loading, totalHashRateMhs]);
 
-  // This effect will periodically claim the rewards to the server
-  useEffect(() => {
-    if (!user || unclaimedRewards < 1e-9) return; // Don't claim dust
-
-    const claimInterval = setInterval(async () => {
-        const rewardsToClaim = unclaimedRewards;
-        setUnclaimedRewards(0); // Reset immediately to avoid double claiming
-        
-        if (rewardsToClaim > 0) {
-            const result = await claimMiningRewards(rewardsToClaim);
-            if (result.success) {
-                // Don't toast on success to avoid spamming notifications
-                await fetchPortfolio(); // Refresh portfolio data
-            } else if (result.error) {
-                // If claim fails, add it back to be reclaimed next time
-                setUnclaimedRewards(prev => prev + rewardsToClaim);
-                toast({ variant: 'destructive', title: "Erreur de Minage", description: result.error });
-            }
-        }
-    }, 30000); // Claim every 30 seconds
-
-    return () => clearInterval(claimInterval);
-  }, [user, unclaimedRewards, fetchPortfolio, toast]);
-
   const value = {
     userProfile: portfolioData,
     cash: portfolioData?.cash ?? 0,
@@ -212,7 +212,8 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     unclaimedRewards,
     totalHashRateMhs,
     loading: authLoading || loading,
-    buyAsset, sellAsset, getHoldingQuantity, updateUserProfile, buyMiningRig
+    buyAsset, sellAsset, getHoldingQuantity, updateUserProfile, buyMiningRig,
+    claimRewardsNow,
   };
 
   return (

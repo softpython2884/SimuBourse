@@ -269,7 +269,7 @@ export async function claimMiningRewards(amountBtc: number): Promise<{ success?:
                 });
             }
 
-            return { success: `${amountBtc.toFixed(8)} BTC réclamés !` };
+            return { success: `Vous avez réclamé ${amountBtc.toFixed(8)} BTC.` };
         });
 
         revalidatePath('/portfolio');

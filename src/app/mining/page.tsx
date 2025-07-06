@@ -11,10 +11,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 export default function MiningPage() {
-    const { userProfile, loading: portfolioLoading, unclaimedRewards, totalHashRateMhs, buyMiningRig } = usePortfolio();
+    const { userProfile, loading: portfolioLoading, unclaimedRewards, totalHashRateMhs, buyMiningRig, claimRewardsNow } = usePortfolio();
     const { getAssetByTicker } = useMarketData();
     const { toast } = useToast();
     const [isBuying, setIsBuying] = useState<string | null>(null);
+    const [isClaiming, setIsClaiming] = useState(false);
 
     const btcPrice = getAssetByTicker('BTC')?.price || 0;
 
@@ -39,6 +40,12 @@ export default function MiningPage() {
         setIsBuying(rigId);
         await buyMiningRig(rigId);
         setIsBuying(null);
+    }
+
+    const handleClaimRewards = async () => {
+        setIsClaiming(true);
+        await claimRewardsNow();
+        setIsClaiming(false);
     }
     
     const formatHashRate = (mhs: number) => {
@@ -79,10 +86,18 @@ export default function MiningPage() {
                     </p>
                 </div>
                  <div className="flex flex-col space-y-1.5 rounded-lg border p-4">
-                    <span className="text-sm text-muted-foreground flex items-center gap-2"><Gem className="h-4 w-4" /> Récompenses non réclamées</span>
-                    <span className="text-2xl font-bold text-primary">{unclaimedRewards.toFixed(8)} BTC</span>
-                    <p className="text-xs text-muted-foreground">
-                      Réclamées automatiquement toutes les 30s
+                     <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <span className="text-sm text-muted-foreground flex items-center gap-2"><Gem className="h-4 w-4" /> Récompenses non réclamées</span>
+                            <span className="text-2xl font-bold text-primary">{unclaimedRewards.toFixed(8)} BTC</span>
+                        </div>
+                        <Button onClick={handleClaimRewards} disabled={isClaiming || unclaimedRewards < 1e-9} size="sm">
+                           {isClaiming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                           Réclamer
+                        </Button>
+                    </div>
+                     <p className="text-xs text-muted-foreground pt-2">
+                      Cliquez pour ajouter les récompenses minées à votre portefeuille.
                     </p>
                 </div>
             </CardContent>
