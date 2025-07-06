@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Home, LineChart, Users, Cpu, BrainCircuit, Landmark, BarChart, Wallet } from 'lucide-react';
+import { Home, LineChart, Users, Cpu, BrainCircuit, Landmark, BarChart, Wallet, Shield } from 'lucide-react';
 import { Logo } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +16,7 @@ export const NAV_LINKS = [
   { href: '/companies', icon: Landmark, label: 'Entreprises' },
   { href: '/ai-investor', icon: BrainCircuit, label: 'Investisseur IA' },
   { href: '/profile', icon: Users, label: 'Profil' },
+  { href: '/admin', icon: Shield, label: 'Admin' },
 ];
 
 export function AppSidebar() {
