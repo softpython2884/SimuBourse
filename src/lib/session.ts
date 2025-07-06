@@ -1,39 +1,22 @@
 'use server';
 
 import 'server-only';
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { db } from './db';
-import { users } from './db/schema';
-import { eq } from 'drizzle-orm';
-import * as d from 'dotenv';
-d.config({ path: '.env' });
 
+// This function will now do nothing related to cookies.
+// It's kept for flow compatibility with the login action.
 export async function setSession(userId: number) {
-  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 day
-  const sessionPayload = { userId };
-
-  cookies().set('session', JSON.stringify(sessionPayload), {
-    expires,
-    httpOnly: true,
-    path: '/',
-  });
+  // No-op. The client will handle redirection after login.
 }
 
+// This function will always return the FIRST user from the database,
+// acting as a mock logged-in user for development. This avoids using cookies.
 export async function getSession() {
-  const cookie = cookies().get('session')?.value;
-  if (!cookie) {
-    return null;
-  }
-
   try {
-    const session = JSON.parse(cookie);
-    if (!session?.userId) {
-      return null;
-    }
-    
-    const user = await db.query.users.findFirst({
-        where: eq(users.id, session.userId as number),
+    // To make this work, a user must exist in the database.
+    // The signup page should be used to create at least one user.
+    const mockUser = await db.query.users.findFirst({
         columns: {
             id: true,
             displayName: true,
@@ -41,14 +24,15 @@ export async function getSession() {
         }
     });
   
-    return user || null;
+    return mockUser || null; // Return the first user found, or null if DB is empty.
   } catch (error) {
-    console.error("Session parsing error:", error);
+    console.error("Mock session retrieval error:", error);
     return null;
   }
 }
 
+// This function will now just redirect to the login page, simulating a logout.
 export async function deleteSession() {
-  cookies().delete('session');
+  // No cookie to delete.
   redirect('/login');
 }
