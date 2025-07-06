@@ -8,6 +8,9 @@ import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { InvestDialog } from '@/components/invest-dialog';
+import { getSession } from '@/lib/session';
+import { ManageCompanyAssetsDialog } from '@/components/manage-company-assets-dialog';
+
 
 function getInitials(name: string) {
     if (!name) return '?';
@@ -25,6 +28,9 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
   if (!company) {
     notFound();
   }
+
+  const session = await getSession();
+  const isCEO = company.members.some(member => member.userId === session?.id && member.role === 'ceo');
   
   const marketCap = company.sharePrice * company.totalShares;
 
@@ -176,11 +182,18 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
       </div>
 
        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Package /> Portefeuille de l'Entreprise
-                </CardTitle>
-                <CardDescription>Actifs et biens détenus par {company.name}.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle className="flex items-center gap-2">
+                        <Package /> Portefeuille de l'Entreprise
+                    </CardTitle>
+                    <CardDescription>Actifs et biens détenus par {company.name}.</CardDescription>
+                </div>
+                {isCEO && (
+                    <ManageCompanyAssetsDialog company={company}>
+                        <Button variant="outline">Gérer le Portefeuille</Button>
+                    </ManageCompanyAssetsDialog>
+                )}
             </CardHeader>
             <CardContent>
                 <Table>
