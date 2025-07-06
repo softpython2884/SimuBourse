@@ -19,6 +19,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 import { AssetFromDb } from '@/lib/actions/assets';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from '@/components/ui/badge';
 
 interface TradeDialogProps {
   asset: AssetFromDb;
@@ -82,7 +84,7 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
             {tradeTypeFr} {asset.name} ({asset.ticker})
           </DialogTitle>
           <DialogDescription>
-            Prix actuel: ${asset.price.toFixed(2)}. 
+            Prix actuel: ${asset.price.toFixed(asset.price > 10 ? 2 : 4)}. 
             {tradeType === 'Buy' ? ` Fonds disponibles: $${cash.toFixed(2)}.` : ` Vous possédez: ${holdingQuantity.toLocaleString()}.`}
           </DialogDescription>
         </DialogHeader>
@@ -130,9 +132,42 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
                 </FormItem>
               )}
             />
-            <div className="text-sm font-medium">
+            
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="item-1">
+                  <AccordionTrigger>Ordre Automatique (Avancé)</AccordionTrigger>
+                  <AccordionContent>
+                      <div className="space-y-4 pt-2">
+                          <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium">Définir des ordres Stop-Loss / Take-Profit</h4>
+                              <Badge variant="outline">Bientôt disponible</Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                              Ces ordres se déclencheront automatiquement pour vendre vos actifs si le prix atteint les seuils que vous avez définis.
+                          </p>
+                          <div className="grid grid-cols-2 gap-4">
+                              <FormItem>
+                                  <FormLabel>Prix Stop-Loss</FormLabel>
+                                  <FormControl>
+                                      <Input type="number" placeholder={`< ${asset.price.toFixed(2)}`} disabled />
+                                  </FormControl>
+                              </FormItem>
+                               <FormItem>
+                                  <FormLabel>Prix Take-Profit</FormLabel>
+                                  <FormControl>
+                                      <Input type="number" placeholder={`> ${asset.price.toFixed(2)}`} disabled />
+                                  </FormControl>
+                              </FormItem>
+                          </div>
+                      </div>
+                  </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+
+            <div className="text-sm font-medium pt-2">
               {tradeType === 'Buy' ? 'Coût total' : 'Produit total'}: ${totalValue.toFixed(2)}
             </div>
+            
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
                 Annuler

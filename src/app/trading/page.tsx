@@ -8,15 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TradeDialog } from "@/components/trade-dialog";
 import { useMarketData } from '@/context/market-data-context';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, List, LayoutGrid } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AssetCard } from '@/components/asset-card';
 
 
 export default function TradingPage() {
   const { assets, loading } = useMarketData();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOption, setSortOption] = useState('marketCap_desc');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const filteredAndSortedAssets = useMemo(() => {
     let processedAssets = [...assets];
@@ -96,53 +98,69 @@ export default function TradingPage() {
                         <SelectItem value="change_asc">Variation (Croissant)</SelectItem>
                     </SelectContent>
                 </Select>
+                 <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+                    <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('list')}>
+                        <List className="h-4 w-4" />
+                    </Button>
+                    <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('grid')}>
+                        <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Actif</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Prix</TableHead>
-              <TableHead>Variation (24h)</TableHead>
-              <TableHead>Cap. Boursière</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredAndSortedAssets.map((asset) => {
-              const changeIsPositive = asset.change24h.startsWith('+');
-              return (
-              <TableRow key={asset.ticker}>
-                <TableCell>
-                  <div className="font-medium">{asset.name}</div>
-                  <div className="text-sm text-muted-foreground">{asset.ticker}</div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">{asset.type}</Badge>
-                </TableCell>
-                <TableCell className="font-mono">${asset.price.toFixed(2)}</TableCell>
-                <TableCell className={changeIsPositive ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}>
-                  {asset.change24h}
-                </TableCell>
-                <TableCell>{asset.marketCap}</TableCell>
-                <TableCell className="text-right space-x-2">
-                   <Button asChild variant="outline" size="sm">
-                    <Link href={`/trading/${asset.ticker}`}>Détails</Link>
-                   </Button>
-                   <TradeDialog asset={asset} tradeType="Buy">
-                    <Button variant="outline" size="sm">Acheter</Button>
-                  </TradeDialog>
-                  <TradeDialog asset={asset} tradeType="Sell">
-                    <Button variant="secondary" size="sm">Vendre</Button>
-                  </TradeDialog>
-                </TableCell>
-              </TableRow>
-            )})}
-          </TableBody>
-        </Table>
+        {viewMode === 'list' ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Actif</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Prix</TableHead>
+                  <TableHead>Variation (24h)</TableHead>
+                  <TableHead>Cap. Boursière</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredAndSortedAssets.map((asset) => {
+                  const changeIsPositive = asset.change24h.startsWith('+');
+                  return (
+                  <TableRow key={asset.ticker}>
+                    <TableCell>
+                      <div className="font-medium">{asset.name}</div>
+                      <div className="text-sm text-muted-foreground">{asset.ticker}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{asset.type}</Badge>
+                    </TableCell>
+                    <TableCell className="font-mono">${asset.price.toFixed(2)}</TableCell>
+                    <TableCell className={changeIsPositive ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}>
+                      {asset.change24h}
+                    </TableCell>
+                    <TableCell>{asset.marketCap}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                       <Button asChild variant="outline" size="sm">
+                        <Link href={`/trading/${asset.ticker}`}>Détails</Link>
+                       </Button>
+                       <TradeDialog asset={asset} tradeType="Buy">
+                        <Button variant="outline" size="sm">Acheter</Button>
+                      </TradeDialog>
+                      <TradeDialog asset={asset} tradeType="Sell">
+                        <Button variant="secondary" size="sm">Vendre</Button>
+                      </TradeDialog>
+                    </TableCell>
+                  </TableRow>
+                )})}
+              </TableBody>
+            </Table>
+        ) : (
+             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filteredAndSortedAssets.map((asset) => (
+                    <AssetCard key={asset.ticker} asset={asset} />
+                ))}
+             </div>
+        )}
       </CardContent>
     </Card>
   );
