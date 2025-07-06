@@ -99,21 +99,27 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
 
   const yAxisDomain = useMemo(() => {
     if (!filteredData || filteredData.length === 0) {
-      const price = asset.price;
-      return [price * 0.95, price * 1.05];
+      // Provide a default 4% window if there's no data
+      return [asset.price * 0.98, asset.price * 1.02];
     }
+    
     const prices = filteredData.map(d => d.price);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
 
-    if (min === max) {
-      return [min * 0.95, max * 1.05];
+    // If min and max are the same (or very close), create a small window around the price
+    if (maxPrice - minPrice < 1e-9) {
+      return [minPrice * 0.98, maxPrice * 1.02];
     }
 
-    // Add 10% padding to the top and bottom of the price range to make it more visible
-    const padding = (max - min) * 0.1;
+    // Calculate a 10% padding based on the data's range for aesthetics
+    const padding = (maxPrice - minPrice) * 0.1;
 
-    return [Math.max(0, min - padding), max + padding];
+    // Apply the padding and ensure the bottom of the domain is not negative
+    const domainMin = Math.max(0, minPrice - padding);
+    const domainMax = maxPrice + padding;
+    
+    return [domainMin, domainMax];
   }, [filteredData, asset.price]);
 
   const chartConfig = {
