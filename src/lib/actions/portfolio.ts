@@ -3,11 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { users, holdings, transactions, assets as assetsSchema } from '@/lib/db/schema';
+import { users, holdings, transactions, assets as assetsSchema, companies } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { getSession } from '@/lib/session';
 import { getRigById } from '../mining';
 import { updatePriceFromTrade } from './assets';
+import { investInCompany, sellShares } from './companies';
 
 const profileUpdateSchema = z.object({
     displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
@@ -129,6 +130,19 @@ export async function buyAssetAction(ticker: string, quantity: number): Promise<
     const session = await getSession();
     if (!session?.id) return { error: 'Non autorisé.' };
     
+    // First, check if it's a company ticker
+    const company = await db.query.companies.findFirst({
+        where: and(eq(companies.ticker, ticker), eq(companies.isListed, true))
+    });
+    
+    if (company) {
+        // This is a company share purchase. The `quantity` here is number of shares.
+        // We need to calculate the cost and then use the `investInCompany` action which takes an amount.
+        const cost = parseFloat(company.sharePrice) * quantity;
+        return investInCompany(company.id, cost);
+    }
+
+    // It's a regular asset, proceed as before
     try {
         const asset = await db.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
         if (!asset) {
@@ -195,7 +209,10 @@ export async function buyAssetAction(ticker: string, quantity: number): Promise<
         if (result.success) {
             await updatePriceFromTrade(ticker, cost);
         }
-
+        
+        revalidatePath('/portfolio');
+        revalidatePath('/profile');
+        revalidatePath('/');
         return result;
 
     } catch (error: any) {
@@ -207,6 +224,18 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
     const session = await getSession();
     if (!session?.id) return { error: 'Non autorisé.' };
     
+    // First, check if it's a company ticker
+    const company = await db.query.companies.findFirst({
+        where: and(eq(companies.ticker, ticker), eq(companies.isListed, true))
+    });
+
+    if (company) {
+        // This is a company share sale. `quantity` is the number of shares.
+        // We reuse the sellShares logic.
+        return sellShares(company.id, quantity);
+    }
+    
+    // It's a regular asset, proceed as before
     try {
         const asset = await db.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
         if (!asset) {
@@ -263,6 +292,9 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
             await updatePriceFromTrade(ticker, -proceeds); // Negative value for sell impact
         }
         
+        revalidatePath('/portfolio');
+        revalidatePath('/profile');
+        revalidatePath('/');
         return result;
 
     } catch (error: any) {

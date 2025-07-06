@@ -80,17 +80,26 @@ export async function updatePriceFromTrade(ticker: string, tradeValue: number) {
 
         if (!asset || asset.type === 'Company Share') return;
 
-        const marketCap = parseMarketCap(asset.marketCap);
         const currentPrice = parseFloat(asset.price);
+        if (currentPrice <= 0) return;
 
-        // Guards to prevent invalid calculations or division by zero.
-        if (marketCap <= 0 || currentPrice <= 0) return;
+        let newPrice: number;
 
-        const IMPACT_CONSTANT = 0.05; 
-        const impactPercentage = (tradeValue / marketCap) * IMPACT_CONSTANT;
-        
-        const newPrice = currentPrice * (1 + impactPercentage);
-        
+        if (asset.type === 'Stock') {
+            const marketCap = parseMarketCap(asset.marketCap);
+            if (marketCap <= 0) return; // Cannot calculate impact without market cap
+
+            const IMPACT_CONSTANT = 0.05; 
+            const impactPercentage = (tradeValue / marketCap) * IMPACT_CONSTANT;
+            newPrice = currentPrice * (1 + impactPercentage);
+        } else { // Forex or Commodity
+            // Use a much smaller, fixed impact for non-marketcap assets
+            const VOLATILITY_ADJUSTMENT = 0.0001;
+            // A simple model: impact is proportional to trade value but scaled down massively.
+            const priceChange = (tradeValue / 1_000_000) * VOLATILITY_ADJUSTMENT;
+            newPrice = currentPrice + priceChange;
+        }
+
         // Final sanity check to prevent writing bad data (NaN, Infinity, negative) to the DB
         if (isNaN(newPrice) || !isFinite(newPrice) || newPrice <= 0) {
             console.warn(`Prevented invalid price update for ${ticker}. New price would be: ${newPrice}`);
