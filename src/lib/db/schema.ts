@@ -200,6 +200,7 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
   members: many(companyMembers),
   shares: many(companyShares),
   holdings: many(companyHoldings),
+  miningRigs: many(companyMiningRigs),
 }));
 
 export const companyMembers = pgTable('company_members', {
@@ -265,6 +266,25 @@ export const companyHoldings = pgTable('company_holdings', {
 export const companyHoldingsRelations = relations(companyHoldings, ({ one }) => ({
   company: one(companies, {
     fields: [companyHoldings.companyId],
+    references: [companies.id],
+  }),
+}));
+
+export const companyMiningRigs = pgTable('company_mining_rigs', {
+  id: serial('id').primaryKey(),
+  companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  rigId: varchar('rig_id', { length: 50 }).notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    companyRigIdx: uniqueIndex('company_rig_idx').on(table.companyId, table.rigId),
+  }
+});
+
+export const companyMiningRigsRelations = relations(companyMiningRigs, ({ one }) => ({
+  company: one(companies, {
+    fields: [companyMiningRigs.companyId],
     references: [companies.id],
   }),
 }));

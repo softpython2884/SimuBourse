@@ -2,11 +2,12 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { companies, companyMembers, users, companyShares, companyHoldings, assets as assetsSchema } from '@/lib/db/schema';
+import { companies, companyMembers, users, companyShares, companyHoldings, assets as assetsSchema, companyMiningRigs } from '@/lib/db/schema';
 import { getSession } from '../session';
 import { revalidatePath } from 'next/cache';
 import { eq, and, desc } from 'drizzle-orm';
 import { updatePriceFromTrade } from './assets';
+import { getRigById } from '@/lib/mining';
 
 const createCompanySchema = z.object({
   name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50),
@@ -176,7 +177,8 @@ export async function getCompanyById(companyId: number) {
         },
         holdings: {
            orderBy: (companyHoldings, { desc }) => [desc(companyHoldings.updatedAt)],
-        }
+        },
+        miningRigs: true,
       }
     });
 
@@ -212,7 +214,8 @@ export async function getCompanyById(companyId: number) {
         ...h,
         quantity: parseFloat(h.quantity),
         avgCost: parseFloat(h.avgCost),
-      }))
+      })),
+      miningRigs: company.miningRigs,
     };
 
   } catch (error) {
@@ -430,5 +433,54 @@ export async function addCashToCompany(companyId: number, amount: number): Promi
 
     } catch (error: any) {
         return { error: error.message || "Une erreur est survenue." };
+    }
+}
+
+export async function buyMiningRigForCompany(companyId: number, rigId: string): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) return { error: "Non autorisé." };
+
+    const rigToBuy = getRigById(rigId);
+    if (!rigToBuy) return { error: "Matériel de minage non valide." };
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const member = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)) });
+            if (!member || member.role !== 'ceo') throw new Error("Seul le PDG peut acheter du matériel pour l'entreprise.");
+            
+            const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId), columns: { cash: true } });
+            if (!company) throw new Error("Entreprise non trouvée.");
+
+            const companyCash = parseFloat(company.cash);
+            if (companyCash < rigToBuy.price) throw new Error("Trésorerie de l'entreprise insuffisante.");
+
+            const newCash = companyCash - rigToBuy.price;
+            await tx.update(companies).set({ cash: newCash.toFixed(2) }).where(eq(companies.id, companyId));
+
+            const existingRig = await tx.query.companyMiningRigs.findFirst({
+                where: and(eq(companyMiningRigs.companyId, companyId), eq(companyMiningRigs.rigId, rigId)),
+            });
+
+            if (existingRig) {
+                await tx.update(companyMiningRigs)
+                    .set({ quantity: existingRig.quantity + 1 })
+                    .where(eq(companyMiningRigs.id, existingRig.id));
+            } else {
+                await tx.insert(companyMiningRigs).values({
+                    companyId: companyId,
+                    rigId: rigId,
+                    quantity: 1,
+                });
+            }
+            
+            return { success: `L'entreprise a acheté un ${rigToBuy.name}.` };
+        });
+
+        revalidatePath(`/companies/${companyId}`);
+        return result;
+
+    } catch (error: any) {
+        console.error("Error buying mining rig for company:", error);
+        return { error: error.message || "Une erreur est survenue lors de l'achat." };
     }
 }

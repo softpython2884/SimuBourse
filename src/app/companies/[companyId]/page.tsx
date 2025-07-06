@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent, Package } from 'lucide-react';
+import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent, Package, Cpu } from 'lucide-react';
 import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -11,12 +11,19 @@ import { InvestDialog } from '@/components/invest-dialog';
 import { getSession } from '@/lib/session';
 import { ManageCompanyAssetsDialog } from '@/components/manage-company-assets-dialog';
 import { AddCompanyCashDialog } from '@/components/add-company-cash-dialog';
+import { getRigById } from '@/lib/mining';
 
 
 function getInitials(name: string) {
     if (!name) return '?';
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 }
+
+const formatHashRate = (mhs: number) => {
+    if (mhs >= 1_000_000) return `${(mhs / 1_000_000).toFixed(2)} TH/s`;
+    if (mhs >= 1_000) return `${(mhs / 1_000).toFixed(2)} GH/s`;
+    return `${mhs.toFixed(0)} MH/s`;
+};
 
 export default async function CompanyDetailPage({ params }: { params: { companyId: string } }) {
   const companyId = parseInt(params.companyId, 10);
@@ -32,6 +39,11 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
 
   const session = await getSession();
   const isCEO = company.members.some(member => member.userId === session?.id && member.role === 'ceo');
+  
+  const totalCompanyHashRate = company.miningRigs.reduce((total, ownedRig) => {
+    const rigData = getRigById(ownedRig.rigId);
+    return total + (rigData?.hashRateMhs || 0) * ownedRig.quantity;
+  }, 0);
   
   return (
     <div className="space-y-6">
@@ -226,6 +238,49 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
                             <TableRow>
                                 <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                                     Cette entreprise ne détient encore aucun actif.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Cpu /> Opération de Minage de l'Entreprise
+                </CardTitle>
+                <CardDescription>
+                    Matériel de minage détenu par {company.name}. Puissance totale : {formatHashRate(totalCompanyHashRate)}.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Matériel</TableHead>
+                            <TableHead>Quantité</TableHead>
+                            <TableHead className="text-right">Puissance de Hachage</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {company.miningRigs.length > 0 ? company.miningRigs.map(ownedRig => {
+                            const rigData = getRigById(ownedRig.rigId);
+                            if (!rigData) return null;
+                            return (
+                                <TableRow key={ownedRig.id}>
+                                    <TableCell>
+                                        <div className="font-medium">{rigData.name}</div>
+                                    </TableCell>
+                                    <TableCell>{ownedRig.quantity}</TableCell>
+                                    <TableCell className="text-right">{formatHashRate(rigData.hashRateMhs * ownedRig.quantity)}</TableCell>
+                                </TableRow>
+                            )
+                        }) : (
+                            <TableRow>
+                                <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                                    Cette entreprise ne possède aucun matériel de minage.
                                 </TableCell>
                             </TableRow>
                         )}

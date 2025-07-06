@@ -22,7 +22,7 @@ export default function TradingPage() {
     let processedAssets = [...assets];
 
     const parseMarketCap = (mc: string): number => {
-        if (!mc || typeof mc !== 'string') return 0;
+        if (!mc || typeof mc !== 'string' || mc === 'N/A') return 0;
         const value = parseFloat(mc.replace(/[^0-9.]/g, ''));
         if (mc.includes('T')) return value * 1e12;
         if (mc.includes('B')) return value * 1e9;
