@@ -37,7 +37,7 @@ interface AssetChartClientProps {
 }
 
 export function AssetChartClient({ asset }: AssetChartClientProps) {
-  const { getHistoricalData } = useMarketData();
+  const { getHistoricalData, registerNewsEvent } = useMarketData();
   const historicalData = getHistoricalData(asset.ticker);
 
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
@@ -50,13 +50,21 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
 
       setIsLoadingNews(true);
       setNews([]);
-      const freshNews = await getOrGenerateAssetNews(asset.ticker, asset.name);
+      const { news: freshNews, source } = await getOrGenerateAssetNews(asset.ticker, asset.name);
       setNews(freshNews);
       setIsLoadingNews(false);
+
+      if (source === 'generated' && freshNews) {
+        freshNews.forEach(item => {
+            if (item.sentiment !== 'neutral') {
+                registerNewsEvent(asset.ticker, item.sentiment);
+            }
+        });
+      }
     }
 
     fetchNews();
-  }, [asset?.ticker, asset?.name]);
+  }, [asset?.ticker, asset?.name, registerNewsEvent]);
 
   const filteredData = useMemo(() => {
     const now = new Date();
@@ -102,8 +110,8 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
       return [min * 0.95, max * 1.05];
     }
 
-    // Add 20% padding to the top and bottom of the price range
-    const padding = (max - min) * 0.2;
+    // Add 10% padding to the top and bottom of the price range to make it more visible
+    const padding = (max - min) * 0.1;
 
     return [Math.max(0, min - padding), max + padding];
   }, [filteredData, asset.price]);
