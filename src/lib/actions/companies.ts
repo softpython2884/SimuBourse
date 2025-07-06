@@ -179,24 +179,21 @@ export async function getCompaniesForUserDashboard() {
     const sharesByCompanyId = new Map(userShares.map(s => [s.companyId, s]));
     const membershipsByCompanyId = new Map(userMemberships.map(m => [m.companyId, m]));
     
-    const userRelatedPrivateCompanyIds = new Set<number>();
-    const managedCompanyIds = new Set<number>();
-    userMemberships.forEach(m => {
-        userRelatedPrivateCompanyIds.add(m.companyId);
-        managedCompanyIds.add(m.companyId);
-    });
-    userShares.forEach(s => userRelatedPrivateCompanyIds.add(s.companyId));
-    
     const managedCompanies: any[] = [];
     const investedCompanies: any[] = [];
     
     const privateCompanies = companiesWithMarketData.filter(c => !c.isListed);
+    const managedAndInvestedIds = new Set<number>();
 
-    // Process private companies the user is related to
-    for (const company of privateCompanies) {
-      if (userRelatedPrivateCompanyIds.has(company.id)) {
-        const membership = membershipsByCompanyId.get(company.id);
-        const shareData = sharesByCompanyId.get(company.id);
+    // Process all companies user has a relation to (private and listed)
+    const allRelatedCompanyIds = new Set([...sharesByCompanyId.keys(), ...membershipsByCompanyId.keys()]);
+    
+    for (const companyId of allRelatedCompanyIds) {
+        const company = companiesWithMarketData.find(c => c.id === companyId);
+        if (!company) continue;
+
+        const membership = membershipsByCompanyId.get(companyId);
+        const shareData = sharesByCompanyId.get(companyId);
         const sharesHeld = parseFloat(shareData?.quantity || '0');
 
         const companyData = {
@@ -208,16 +205,17 @@ export async function getCompaniesForUserDashboard() {
 
         if (membership) {
             managedCompanies.push(companyData);
-        } else if (sharesHeld > 0) {
+            managedAndInvestedIds.add(company.id);
+        } else if (sharesHeld > 0 && !company.isListed) {
+            // Only add to invested if not managed and it's a private company
             investedCompanies.push(companyData);
+            managedAndInvestedIds.add(company.id);
         }
-      }
     }
     
-    // Filter out private companies the user is related to from the "other" list
-    const otherPrivateCompanies = privateCompanies.filter(c => !userRelatedPrivateCompanyIds.has(c.id));
+    const otherPrivateCompanies = privateCompanies.filter(c => !allRelatedCompanyIds.has(c.id));
     
-    // Add user's share data to listed companies
+    // Add user's share data to all listed companies
     for(const company of allListedCompanies) {
          const shareData = sharesByCompanyId.get(company.id);
          if (shareData) {
@@ -226,9 +224,6 @@ export async function getCompaniesForUserDashboard() {
             (company as any).sharesHeld = 0;
          }
     }
-
-    const listedCompaniesTheUserIsRelatedTo = new Set(allListedCompanies.filter(c => sharesByCompanyId.has(c.id) || managedCompanyIds.has(c.id)).map(c => c.id));
-    const finalListedCompanies = allListedCompanies.filter(c => !listedCompaniesTheUserIsRelatedTo.has(c.id));
 
     return { managedCompanies, investedCompanies, otherPrivateCompanies, listedCompanies: allListedCompanies };
 }
@@ -474,12 +469,16 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
             const sharePrice = currentTotalShares > 0 ? currentNav / currentTotalShares : 0;
             const proceeds = sharePrice * quantity;
 
+            // New 35/65 rule
+            const companyLiability = proceeds * 0.35;
             const companyCash = parseFloat(company.cash);
-            if(companyCash < proceeds) throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter ces parts.");
+
+            if(companyCash < companyLiability) throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter ces parts.");
 
             const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
             if (!user) throw new Error("Utilisateur non trouvé.");
             
+            // User gets full proceeds
             await tx.update(users).set({ cash: (parseFloat(user.cash) + proceeds).toString() }).where(eq(users.id, session.id));
             
             const newSharesHeld = sharesHeld - quantity;
@@ -489,7 +488,8 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
                 await tx.update(companyShares).set({ quantity: newSharesHeld.toString() }).where(eq(companyShares.id, userShareHolding!.id));
             }
 
-            const newCompanyCash = companyCash - proceeds;
+            // Company cash decreases by its liability, total shares decrease by amount sold
+            const newCompanyCash = companyCash - companyLiability;
             const newTotalShares = parseFloat(company.totalShares) - quantity;
             await tx.update(companies).set({ 
                 cash: newCompanyCash.toString(),
