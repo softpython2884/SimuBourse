@@ -25,6 +25,8 @@ export const users = pgTable('users', {
 export const usersRelations = relations(users, ({ many }) => ({
   holdings: many(holdings),
   transactions: many(transactions),
+  predictionMarkets: many(predictionMarkets),
+  marketBets: many(marketBets),
 }));
 
 export const holdings = pgTable('holdings', {
@@ -81,3 +83,63 @@ export const aiNews = pgTable('ai_news', {
     tickerCreatedAtIdx: index('ticker_created_at_idx').on(table.ticker, desc(table.createdAt)),
   }
 });
+
+
+// Prediction Markets
+export const predictionMarkets = pgTable('prediction_markets', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  category: varchar('category', { length: 256 }).notNull(),
+  status: varchar('status', { length: 10, enum: ['open', 'closed', 'settled'] }).default('open').notNull(),
+  totalPool: numeric('total_pool', { precision: 15, scale: 2 }).default('0.00').notNull(),
+  closingAt: timestamp('closing_at', { withTimezone: true }).notNull(),
+  creatorId: integer('creator_id').references(() => users.id, { onDelete: 'set null' }),
+  creatorDisplayName: varchar('creator_display_name', { length: 256 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const predictionMarketsRelations = relations(predictionMarkets, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [predictionMarkets.creatorId],
+    references: [users.id],
+  }),
+  outcomes: many(marketOutcomes),
+}));
+
+export const marketOutcomes = pgTable('market_outcomes', {
+  id: serial('id').primaryKey(),
+  marketId: integer('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  pool: numeric('pool', { precision: 15, scale: 2 }).default('0.00').notNull(),
+}, (table) => {
+  return {
+    marketIdIdx: index('market_id_idx').on(table.marketId),
+  }
+});
+
+export const marketOutcomesRelations = relations(marketOutcomes, ({ one, many }) => ({
+  market: one(predictionMarkets, {
+    fields: [marketOutcomes.marketId],
+    references: [predictionMarkets.id],
+  }),
+  bets: many(marketBets),
+}));
+
+export const marketBets = pgTable('market_bets', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  outcomeId: integer('outcome_id').notNull().references(() => marketOutcomes.id, { onDelete: 'cascade' }),
+  amount: numeric('amount', { precision: 15, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const marketBetsRelations = relations(marketBets, ({ one }) => ({
+  user: one(users, {
+    fields: [marketBets.userId],
+    references: [users.id],
+  }),
+  outcome: one(marketOutcomes, {
+    fields: [marketBets.outcomeId],
+    references: [marketOutcomes.id],
+  }),
+}));

@@ -27,10 +27,8 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/context/auth-context';
-import { usePortfolio } from '@/context/portfolio-context';
 import { useToast } from '@/hooks/use-toast';
-// import { addDoc, collection, Timestamp } from 'firebase/firestore'; // Remplacé
-// import { db } from '@/lib/firebase'; // Remplacé
+import { createUserMarket } from '@/lib/actions/markets';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Loader2, PlusCircle, XCircle } from 'lucide-react';
@@ -46,7 +44,6 @@ export function CreateMarketDialog() {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
-  const { userProfile } = usePortfolio();
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof marketFormSchema>>({
@@ -65,19 +62,29 @@ export function CreateMarketDialog() {
   });
 
   async function onSubmit(values: z.infer<typeof marketFormSchema>) {
-    if (!user || !userProfile) {
+    if (!user) {
       toast({ variant: 'destructive', title: 'Erreur', description: 'Vous devez être connecté pour créer un marché.' });
       return;
     }
     
     setIsLoading(true);
-    // Logique de création de marché avec PostgreSQL à implémenter
-    toast({ variant: 'destructive', title: 'Fonctionnalité désactivée', description: 'La création de marché est en cours de migration.' });
+    const result = await createUserMarket(values);
     setIsLoading(false);
+
+    if (result.error) {
+      toast({ variant: 'destructive', title: "Échec de la création", description: result.error });
+    } else if (result.success) {
+      toast({ title: "Succès", description: result.success });
+      setOpen(false);
+      form.reset();
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) form.reset();
+    }}>
       <DialogTrigger asChild>
         <Button>Créer un Marché</Button>
       </DialogTrigger>
