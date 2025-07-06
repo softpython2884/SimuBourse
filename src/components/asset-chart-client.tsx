@@ -84,17 +84,24 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
 
-    // If the line is flat, create a small 1% window around the price
+    // If the line is completely flat, create a small window to avoid errors
     if (minPrice === maxPrice) {
       return [minPrice * 0.995, maxPrice * 1.005];
     }
 
     const priceRange = maxPrice - minPrice;
     
-    // For the 1D view, which can have smaller variations, we use a larger
-    // padding multiplier to ensure the chart feels "zoomed in".
-    const paddingMultiplier = timeRange === '1D' ? 0.4 : 0.1;
-    const padding = priceRange * paddingMultiplier;
+    // For the 1D view, if the price variation is very small (e.g., <1%),
+    // we create an artificial window to make the changes visible.
+    // This prevents the chart from looking flat.
+    if (timeRange === '1D' && (priceRange / minPrice) < 0.01) { // less than 1% variation
+        const midPrice = (minPrice + maxPrice) / 2;
+        const artificialPadding = midPrice * 0.005; // Creates a 1% total window
+        return [midPrice - artificialPadding, midPrice + artificialPadding];
+    }
+
+    // For other time ranges or larger 1D variations, use a standard 10% padding.
+    const padding = priceRange * 0.1;
     
     return [minPrice - padding, maxPrice + padding];
   }, [filteredData, timeRange]);

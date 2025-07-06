@@ -9,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TradeDialog } from '@/components/trade-dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
-import { AddCashDialog } from './add-cash-dialog';
 
 export default function PortfolioClientPage() {
     const { holdings, cash, initialCash, loading } = usePortfolio();
@@ -51,12 +50,9 @@ export default function PortfolioClientPage() {
     return (
         <div className="space-y-6">
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Synthèse du Portefeuille</CardTitle>
-                        <CardDescription>Un aperçu de la performance de vos investissements.</CardDescription>
-                    </div>
-                    <AddCashDialog />
+                <CardHeader>
+                    <CardTitle>Synthèse du Portefeuille</CardTitle>
+                    <CardDescription>Un aperçu de la performance de vos investissements.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-3">
                     <div className="flex flex-col space-y-1.5 rounded-lg border p-4">
