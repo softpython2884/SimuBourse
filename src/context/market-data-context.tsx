@@ -2,17 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
-import { db } from '@/lib/firebase';
-import {
-  collection,
-  onSnapshot,
-  query,
-  orderBy,
-  limit,
-  Timestamp,
-  getDocs,
-} from 'firebase/firestore';
-import { DetailedAsset } from '@/lib/assets';
+import { DetailedAsset, assets as initialAssetsList } from '@/lib/assets';
 
 export type HistoricalDataPoint = {
     date: string;
@@ -49,7 +39,7 @@ const calculateDeterministicPrice = (initialPrice: number, ticker: string, times
     const sin3 = Math.sin(timeFactor3 + tickerFactor1 + tickerFactor2);
 
     // Combine the waves with different weights
-    const noise = (sin1 * 0.02) + (sin2 * 0.015) + (sin3 * 0.005); // Max ~4% total volatility
+    const noise = (sin1 * 0.02) + (sin2 * 0.015) + (sin3 * 0.005);
     
     // Force a "mean reversion" to prevent prices from drifting too far
     const reversionStrength = 0.05; 
@@ -58,77 +48,42 @@ const calculateDeterministicPrice = (initialPrice: number, ticker: string, times
     return initialPrice * (1 + drift);
 };
 
+const initialAssetsMap = initialAssetsList.reduce((acc, asset) => {
+    acc[asset.ticker] = asset;
+    return acc;
+}, {} as AssetsMap);
+
 
 export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
-    const [assets, setAssets] = useState<AssetsMap>({});
+    const [assets, setAssets] = useState<AssetsMap>(initialAssetsMap);
     const [historicalData, setHistoricalData] = useState<HistoricalDataMap>({});
-    const [initialAssetsMap, setInitialAssetsMap] = useState<AssetsMap>({});
 
-    // This effect runs once to fetch the initial state of the market from Firestore.
     useEffect(() => {
-        console.log("Fetching initial market state...");
-        const assetsQuery = query(collection(db, 'market_state'));
-        
-        const assetsUnsubscribe = onSnapshot(assetsQuery, async (snapshot) => {
-            if (snapshot.empty) {
-                console.log("Market state is empty. Seeding is handled by a separate function if needed.");
-                setLoading(false);
-                return;
+        const now = Date.now();
+        const initialHist: HistoricalDataMap = {};
+        for(const ticker in initialAssetsMap) {
+            const asset = initialAssetsMap[ticker];
+            const data: HistoricalDataPoint[] = [];
+            // Pre-fill with some historical data for the last 24h
+            for (let i = 288; i > 0; i--) { // 288 points = 1 point every 5 minutes for 24h
+                const timestamp = now - i * 5 * 60000;
+                const price = calculateDeterministicPrice(asset.price, asset.ticker, timestamp);
+                data.push({ date: new Date(timestamp).toISOString(), price });
             }
-
-            const newAssetsData: AssetsMap = {};
-            const historicalDataPromises: Promise<void>[] = [];
-
-            snapshot.forEach((doc) => {
-                const assetData = doc.data() as DetailedAsset;
-                newAssetsData[doc.id] = assetData;
-
-                const ticker = doc.id;
-                const pointsCollectionRef = collection(db, 'historical_data', ticker, 'points');
-                const q = query(pointsCollectionRef, orderBy('date', 'desc'), limit(1440));
-                
-                historicalDataPromises.push(
-                    getDocs(q).then(pointsSnapshot => {
-                        const points = pointsSnapshot.docs.map(pointDoc => {
-                            const data = pointDoc.data();
-                            return {
-                                price: data.price,
-                                date: (data.date as Timestamp).toDate().toISOString(),
-                            };
-                        }).reverse();
-                        
-                        setHistoricalData(prev => ({ ...prev, [ticker]: points }));
-                    })
-                );
-            });
-            
-            await Promise.all(historicalDataPromises);
-            
-            setAssets(newAssetsData);
-            setInitialAssetsMap(newAssetsData); // Save the initial state for the simulation baseline
-            setLoading(false);
-            console.log("Initial market state loaded.");
-        }, (error) => {
-            console.error("Firebase market_state listener error:", error);
-            setLoading(false);
-        });
-        
-        return () => {
-            assetsUnsubscribe();
-        };
+            initialHist[ticker] = data;
+        }
+        setHistoricalData(initialHist);
+        setLoading(false);
     }, []);
 
-    // This effect runs the client-side simulation loop once the initial data is loaded.
+    // This effect runs the client-side simulation loop.
     useEffect(() => {
-        if (Object.keys(initialAssetsMap).length === 0 || loading) return;
+        if (loading) return;
 
-        console.log("Starting client-side market simulation.");
         const intervalId = setInterval(() => {
             const now = Date.now();
-            const today = new Date(now);
-
-            // Functional updates ensure we always have the latest state without stale closures.
+            
             setAssets(prevAssets => {
                 const newAssets = { ...prevAssets };
                 for (const ticker in newAssets) {
@@ -147,26 +102,22 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
 
             setHistoricalData(prevHist => {
                 const newHist = { ...prevHist };
-                for (const ticker in prevHist) {
-                    const initialAsset = initialAssetsMap[ticker];
-                    if (!initialAsset) continue;
-                    
-                    const newPrice = calculateDeterministicPrice(initialAsset.price, ticker, now);
-                    const newPoint = { date: today.toISOString(), price: newPrice };
-                    const history = newHist[ticker] ? [...newHist[ticker], newPoint] : [newPoint];
+                for (const ticker in newHist) {
+                    if (!initialAssetsMap[ticker]) continue;
+
+                    const newPrice = calculateDeterministicPrice(initialAssetsMap[ticker].price, ticker, now);
+                    const newPoint = { date: new Date(now).toISOString(), price: newPrice };
+                    const history = [...(newHist[ticker] || []), newPoint];
                     
                     // Keep history from growing too large in memory
                     newHist[ticker] = history.slice(-1500); 
                 }
                 return newHist;
             });
-        }, 2000); // Update every 2 seconds
+        }, 5000); // Update every 5 seconds
 
-        return () => {
-            console.log("Stopping client-side market simulation.");
-            clearInterval(intervalId);
-        }
-    }, [initialAssetsMap, loading]);
+        return () => clearInterval(intervalId);
+    }, [loading]);
 
 
     const getAssetByTicker = useCallback((ticker: string): DetailedAsset | undefined => {

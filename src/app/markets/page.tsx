@@ -5,13 +5,9 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { CreateMarketDialog } from '@/components/create-market-dialog';
-// import { db } from '@/lib/firebase'; // Remplacé
-// import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore'; // Remplacé
 import { Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Timestamp } from 'firebase/firestore'; // Temporaire, sera remplacé par le type de date de PG
-
 
 export interface Market {
   id: string;
@@ -21,8 +17,8 @@ export interface Market {
   totalPool: number;
   creatorDisplayName: string;
   status: 'open' | 'closed' | 'settled';
-  closingAt: Timestamp; // Temporaire
-  createdAt: Timestamp; // Temporaire
+  closingAt: Date;
+  createdAt: Date;
 }
 
 export default function PredictionMarketsPage() {
@@ -66,7 +62,7 @@ export default function PredictionMarketsPage() {
               <CardHeader>
                 <CardTitle>{market.title}</CardTitle>
                 <CardDescription>
-                  Par {market.creatorDisplayName} • Ferme dans {formatDistanceToNow(market.closingAt.toDate(), { locale: fr })}
+                  Par {market.creatorDisplayName} • Ferme dans {formatDistanceToNow(market.closingAt, { locale: fr })}
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-grow space-y-4">
