@@ -16,6 +16,8 @@ import { ManageMembersDialog } from '@/components/manage-members-dialog';
 import { WithdrawCompanyCashDialog } from '@/components/withdraw-company-cash-dialog';
 import { ListCompanyButton } from '@/components/list-company-button';
 import { ClaimBtcButton } from '@/components/claim-btc-button';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 
 function getInitials(name: string) {
@@ -251,6 +253,54 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
             </CardContent>
         </Card>
       </div>
+
+        <Card>
+            <CardHeader>
+                <CardTitle>Historique des Transactions de l'Entreprise</CardTitle>
+                <CardDescription>Journal des achats et ventes d'actifs par {company.name}.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Actif</TableHead>
+                            <TableHead className="text-right">Quantité</TableHead>
+                            <TableHead className="text-right">Prix Unitaire</TableHead>
+                            <TableHead className="text-right">Valeur Totale</TableHead>
+                            <TableHead className="text-right">Date</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {company.transactions && company.transactions.length > 0 ? company.transactions.map(tx => (
+                            <TableRow key={tx.id}>
+                                <TableCell>
+                                    <Badge variant={tx.type === 'Buy' ? 'destructive' : 'default'} className={tx.type === 'Sell' ? 'bg-green-600' : ''}>
+                                        {tx.type === 'Buy' ? 'Achat' : 'Vente'}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="font-medium">{tx.name}</div>
+                                    <div className="text-sm text-muted-foreground">{tx.ticker}</div>
+                                </TableCell>
+                                <TableCell className="text-right font-mono">{tx.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</TableCell>
+                                <TableCell className="text-right font-mono">${tx.price.toFixed(4)}</TableCell>
+                                <TableCell className={`text-right font-medium ${tx.type === 'Buy' ? 'text-red-500' : 'text-green-500'}`}>
+                                    {tx.type === 'Buy' ? '-' : '+'}${tx.value.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right text-sm">{format(tx.createdAt, 'd MMM yyyy, HH:mm', { locale: fr })}</TableCell>
+                            </TableRow>
+                        )) : (
+                            <TableRow>
+                                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                    Cette entreprise n'a encore effectué aucune transaction.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
 
        <Card>
             <CardHeader className="flex flex-row items-center justify-between">

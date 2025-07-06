@@ -208,6 +208,7 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
   shares: many(companyShares),
   holdings: many(companyHoldings),
   miningRigs: many(companyMiningRigs),
+  transactions: many(companyTransactions),
 }));
 
 export const companyMembers = pgTable('company_members', {
@@ -293,6 +294,25 @@ export const companyMiningRigs = pgTable('company_mining_rigs', {
 export const companyMiningRigsRelations = relations(companyMiningRigs, ({ one }) => ({
   company: one(companies, {
     fields: [companyMiningRigs.companyId],
+    references: [companies.id],
+  }),
+}));
+
+export const companyTransactions = pgTable('company_transactions', {
+  id: serial('id').primaryKey(),
+  companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  type: varchar('type', { length: 4 }).notNull(), // 'Buy' or 'Sell'
+  ticker: varchar('ticker', { length: 10 }).notNull(),
+  name: varchar('name', { length: 256 }).notNull(),
+  quantity: numeric('quantity', { precision: 18, scale: 8 }).notNull(),
+  price: numeric('price', { precision: 18, scale: 8 }).notNull(),
+  value: numeric('value', { precision: 18, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const companyTransactionsRelations = relations(companyTransactions, ({ one }) => ({
+  company: one(companies, {
+    fields: [companyTransactions.companyId],
     references: [companies.id],
   }),
 }));

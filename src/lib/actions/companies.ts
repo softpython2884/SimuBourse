@@ -3,7 +3,7 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { companies, companyMembers, users, companyShares, companyHoldings, assets as assetsSchema, transactions, companyMiningRigs } from '@/lib/db/schema';
+import { companies, companyMembers, users, companyShares, companyHoldings, assets as assetsSchema, transactions, companyMiningRigs, companyTransactions } from '@/lib/db/schema';
 import { getSession } from '../session';
 import { revalidatePath } from 'next/cache';
 import { eq, and, desc, or, ilike, notInArray, inArray, sql } from 'drizzle-orm';
@@ -270,6 +270,10 @@ export async function getCompanyById(companyId: number) {
            orderBy: (companyHoldings, { desc }) => [desc(companyHoldings.updatedAt)],
         },
         miningRigs: true,
+        transactions: {
+            orderBy: [desc(companyTransactions.createdAt)],
+            limit: 20,
+        },
       }
     });
 
@@ -311,6 +315,14 @@ export async function getCompanyById(companyId: number) {
         return total + (rigData?.price || 0) * ownedRig.quantity;
     }, 0);
 
+    const formattedTransactions = company.transactions.map(tx => ({
+        ...tx,
+        quantity: parseFloat(tx.quantity),
+        price: parseFloat(tx.price),
+        value: parseFloat(tx.value),
+        createdAt: new Date(tx.createdAt),
+    }));
+
     return {
       ...company,
       cash: parseFloat(company.cash),
@@ -319,6 +331,7 @@ export async function getCompanyById(companyId: number) {
       marketCap: marketCap,
       miningRigsValue: miningRigsValue,
       unclaimedBtc: finalUnclaimedBtc,
+      transactions: formattedTransactions,
       shares: company.shares.map(s => ({...s, quantity: parseFloat(s.quantity), avgCost: parseFloat(s.avgCost)})),
       holdings: company.holdings.map(h => ({
         ...h,
@@ -793,6 +806,17 @@ export async function buyAssetForCompany(companyId: number, ticker: string, quan
                     avgCost: asset.price,
                 });
             }
+
+            await tx.insert(companyTransactions).values({
+                companyId: companyId,
+                type: 'Buy',
+                ticker: asset.ticker,
+                name: asset.name,
+                quantity: quantity.toString(),
+                price: asset.price,
+                value: tradeValue.toString(),
+            });
+
             return { success: `L'entreprise a acheté ${quantity} de ${ticker}.` };
         });
 
@@ -833,6 +857,17 @@ export async function sellAssetForCompany(companyId: number, holdingId: number, 
             } else {
                 await tx.delete(companyHoldings).where(eq(companyHoldings.id, holdingId));
             }
+
+            await tx.insert(companyTransactions).values({
+                companyId: companyId,
+                type: 'Sell',
+                ticker: asset.ticker,
+                name: asset.name,
+                quantity: quantity.toString(),
+                price: asset.price,
+                value: tradeValue.toString(),
+            });
+
             return { success: `L'entreprise a vendu ${quantity} de ${asset.ticker}.` };
         });
 
