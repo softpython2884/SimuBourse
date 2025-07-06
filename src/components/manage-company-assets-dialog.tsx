@@ -16,6 +16,7 @@ import { Loader2 } from 'lucide-react';
 import { buyAssetForCompany, sellAssetForCompany } from '@/lib/actions/companies';
 import type { CompanyWithDetails } from '@/lib/actions/companies';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
 interface ManageCompanyAssetsDialogProps {
   company: CompanyWithDetails;
@@ -61,6 +62,7 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
   const selectedHolding = selectedHoldingId ? company.holdings.find(h => h.id === selectedHoldingId) : null;
   const selectedSellAsset = selectedHolding ? getAssetByTicker(selectedHolding.ticker) : null;
   const totalProceeds = selectedSellAsset ? sellQuantity * selectedSellAsset.price : 0;
+  const sellProfitLoss = selectedHolding && selectedSellAsset ? (selectedSellAsset.price - selectedHolding.avgCost) * sellQuantity : 0;
 
   async function onBuySubmit(values: z.infer<typeof buyFormSchema>) {
     if (!selectedBuyAsset) {
@@ -229,8 +231,16 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                             )}
                         />
                          {selectedSellAsset && (
-                            <div className="text-sm text-muted-foreground">
-                                Produit total de la vente : ${totalProceeds.toFixed(2)}
+                            <div className="space-y-1 text-sm text-muted-foreground">
+                                <div>Produit de la vente : ${totalProceeds.toFixed(2)}</div>
+                                {sellQuantity > 0 && selectedHolding && (
+                                    <div className={cn(
+                                        'font-medium',
+                                        sellProfitLoss >= 0 ? 'text-green-500' : 'text-red-500'
+                                    )}>
+                                        Gain/Perte potentiel : {sellProfitLoss >= 0 ? '+' : '-'}${Math.abs(sellProfitLoss).toFixed(2)}
+                                    </div>
+                                )}
                             </div>
                         )}
                         <DialogFooter>
