@@ -84,7 +84,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
                     if (!initialPrice) continue;
 
                     // Simulate price change
-                    const volatility = asset.type === 'Crypto' ? 0.0015 : 0.0005;
+                    const volatility = asset.type === 'Crypto' ? 0.015 : 0.005;
                     const changeFactor = 1 + (Math.random() - 0.5) * 2 * volatility;
                     asset.price *= changeFactor;
                     updatedTickers[ticker] = asset.price;
