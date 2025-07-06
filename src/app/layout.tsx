@@ -29,8 +29,8 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
-          <PortfolioProvider>
-            <MarketDataProvider>
+          <MarketDataProvider>
+            <PortfolioProvider>
               <div className="flex min-h-screen w-full flex-col bg-muted/40">
                 <AppSidebar />
                 <div className="flex flex-col sm:pl-14">
@@ -41,8 +41,8 @@ export default function RootLayout({
                 </div>
               </div>
               <Toaster />
-            </MarketDataProvider>
-          </PortfolioProvider>
+            </PortfolioProvider>
+          </MarketDataProvider>
         </AuthProvider>
       </body>
     </html>

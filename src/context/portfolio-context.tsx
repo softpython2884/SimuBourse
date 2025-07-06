@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileAction, ProfileUpdateInput, buyAssetAction, sellAssetAction, claimMiningRewards as claimMiningRewardsAction } from '@/lib/actions/portfolio';
 import { buyMiningRig as buyMiningRigAction } from '@/lib/actions/mining';
 import { getRigById } from '@/lib/mining';
+import { useMarketData } from './market-data-context';
 
 export interface Asset {
   name: string;
@@ -86,6 +87,7 @@ const INITIAL_CASH = 100000;
 
 export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
+  const { applyTradeImpact } = useMarketData();
   const { toast } = useToast();
 
   const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null);
@@ -132,6 +134,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       toast({ variant: 'destructive', title: "Échec de l'achat", description: result.error });
     } else {
       toast({ title: 'Succès', description: result.success });
+      applyTradeImpact(asset.ticker, asset.price * quantity);
       await fetchPortfolio();
     }
   }
@@ -142,6 +145,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
       toast({ variant: 'destructive', title: 'Échec de la vente', description: result.error });
     } else {
       toast({ title: 'Succès', description: result.success });
+      applyTradeImpact(asset.ticker, -1 * asset.price * quantity);
       await fetchPortfolio();
     }
   }

@@ -22,6 +22,7 @@ interface MarketDataContextType {
     getHistoricalData: (ticker: string) => HistoricalDataPoint[];
     loading: boolean;
     getNewsForTicker: (ticker: string) => GenerateAssetNewsOutput | undefined;
+    applyTradeImpact: (ticker: string, tradeValue: number) => void;
 }
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
@@ -62,6 +63,15 @@ const initialAssetsMap = initialAssetsList.reduce((acc, asset) => {
     acc[asset.ticker] = asset;
     return acc;
 }, {} as AssetsMap);
+
+const parseMarketCap = (mc: string): number => {
+    if (!mc || typeof mc !== 'string') return 0;
+    const value = parseFloat(mc.replace(/[^0-9.]/g, ''));
+    if (mc.toLowerCase().includes('t')) return value * 1e12;
+    if (mc.toLowerCase().includes('b')) return value * 1e9;
+    if (mc.toLowerCase().includes('m')) return value * 1e6;
+    return value;
+};
 
 
 export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
@@ -182,6 +192,29 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         return () => clearInterval(intervalId);
     }, [loading]);
 
+    const applyTradeImpact = useCallback((ticker: string, tradeValue: number) => {
+        setTargetPrices(prev => {
+            const asset = assetsRef.current[ticker];
+            if (!asset) return prev;
+
+            const marketCap = parseMarketCap(asset.marketCap);
+            if(marketCap === 0) return prev; // Avoid division by zero
+
+            // The impact of a trade is inversely proportional to the asset's market cap.
+            // IMPACT_CONSTANT determines the overall sensitivity of the market.
+            // A value of 0.05 means a trade equal to the market cap would move the target price by 5%.
+            // This is a simplified model for a liquidity effect.
+            const IMPACT_CONSTANT = 0.05; 
+            const impactPercentage = (tradeValue / marketCap) * IMPACT_CONSTANT;
+            
+            const currentTarget = prev[ticker] || asset.price;
+            const newTarget = currentTarget * (1 + impactPercentage);
+
+            console.log(`Trade impact on ${ticker}: value=${tradeValue.toFixed(2)}, impact=${(impactPercentage*100).toFixed(4)}%, old target=${currentTarget.toFixed(2)}, new target=${newTarget.toFixed(2)}`);
+
+            return { ...prev, [ticker]: newTarget };
+        });
+    }, []);
 
     const getAssetByTicker = useCallback((ticker: string): DetailedAsset | undefined => {
         return assets[ticker];
@@ -203,6 +236,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         getHistoricalData,
         loading,
         getNewsForTicker,
+        applyTradeImpact,
     };
     
     return (
