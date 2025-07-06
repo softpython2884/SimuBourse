@@ -1,45 +1,33 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { Loader2 } from 'lucide-react';
+import { createContext, useContext, ReactNode } from 'react';
+// import { User } from 'firebase/auth'; // Remplacé
+
+// Un type utilisateur simple pour la transition. Sera étoffé plus tard.
+export type User = {
+  id: number;
+  displayName: string;
+  email: string;
+}
 
 type AuthContextType = {
   user: User | null;
   loading: boolean;
 };
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
+// Contexte temporaire qui simule un utilisateur non connecté.
+// Il sera remplacé par une gestion de session (ex: JWT) dans les prochaines étapes.
+const AuthContext = createContext<AuthContextType>({ user: null, loading: false });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-    }, (error) => {
-      console.error('Erreur onAuthStateChanged :', error);
-      setLoading(false);
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+  const value = {
+    user: null, // L'utilisateur est toujours déconnecté pour l'instant
+    loading: false, // Le chargement est terminé
+  };
 
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

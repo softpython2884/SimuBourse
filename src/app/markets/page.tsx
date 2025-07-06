@@ -5,11 +5,13 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { CreateMarketDialog } from '@/components/create-market-dialog';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
+// import { db } from '@/lib/firebase'; // Remplacé
+// import { collection, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore'; // Remplacé
 import { Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { Timestamp } from 'firebase/firestore'; // Temporaire, sera remplacé par le type de date de PG
+
 
 export interface Market {
   id: string;
@@ -19,8 +21,8 @@ export interface Market {
   totalPool: number;
   creatorDisplayName: string;
   status: 'open' | 'closed' | 'settled';
-  closingAt: Timestamp;
-  createdAt: Timestamp;
+  closingAt: Timestamp; // Temporaire
+  createdAt: Timestamp; // Temporaire
 }
 
 export default function PredictionMarketsPage() {
@@ -28,25 +30,10 @@ export default function PredictionMarketsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'prediction_markets'),
-      where('status', '==', 'open'),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const marketsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Market));
-      setMarkets(marketsData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching markets: ", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    // La logique de récupération des données sera ré-implémentée avec PostgreSQL.
+    // Pour l'instant, on affiche un état vide.
+    setMarkets([]);
+    setLoading(false);
   }, []);
 
   const getOdds = (pool: number, totalPool: number) => {
@@ -70,7 +57,7 @@ export default function PredictionMarketsPage() {
         </div>
       ) : markets.length === 0 ? (
         <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30">
-            <p className="text-muted-foreground">Aucun marché ouvert pour le moment. Soyez le premier à en créer un !</p>
+            <p className="text-muted-foreground">Aucun marché ouvert pour le moment. La connexion à la base de données est en cours de migration.</p>
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

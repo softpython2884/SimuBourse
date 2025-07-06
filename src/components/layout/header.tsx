@@ -16,8 +16,6 @@ import { Logo } from '@/components/icons';
 import { NAV_LINKS } from './sidebar';
 import { useAuth } from '@/context/auth-context';
 import { usePortfolio } from '@/context/portfolio-context';
-import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
 export function AppHeader() {
@@ -26,7 +24,7 @@ export function AppHeader() {
   const router = useRouter();
 
   const handleLogout = async () => {
-    await signOut(auth);
+    // La logique de déconnexion sera implémentée avec la nouvelle gestion de session.
     router.push('/login');
   };
 

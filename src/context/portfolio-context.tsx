@@ -1,20 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from './auth-context';
-import { db } from '@/lib/firebase';
-import {
-  doc,
-  setDoc,
-  collection,
-  onSnapshot,
-  runTransaction,
-  query,
-  orderBy,
-  Timestamp,
-  updateDoc,
-} from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
 export interface Asset {
@@ -66,256 +53,29 @@ const PortfolioContext = createContext<PortfolioContextType | undefined>(undefin
 
 const INITIAL_CASH = 100000;
 
+// Ce Provider est un placeholder. Il sera reconnecté à la base de données PostgreSQL
+// une fois la gestion de l'authentification et de la session mise en place.
 export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuth();
   const { toast } = useToast();
 
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const cash = userProfile?.cash ?? INITIAL_CASH;
-  const initialCash = userProfile?.initialCash ?? INITIAL_CASH;
-
-
-  useEffect(() => {
-    if (!user) {
-      setUserProfile(null);
-      setHoldings([]);
-      setTransactions([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    const userDocRef = doc(db, 'users', user.uid);
-
-    const unsubscribeUser = onSnapshot(userDocRef, async (docSnap) => {
-      if (docSnap.exists()) {
-        setUserProfile(docSnap.data() as UserProfile);
-      } else {
-        const newUserProfile: UserProfile = {
-          displayName: user.displayName || user.email?.split('@')[0] || 'Joueur',
-          email: user.email!,
-          cash: INITIAL_CASH,
-          initialCash: INITIAL_CASH,
-          phoneNumber: '',
-        };
-        await setDoc(userDocRef, newUserProfile);
-        setUserProfile(newUserProfile);
-      }
-    });
-
-    const holdingsCollectionRef = collection(db, 'users', user.uid, 'holdings');
-    const unsubscribeHoldings = onSnapshot(holdingsCollectionRef, (snapshot) => {
-      const userHoldings = snapshot.docs.map(
-        (doc) =>
-          ({
-            ticker: doc.id,
-            ...doc.data(),
-          } as Holding)
-      );
-      setHoldings(userHoldings);
-    });
-    
-    const transactionsCollectionRef = collection(db, 'users', user.uid, 'transactions');
-    const q = query(transactionsCollectionRef, orderBy('date', 'desc'));
-    const unsubscribeTransactions = onSnapshot(q, (snapshot) => {
-      const userTransactions = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          ...data,
-          date: (data.date as Timestamp).toDate().toISOString().split('T')[0],
-        } as Transaction;
-      });
-      setTransactions(userTransactions);
-      setLoading(false);
-    });
-
-    return () => {
-      unsubscribeUser();
-      unsubscribeHoldings();
-      unsubscribeTransactions();
-    };
-  }, [user]);
-
-  const updateUserProfile = useCallback(async (data: Partial<Pick<UserProfile, 'displayName' | 'phoneNumber'>>) => {
-    if (!user) return;
-    const userDocRef = doc(db, 'users', user.uid);
-    try {
-        await updateDoc(userDocRef, data);
-        toast({
-            title: 'Profil mis à jour',
-            description: 'Vos informations ont été enregistrées avec succès.',
-        });
-    } catch (e: any) {
-        toast({
-            variant: 'destructive',
-            title: 'Échec de la mise à jour',
-            description: e.message || 'An error occurred.',
-        });
-    }
-  }, [user, toast]);
-
-  const buyAsset = useCallback(async (asset: Asset, quantity: number) => {
-    if (!user) return;
-    const cost = asset.price * quantity;
-
-    try {
-      await runTransaction(db, async (t) => {
-
-        // --- PHASE 1: READS ---
-        const userDocRef = doc(db, 'users', user.uid);
-        const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
-        
-        const userDoc = await t.get(userDocRef);
-        const holdingDoc = await t.get(holdingDocRef);
-
-        // --- PHASE 2: VALIDATION & PREPARATION (NO DB INTERACTIONS) ---
-        if (!userDoc.exists()) {
-          throw new Error('Utilisateur non trouvé.');
-        }
-        
-        const currentCash = userDoc.data().cash;
-        if (currentCash < cost) {
-          throw new Error('Fonds insuffisants.');
-        }
-
-        const newCashValue = currentCash - cost;
-        let newHoldingData;
-
-        if (holdingDoc.exists()) {
-          const currentHolding = holdingDoc.data();
-          const newQuantity = currentHolding.quantity + quantity;
-          const newTotalCost = (currentHolding.avgCost * currentHolding.quantity) + cost;
-          const newAvgCost = newTotalCost / newQuantity;
-          newHoldingData = { ...currentHolding, quantity: newQuantity, avgCost: newAvgCost };
-        } else {
-          newHoldingData = { 
-            quantity, 
-            avgCost: asset.price, 
-            name: asset.name, 
-            type: asset.type 
-          };
-        }
-
-        const newTransactionPayload = {
-          type: 'Buy' as const,
-          asset: { name: asset.name, ticker: asset.ticker },
-          quantity,
-          price: asset.price,
-          value: cost,
-          date: Timestamp.now(),
-        };
-        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
-
-        // --- PHASE 3: WRITES ---
-        t.update(userDocRef, { cash: newCashValue });
-        t.set(holdingDocRef, newHoldingData);
-        t.set(newTransactionRef, newTransactionPayload);
-      });
-
-      toast({
-        title: 'Achat réussi',
-        description: `Vous avez acheté ${quantity} ${asset.ticker} pour $${cost.toFixed(2)}.`,
-      });
-    } catch (e: any) {
-      toast({
+  const showToast = () => {
+     toast({
         variant: 'destructive',
-        title: 'Échec de l\'achat',
-        description: e.message || 'Une erreur est survenue.',
+        title: 'Action impossible',
+        description: 'Veuillez vous connecter pour utiliser cette fonctionnalité.',
       });
-    }
-  }, [user, toast]);
-
-  const sellAsset = useCallback(async (asset: Asset, quantity: number) => {
-    if (!user) return;
-    const proceeds = asset.price * quantity;
-
-    try {
-      await runTransaction(db, async (t) => {
-
-        // --- PHASE 1: READS ---
-        const userDocRef = doc(db, 'users', user.uid);
-        const holdingDocRef = doc(db, 'users', user.uid, 'holdings', asset.ticker);
-        
-        const userDoc = await t.get(userDocRef);
-        const holdingDoc = await t.get(holdingDocRef);
-
-        // --- PHASE 2: VALIDATION & PREPARATION (NO DB INTERACTIONS) ---
-        if (!userDoc.exists()) {
-          throw new Error('Utilisateur non trouvé.');
-        }
-        if (!holdingDoc.exists()) {
-          throw new Error(`Vous n'avez pas d'actions ${asset.ticker} à vendre.`);
-        }
-        
-        const currentHolding = holdingDoc.data();
-        if (currentHolding.quantity < quantity) {
-          throw new Error(`Vous essayez de vendre ${quantity} ${asset.ticker} mais vous en possédez seulement ${currentHolding.quantity}.`);
-        }
-
-        const newCashValue = userDoc.data().cash + proceeds;
-        const newQuantity = currentHolding.quantity - quantity;
-        
-        const newTransactionPayload = {
-          type: 'Sell' as const,
-          asset: { name: asset.name, ticker: asset.ticker },
-          quantity,
-          price: asset.price,
-          value: proceeds,
-          date: Timestamp.now(),
-        };
-        const newTransactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
-        
-        // --- PHASE 3: WRITES ---
-        t.update(userDocRef, { cash: newCashValue });
-
-        if (newQuantity > 0.00001) {
-          t.update(holdingDocRef, { quantity: newQuantity });
-        } else {
-          t.delete(holdingDocRef);
-        }
-
-        t.set(newTransactionRef, newTransactionPayload);
-      });
-
-      toast({
-        title: 'Vente réussie',
-        description: `Vous avez vendu ${quantity} ${asset.ticker} pour $${proceeds.toFixed(2)}.`,
-      });
-    } catch (e: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Échec de la vente',
-        description: e.message || 'Une erreur est survenue.',
-      });
-    }
-  }, [user, toast]);
-
-  const getHoldingQuantity = (ticker: string) => {
-    return holdings.find((h) => h.ticker === ticker)?.quantity || 0;
-  };
-  
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
   }
 
   const contextValue = {
-    userProfile,
-    cash,
-    initialCash,
-    holdings,
-    transactions,
-    buyAsset,
-    sellAsset,
-    getHoldingQuantity,
-    updateUserProfile,
+    userProfile: null,
+    cash: INITIAL_CASH,
+    initialCash: INITIAL_CASH,
+    holdings: [],
+    transactions: [],
+    buyAsset: () => showToast(),
+    sellAsset: () => showToast(),
+    getHoldingQuantity: () => 0,
+    updateUserProfile: async () => showToast(),
   };
 
   return (

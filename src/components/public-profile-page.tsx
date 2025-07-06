@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, collection, query, orderBy, getDocs, Timestamp } from 'firebase/firestore';
+// import { db } from '@/lib/firebase'; // Remplacé
+// import { doc, getDoc, collection, query, orderBy, getDocs, Timestamp } from 'firebase/firestore'; // Remplacé
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -38,36 +38,10 @@ export default function PublicProfilePage({ userId }: { userId: string }) {
     const fetchProfileData = async () => {
       setLoading(true);
       setError(null);
-      try {
-        const userDocRef = doc(db, 'users', userId);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (!userDocSnap.exists()) {
-          setError("Cet utilisateur n'existe pas.");
-          return;
-        }
-        setProfile(userDocSnap.data() as PublicUserProfile);
-
-        const transactionsQuery = query(
-          collection(db, 'users', userId, 'transactions'),
-          orderBy('date', 'desc')
-        );
-        const transactionsSnap = await getDocs(transactionsQuery);
-        const transacData = transactionsSnap.docs.map(doc => {
-            const data = doc.data();
-            return {
-                ...data,
-                date: (data.date as Timestamp).toDate().toISOString().split('T')[0],
-            } as PublicTransaction;
-        });
-        setTransactions(transacData);
-
-      } catch (err: any) {
-        console.error(err);
-        setError("Impossible de charger le profil de l'utilisateur.");
-      } finally {
-        setLoading(false);
-      }
+      // La logique de récupération des données sera ré-implémentée avec PostgreSQL.
+      // Pour l'instant, on affiche un état d'erreur car la fonctionnalité n'est pas encore migrée.
+      setError("La consultation des profils publics est temporairement désactivée pendant la migration de la base de données.");
+      setLoading(false);
     };
 
     fetchProfileData();

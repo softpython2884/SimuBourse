@@ -28,8 +28,6 @@ import { generateAssetNews, GenerateAssetNewsOutput } from '@/ai/flows/generate-
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Loader2, TrendingDown, TrendingUp, Newspaper, Lock } from 'lucide-react';
 import { subDays, format, parseISO } from 'date-fns';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
 
 type TimeRange = '1D' | '7D' | '1M' | '3M' | '1Y' | 'ALL';
@@ -49,37 +47,23 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
     async function manageNews() {
         if (!asset) return;
         setIsLoadingNews(true);
-
-        const newsDocRef = doc(db, 'asset_news', asset.ticker);
-        
-        try {
-            const newsDoc = await getDoc(newsDocRef);
-            const oneHourAgo = Timestamp.now().toMillis() - (60 * 60 * 1000);
-
-            let isStale = true;
-            if (newsDoc.exists()) {
-                const data = newsDoc.data();
-                if (data.generatedAt) {
-                    isStale = data.generatedAt.toMillis() < oneHourAgo;
-                }
-            }
-
-            if (isStale && user) {
+        // L'authentification est nécessaire pour éviter les abus de l'API Genkit.
+        // Puisque l'authentification est en cours de migration, nous désactivons temporairement la génération de nouvelles.
+        if (user) {
+            try {
+                // La mise en cache avec Firestore a été supprimée. 
+                // Pour l'instant, nous générons toujours de nouvelles actualités.
+                // Une solution de mise en cache avec PostgreSQL sera envisagée.
                 const result = await generateAssetNews({ ticker: asset.ticker, name: asset.name });
-                const dataToCache = { news: result, generatedAt: Timestamp.now() };
-                await setDoc(newsDocRef, dataToCache);
                 setNews(result);
-            } else if (newsDoc.exists()) {
-                setNews(newsDoc.data().news as GenerateAssetNewsOutput);
-            } else {
-                setNews([]);
+            } catch (error) {
+                console.error("Failed to generate AI news:", error);
+                setNews([{ headline: 'Erreur de chargement', article: 'Impossible de récupérer les actualités.', sentiment: 'neutral' }]);
             }
-        } catch (error) {
-            console.error("Failed to fetch or generate AI news:", error);
-            setNews([{ headline: 'Erreur de chargement', article: 'Impossible de récupérer les actualités.', sentiment: 'neutral' }]);
-        } finally {
-            setIsLoadingNews(false);
+        } else {
+             setNews([]);
         }
+        setIsLoadingNews(false);
     }
     manageNews();
   }, [asset, user]);
@@ -199,7 +183,7 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
                 <AlertTitle>Générer les actualités du jour</AlertTitle>
             </div>
             <AlertDescription className="mt-2">
-                Connectez-vous pour être le premier à générer l'analyse de l'IA pour cet actif.
+                Connectez-vous pour générer l'analyse de l'IA pour cet actif. La connexion est en cours de migration.
             </AlertDescription>
         </Alert>
     )

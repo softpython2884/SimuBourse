@@ -12,9 +12,9 @@ import { usePortfolio } from "@/context/portfolio-context";
 import { useMarketData } from "@/context/market-data-context";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/context/auth-context";
 
 const profileFormSchema = z.object({
   displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
@@ -23,6 +23,7 @@ const profileFormSchema = z.object({
 
 
 export default function ProfileClientPage() {
+    const { user } = useAuth();
     const { userProfile, updateUserProfile, transactions, cash, holdings, initialCash } = usePortfolio();
     const { getAssetByTicker } = useMarketData();
 
@@ -39,77 +40,22 @@ export default function ProfileClientPage() {
         return displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     }
     
-    const holdingsWithMarketData = useMemo(() => {
-        return holdings.map(holding => {
-            const asset = getAssetByTicker(holding.ticker);
-            const currentPrice = asset?.price || holding.avgCost;
-            const currentValue = holding.quantity * currentPrice;
-            const totalCost = holding.quantity * holding.avgCost;
-            const pnl = currentValue - totalCost;
-            const pnlPercent = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
-            return {
-                ...holding,
-                asset,
-                currentPrice,
-                currentValue,
-                pnl,
-                pnlPercent,
-                isRealized: false,
-            };
-        }).sort((a, b) => b.currentValue - a.currentValue);
-    }, [holdings, getAssetByTicker]);
-    
-    const realizedPnL = useMemo(() => {
-        const transactionMap: { [key: string]: { buys: number, sells: number, name: string } } = {};
-
-        transactions.forEach(tx => {
-            if (!transactionMap[tx.asset.ticker]) {
-                transactionMap[tx.asset.ticker] = { buys: 0, sells: 0, name: tx.asset.name };
-            }
-            if (tx.type === 'Buy') {
-                transactionMap[tx.asset.ticker].buys += tx.value;
-            } else {
-                transactionMap[tx.asset.ticker].sells += tx.value;
-            }
-        });
-
-        const holdingTickers = new Set(holdings.map(h => h.ticker));
-
-        return Object.keys(transactionMap)
-            .filter(ticker => !holdingTickers.has(ticker) && transactionMap[ticker].sells > 0)
-            .map(ticker => {
-                const pnl = transactionMap[ticker].sells - transactionMap[ticker].buys;
-                const costBasis = transactionMap[ticker].buys;
-                return {
-                    ticker,
-                    name: transactionMap[ticker].name,
-                    quantity: 0,
-                    currentValue: 0,
-                    pnl,
-                    pnlPercent: costBasis > 0 ? (pnl / costBasis) * 100 : 0,
-                    isRealized: true,
-                };
-            });
-    }, [transactions, holdings]);
-
-    const allAssetsPerformance = useMemo(() => {
-        return [...holdingsWithMarketData, ...realizedPnL].sort((a,b) => {
-            if (a.isRealized && !b.isRealized) return 1;
-            if (!a.isRealized && b.isRealized) return -1;
-            return (b.currentValue || b.pnl) - (a.currentValue || a.pnl);
-        });
-    }, [holdingsWithMarketData, realizedPnL]);
-
-    const portfolioValue = useMemo(() => {
-        const assetsValue = holdingsWithMarketData.reduce((total, holding) => total + holding.currentValue, 0);
-        return cash + assetsValue;
-    }, [cash, holdingsWithMarketData]);
-
-    const totalGains = portfolioValue - initialCash;
-    const totalGainsPercentage = initialCash > 0 ? (totalGains / initialCash) * 100 : 0;
+    // La logique de calcul sera rétablie avec les données de PostgreSQL.
+    const allAssetsPerformance = []; 
+    const portfolioValue = initialCash;
+    const totalGains = 0;
+    const totalGainsPercentage = 0;
 
     async function onProfileSubmit(values: z.infer<typeof profileFormSchema>) {
       await updateUserProfile(values);
+    }
+
+    if (!user && !userProfile) {
+        return (
+            <div className="text-center">
+                <p>Veuillez vous connecter pour voir votre profil.</p>
+            </div>
+        )
     }
 
   return (
@@ -180,30 +126,11 @@ export default function ProfileClientPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {transactions.length > 0 ? (
-                        transactions.map((tx, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              <Badge variant={tx.type === 'Buy' ? 'default' : 'secondary'} className={tx.type === 'Buy' ? 'bg-red-600' : 'bg-green-600'}>
-                                {tx.type === 'Buy' ? 'Achat' : 'Vente'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="font-medium">{tx.asset.name} ({tx.asset.ticker})</TableCell>
-                            <TableCell>{tx.quantity}</TableCell>
-                            <TableCell>${tx.price.toFixed(2)}</TableCell>
-                            <TableCell className={tx.type === 'Buy' ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'}>
-                              {tx.type === 'Buy' ? '-' : '+'}${tx.value.toFixed(2)}
-                            </TableCell>
-                            <TableCell>{tx.date}</TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground">
+                          <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
                             Aucune transaction pour le moment.
                           </TableCell>
                         </TableRow>
-                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -224,32 +151,12 @@ export default function ProfileClientPage() {
                         <TableHead>Gains/Pertes</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
-                      {allAssetsPerformance.length > 0 ? (
-                        allAssetsPerformance.map(holding => (
-                          <TableRow key={holding.ticker} className={holding.isRealized ? "opacity-60" : ""}>
-                            <TableCell>
-                              <div className="font-medium">{holding.name}</div>
-                              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                                {holding.ticker}
-                                {holding.isRealized && <Badge variant="outline">Vendu</Badge>}
-                              </div>
-                            </TableCell>
-                            <TableCell>{holding.quantity > 0 ? holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 5 }) : '-'}</TableCell>
-                            <TableCell>${holding.currentValue > 0 ? holding.currentValue.toFixed(2) : '0.00'}</TableCell>
-                            <TableCell className={`font-medium ${holding.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                              <div>{holding.pnl >= 0 ? '+' : '-'}${Math.abs(holding.pnl).toFixed(2)}</div>
-                              <div className="text-xs">({holding.pnlPercent.toFixed(2)}%)</div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
+                     <TableBody>
                         <TableRow>
                           <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
-                            Vous n'avez aucun historique d'actifs.
+                             Aucun historique d'actifs.
                           </TableCell>
                         </TableRow>
-                      )}
                     </TableBody>
                   </Table>
                 </CardContent>

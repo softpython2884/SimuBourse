@@ -29,8 +29,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/context/auth-context';
 import { usePortfolio } from '@/context/portfolio-context';
 import { useToast } from '@/hooks/use-toast';
-import { addDoc, collection, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+// import { addDoc, collection, Timestamp } from 'firebase/firestore'; // Remplacé
+// import { db } from '@/lib/firebase'; // Remplacé
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Loader2, PlusCircle, XCircle } from 'lucide-react';
@@ -71,36 +71,9 @@ export function CreateMarketDialog() {
     }
     
     setIsLoading(true);
-    try {
-      await addDoc(collection(db, 'prediction_markets'), {
-        title: values.title,
-        category: values.category,
-        outcomes: values.outcomes.map(o => ({ name: o.name, pool: 0 })),
-        closingAt: Timestamp.fromDate(values.closingDate),
-        createdAt: Timestamp.now(),
-        creatorId: user.uid,
-        creatorDisplayName: userProfile.displayName,
-        status: 'open',
-        totalPool: 0,
-        resolvedOutcome: null,
-      });
-
-      toast({
-        title: 'Marché créé !',
-        description: 'Votre marché de prédiction est maintenant en ligne.',
-      });
-      form.reset();
-      setOpen(false);
-    } catch (error) {
-        console.error("Error creating market: ", error);
-        toast({
-            variant: 'destructive',
-            title: 'Erreur',
-            description: "Impossible de créer le marché. Veuillez réessayer."
-        });
-    } finally {
-        setIsLoading(false);
-    }
+    // Logique de création de marché avec PostgreSQL à implémenter
+    toast({ variant: 'destructive', title: 'Fonctionnalité désactivée', description: 'La création de marché est en cours de migration.' });
+    setIsLoading(false);
   }
 
   return (

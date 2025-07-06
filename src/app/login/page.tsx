@@ -5,8 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -33,19 +31,15 @@ export default function LoginPage() {
     },
   });
 
+  // La logique de connexion sera implémentée à la prochaine étape.
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    try {
-      await signInWithEmailAndPassword(auth, values.email, values.password);
-      router.push('/');
-    } catch (error: any) {
-      toast({
+    toast({
         variant: 'destructive',
-        title: 'Échec de la connexion',
-        description: error.message,
-      });
-      setIsLoading(false);
-    }
+        title: 'Fonctionnalité non disponible',
+        description: 'La connexion sera mise en place prochainement.',
+    });
+    setIsLoading(false);
   }
 
   return (
