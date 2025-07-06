@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   Card,
@@ -26,7 +26,6 @@ import { Button } from '@/components/ui/button';
 import { useMarketData } from '@/context/market-data-context';
 import type { DetailedAsset } from '@/lib/assets';
 import type { GenerateAssetNewsOutput } from '@/ai/flows/generate-asset-news';
-import { getOrGenerateAssetNews } from '@/lib/actions/news';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Loader2, TrendingDown, TrendingUp, Newspaper } from 'lucide-react';
 import { subDays, format, parseISO } from 'date-fns';
@@ -38,36 +37,12 @@ interface AssetChartClientProps {
 }
 
 export function AssetChartClient({ asset }: AssetChartClientProps) {
-  const { getHistoricalData, registerNewsEvent } = useMarketData();
+  const { getHistoricalData, getNewsForTicker } = useMarketData();
   const historicalData = getHistoricalData(asset.ticker);
+  const news = getNewsForTicker(asset.ticker);
 
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
-  const [news, setNews] = useState<GenerateAssetNewsOutput>([]);
-  const [isLoadingNews, setIsLoadingNews] = useState(true);
-
-  useEffect(() => {
-    async function fetchNews() {
-      if (!asset?.ticker) return;
-
-      setIsLoadingNews(true);
-      setNews([]);
-      const { news: freshNews, source } = await getOrGenerateAssetNews(asset.ticker, asset.name);
-      setNews(freshNews);
-      setIsLoadingNews(false);
-
-      if (source === 'generated' && freshNews) {
-        freshNews.forEach(item => {
-            if (item.sentiment !== 'neutral') {
-                registerNewsEvent(asset.ticker, item.impactScore);
-            }
-        });
-      }
-    }
-
-    // We only want to fetch news once when the component mounts for a specific asset
-    fetchNews();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asset?.ticker]);
+  const isLoadingNews = !news;
 
   const filteredData = useMemo(() => {
     const now = new Date();

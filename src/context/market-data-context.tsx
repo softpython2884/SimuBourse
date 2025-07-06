@@ -4,6 +4,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { DetailedAsset, assets as initialAssetsList } from '@/lib/assets';
+import type { GenerateAssetNewsOutput } from '@/ai/flows/generate-asset-news';
+import { getOrGenerateAssetNews } from '@/lib/actions/news';
+
 
 export type HistoricalDataPoint = {
     date: string;
@@ -13,17 +16,12 @@ export type HistoricalDataPoint = {
 type AssetsMap = { [ticker: string]: DetailedAsset };
 type HistoricalDataMap = { [ticker:string]: HistoricalDataPoint[] };
 
-interface MomentumData {
-    momentum: number; // The initial momentum value from the news
-    timestamp: number; // The time the news event occurred
-}
-
 interface MarketDataContextType {
     assets: DetailedAsset[];
     getAssetByTicker: (ticker: string) => DetailedAsset | undefined;
     getHistoricalData: (ticker: string) => HistoricalDataPoint[];
     loading: boolean;
-    registerNewsEvent: (ticker: string, impactScore: number) => void;
+    getNewsForTicker: (ticker: string) => GenerateAssetNewsOutput | undefined;
 }
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
@@ -37,24 +35,26 @@ const seededRandom = (seed: number) => {
 };
 
 const calculateNextPrice = (
-    previousPrice: number, 
-    ticker: string, 
-    timestamp: number, 
-    momentum: number
+    previousPrice: number,
+    targetPrice: number,
+    ticker: string,
+    timestamp: number
 ) => {
     const seed = timestamp + ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const randomValue = seededRandom(seed);
-    
-    // Increased base volatility for more background noise and a lively market.
-    const volatility = 0.00002;
-    
-    // A tiny positive drift to simulate a generally healthy market over the long term.
-    const baseDrift = 0.00000002;
-    
-    // The total change is the sum of the long-term drift, the current news-driven momentum, and the random noise.
-    const changePercent = baseDrift + momentum + volatility * (randomValue - 0.5) * 2;
-    const newPrice = previousPrice * (1 + changePercent);
-    
+
+    // Determines how fast the price moves towards its target.
+    const REVERSION_SPEED = 0.03;
+    // Determines the random "jitter" or noise around the price trend.
+    const VOLATILITY = 0.015;
+
+    // The force pulling the price towards its target
+    const reversionForce = (targetPrice - previousPrice) * REVERSION_SPEED;
+    // The random market noise
+    const randomWalk = previousPrice * VOLATILITY * (randomValue - 0.5);
+
+    const newPrice = previousPrice + reversionForce + randomWalk;
+
     return newPrice > 0 ? newPrice : 0.01;
 };
 
@@ -68,57 +68,70 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [assets, setAssets] = useState<AssetsMap>(initialAssetsMap);
     const [historicalData, setHistoricalData] = useState<HistoricalDataMap>({});
-    const [marketMomentum, setMarketMomentum] = useState<{ [ticker: string]: MomentumData }>({});
+    const [news, setNews] = useState<{ [ticker: string]: GenerateAssetNewsOutput }>({});
+    const [targetPrices, setTargetPrices] = useState<{ [ticker: string]: number }>({});
 
     const assetsRef = useRef(assets);
     assetsRef.current = assets;
     const historicalDataRef = useRef(historicalData);
     historicalDataRef.current = historicalData;
-    const marketMomentumRef = useRef(marketMomentum);
-    marketMomentumRef.current = marketMomentum;
-
-    const registerNewsEvent = useCallback((ticker: string, impactScore: number) => {
-        // A max score of 10 creates a significant trend. We map it to a momentum value.
-        // This value is the primary driver of price change for the next few hours.
-        const initialMomentum = impactScore * 0.00008; 
-
-        setMarketMomentum(prev => ({
-            ...prev,
-            [ticker]: { momentum: initialMomentum, timestamp: Date.now() },
-        }));
-    }, []);
+    const targetPricesRef = useRef(targetPrices);
+    targetPricesRef.current = targetPrices;
 
     useEffect(() => {
-        const now = Date.now();
-        const initialHist: HistoricalDataMap = {};
-        const newAssetsMap: AssetsMap = { ...initialAssetsMap };
+        const initializeMarket = async () => {
+            const now = Date.now();
+            const initialHist: HistoricalDataMap = {};
+            const initialAssetsWithPrices: AssetsMap = { ...initialAssetsMap };
 
-        for(const ticker in initialAssetsMap) {
-            const asset = initialAssetsMap[ticker];
-            const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
-            let currentPrice = asset.price;
-            
-            const totalHours = 365 * 24;
-            const data: HistoricalDataPoint[] = [];
-            for (let i = 0; i < totalHours; i++) {
-                const timestamp = oneYearAgo + i * 60 * 60 * 1000;
-                // Generate initial history with only the base drift and jitter (momentum is 0)
-                currentPrice = calculateNextPrice(currentPrice, asset.ticker, timestamp, 0);
-                data.push({ date: new Date(timestamp).toISOString(), price: currentPrice });
+            // 1. Generate a flat historical baseline for all assets
+            for (const ticker in initialAssetsMap) {
+                const asset = initialAssetsMap[ticker];
+                const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
+                let currentPrice = asset.price;
+                const data: HistoricalDataPoint[] = [];
+                for (let i = 0; i < 365 * 24; i++) {
+                    const timestamp = oneYearAgo + i * 60 * 60 * 1000;
+                    data.push({ date: new Date(timestamp).toISOString(), price: currentPrice });
+                }
+                
+                initialHist[ticker] = data;
+                initialAssetsWithPrices[ticker] = { ...asset, price: currentPrice, change24h: '+0.00%' };
             }
+
+            setHistoricalData(initialHist);
+            setAssets(initialAssetsWithPrices);
             
-            initialHist[ticker] = data;
+            // 2. Fetch or generate news for ALL assets at once
+            const newsPromises = initialAssetsList.map(asset => 
+                getOrGenerateAssetNews(asset.ticker, asset.name)
+            );
+            const newsResults = await Promise.all(newsPromises);
+            
+            const newNewsState: { [ticker: string]: GenerateAssetNewsOutput } = {};
+            const newTargetPrices: { [ticker: string]: number } = {};
+            
+            // 3. Calculate the initial "target price" for each asset based on news
+            newsResults.forEach((result, index) => {
+                const asset = initialAssetsList[index];
+                newNewsState[asset.ticker] = result.news;
+                
+                const cumulativeImpact = result.news.reduce((acc, item) => acc + item.impactScore, 0);
+                
+                // An impact score of 10 translates to a 5% target change.
+                // Max impact of 3 news items (30) becomes a 15% target change.
+                const impactFactor = (cumulativeImpact * 0.5) / 100;
+                newTargetPrices[asset.ticker] = initialAssetsWithPrices[asset.ticker].price * (1 + impactFactor);
+            });
+            
+            setNews(newNewsState);
+            setTargetPrices(newTargetPrices);
+            
+            setLoading(false);
+        };
 
-            const lastPrice = data[data.length - 1]?.price || asset.price;
-            const price24hAgo = data[data.length - 25]?.price || lastPrice;
-            const changePercent = ((lastPrice - price24hAgo) / price24hAgo) * 100;
-            const change24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
-            newAssetsMap[ticker] = { ...asset, price: lastPrice, change24h };
-        }
-
-        setAssets(newAssetsMap);
-        setHistoricalData(initialHist);
-        setLoading(false);
+        initializeMarket();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -128,35 +141,17 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
             const now = Date.now();
             const currentAssets = assetsRef.current;
             const currentHistoricalData = historicalDataRef.current;
-            const currentMarketMomentum = marketMomentumRef.current;
+            const currentTargetPrices = targetPricesRef.current;
             
             const newAssetsMap: AssetsMap = { ...currentAssets };
             const newHistoricalDataMap: HistoricalDataMap = { ...currentHistoricalData };
-            const newMarketMomentum = { ...currentMarketMomentum };
 
             for (const ticker in newAssetsMap) {
                 const currentAsset = newAssetsMap[ticker];
                 if (!currentAsset) continue;
                 
-                let activeMomentum = 0;
-                const momentumData = newMarketMomentum[ticker];
-
-                if (momentumData) {
-                    const timeSinceEvent = now - momentumData.timestamp;
-                    const DECAY_HOURS = 4; // The news effect will fade over 4 hours
-                    const DECAY_CONSTANT = DECAY_HOURS * 60 * 60 * 1000;
-                    
-                    // Exponential decay of the momentum
-                    const decayFactor = Math.exp(-timeSinceEvent / DECAY_CONSTANT);
-                    activeMomentum = momentumData.momentum * decayFactor;
-
-                    // If momentum is negligible, remove it to stop calculations
-                    if (Math.abs(activeMomentum) < 1e-9) {
-                        delete newMarketMomentum[ticker];
-                    }
-                }
-
-                const newPrice = calculateNextPrice(currentAsset.price, ticker, now, activeMomentum);
+                const targetPrice = currentTargetPrices[ticker] || currentAsset.price;
+                const newPrice = calculateNextPrice(currentAsset.price, targetPrice, ticker, now);
                 
                 const newPoint = { date: new Date(now).toISOString(), price: newPrice };
                 const updatedHistory = [...(newHistoricalDataMap[ticker] || []), newPoint];
@@ -179,7 +174,6 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
                 newAssetsMap[ticker] = { ...currentAsset, price: newPrice, change24h };
             }
             
-            setMarketMomentum(newMarketMomentum);
             setAssets(newAssetsMap);
             setHistoricalData(newHistoricalDataMap);
 
@@ -197,6 +191,10 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         return historicalData[ticker] || [];
     }, [historicalData]);
 
+    const getNewsForTicker = useCallback((ticker: string): GenerateAssetNewsOutput | undefined => {
+        return news[ticker];
+    }, [news]);
+
     const assetsArray = React.useMemo(() => Object.values(assets), [assets]);
 
     const value = {
@@ -204,7 +202,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         getAssetByTicker,
         getHistoricalData,
         loading,
-        registerNewsEvent,
+        getNewsForTicker,
     };
     
     return (
