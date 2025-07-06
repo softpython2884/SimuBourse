@@ -18,8 +18,10 @@ export const assets: DetailedAsset[] = [
     { name: 'Meta Platforms, Inc.', ticker: 'META', price: 500.00, type: 'Stock', description: 'Engages in the development of social media applications. It builds technology that helps people connect, find communities, and grow businesses.', marketCap: '$1.2T', change24h: '+0.00%' },
     { name: 'Tesla, Inc.', ticker: 'TSLA', price: 180.00, type: 'Stock', description: 'Designs, develops, manufactures, leases, and sells electric vehicles, and energy generation and storage systems.', marketCap: '$570B', change24h: '+0.00%' },
     { name: 'Samsung Electronics', ticker: 'SMSG', price: 1550.00, type: 'Stock', description: 'A South Korean multinational electronics corporation headquartered in Yeongtong-gu, Suwon.', marketCap: '$450B', change24h: '+0.00%' },
+    { name: 'Intel Corporation', ticker: 'INTC', price: 30.00, type: 'Stock', description: 'Engages in the design, manufacture, and sale of computer products and technologies.', marketCap: '$130B', change24h: '+0.00%' },
+    { name: 'IBM', ticker: 'IBM', price: 170.00, type: 'Stock', description: 'An American multinational technology corporation providing hosting and consulting services.', marketCap: '$157B', change24h: '+0.00%' },
     { name: 'Nokia Corporation', ticker: 'NOK', price: 3.80, type: 'Stock', description: 'A Finnish multinational telecommunications, information technology, and consumer electronics company.', marketCap: '$21B', change24h: '+0.00%' },
-
+    
     // Crypto
     { name: 'Bitcoin', ticker: 'BTC', price: 68000.00, type: 'Crypto', description: 'A decentralized digital currency, without a central bank or single administrator.', marketCap: '$1.3T', change24h: '+0.00%' },
     { name: 'Ethereum', ticker: 'ETH', price: 3500.00, type: 'Crypto', description: 'A decentralized, open-source blockchain with smart contract functionality.', marketCap: '$420B', change24h: '+0.00%' },
@@ -31,6 +33,8 @@ export const assets: DetailedAsset[] = [
     { name: 'Dassault Systèmes', ticker: 'DSY', price: 35.00, type: 'Stock', description: 'A French software company that develops 3D design, 3D digital mock-up, and product lifecycle management (PLM) software.', marketCap: '€46B', change24h: '+0.00%' },
     { name: 'Capgemini SE', ticker: 'CAP', price: 200.00, type: 'Stock', description: 'A French multinational information technology services and consulting company.', marketCap: '€34B', change24h: '+0.00%' },
     { name: 'Ubisoft Entertainment', ticker: 'UBI', price: 22.00, type: 'Stock', description: 'A French video game company, known for publishing games in several acclaimed video game franchises.', marketCap: '€2.8B', change24h: '+0.00%' },
+    { name: 'Kering SA', ticker: 'KER', price: 325.00, type: 'Stock', description: 'A French-based multinational corporation specializing in luxury goods.', marketCap: '€40B', change24h: '+0.00%' },
+    { name: 'LVMH Moët Hennessy', ticker: 'LVMH', price: 730.00, type: 'Stock', description: 'A French multinational luxury goods conglomerate headquartered in Paris.', marketCap: '€365B', change24h: '+0.00%' },
 
     // Entertainment & Gaming
     { name: 'The Walt Disney Company', ticker: 'DIS', price: 102.00, type: 'Stock', description: 'A multinational mass media and entertainment conglomerate.', marketCap: '$186B', change24h: '+0.00%' },
@@ -45,9 +49,16 @@ export const assets: DetailedAsset[] = [
     { name: 'McDonald\'s Corp.', ticker: 'MCD', price: 260.00, type: 'Stock', description: 'Operates and franchises McDonald\'s restaurants worldwide.', marketCap: '$186B', change24h: '+0.00%' },
     { name: 'The Coca-Cola Company', ticker: 'KO', price: 63.00, type: 'Stock', description: 'A beverage company that manufactures, markets, and sells various nonalcoholic beverages worldwide.', marketCap: '$270B', change24h: '+0.00%' },
     { name: 'NIKE, Inc.', ticker: 'NKE', price: 95.00, type: 'Stock', description: 'Engages in the design, development, marketing, and sale of athletic footwear, apparel, equipment, and accessories.', marketCap: '$143B', change24h: '+0.00%' },
-    { name: 'LVMH Moët Hennessy', ticker: 'LVMH', price: 730.00, type: 'Stock', description: 'A French multinational luxury goods conglomerate headquartered in Paris.', marketCap: '€365B', change24h: '+0.00%' },
+    
+    // Automotive
     { name: 'Toyota Motor Corp.', ticker: 'TM', price: 205.00, type: 'Stock', description: 'A Japanese multinational automotive manufacturer.', marketCap: '$270B', change24h: '+0.00%' },
+    { name: 'Ford Motor Company', ticker: 'F', price: 12.00, type: 'Stock', description: 'An American multinational automobile manufacturer.', marketCap: '$48B', change24h: '+0.00%' },
+    { name: 'BMW Group', ticker: 'BMW', price: 90.00, type: 'Stock', description: 'A German multinational company which produces automobiles and motorcycles.', marketCap: '€58B', change24h: '+0.00%' },
 
+    // Finance
+    { name: 'JPMorgan Chase & Co.', ticker: 'JPM', price: 198.00, type: 'Stock', description: 'An American multinational financial services company.', marketCap: '$570B', change24h: '+0.00%' },
+    { name: 'The Goldman Sachs Group', ticker: 'GS', price: 458.00, type: 'Stock', description: 'An American multinational investment bank and financial services company.', marketCap: '$148B', change24h: '+0.00%' },
+    
     // Commodities & Forex
     { name: 'Gold Spot', ticker: 'XAU', price: 2350.00, type: 'Commodity', description: 'Represents the price for one troy ounce of gold on the spot market.', marketCap: '$15.8T', change24h: '+0.00%' },
     { name: 'Crude Oil (WTI)', ticker: 'OIL', price: 80.00, type: 'Commodity', description: 'West Texas Intermediate crude oil, a benchmark in oil pricing.', marketCap: 'N/A', change24h: '+0.00%' },

@@ -469,11 +469,10 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
             const sharePrice = currentTotalShares > 0 ? currentNav / currentTotalShares : 0;
             const proceeds = sharePrice * quantity;
 
-            // New 35/65 rule
+            // New 35/65 rule, but non-blocking
             const companyLiability = proceeds * 0.35;
             const companyCash = parseFloat(company.cash);
-
-            if(companyCash < companyLiability) throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter ces parts.");
+            const paymentFromCompany = Math.min(companyCash, companyLiability);
 
             const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
             if (!user) throw new Error("Utilisateur non trouvé.");
@@ -488,8 +487,8 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
                 await tx.update(companyShares).set({ quantity: newSharesHeld.toString() }).where(eq(companyShares.id, userShareHolding!.id));
             }
 
-            // Company cash decreases by its liability, total shares decrease by amount sold
-            const newCompanyCash = companyCash - companyLiability;
+            // Company cash decreases by what it paid, total shares decrease by amount sold
+            const newCompanyCash = companyCash - paymentFromCompany;
             const newTotalShares = parseFloat(company.totalShares) - quantity;
             await tx.update(companies).set({ 
                 cash: newCompanyCash.toString(),
