@@ -265,11 +265,7 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
                             />
                             <YAxis
                                 domain={yAxisDomain}
-                                // Instead of `hide`, we make the axis invisible but keep it for layout,
-                                // ensuring the scaling is calculated correctly.
-                                width={1}
-                                tick={false}
-                                axisLine={false}
+                                hide
                             />
                             <ChartTooltip
                                 cursor={false}

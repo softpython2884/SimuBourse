@@ -41,6 +41,46 @@ export async function updateUserProfile(values: ProfileUpdateInput): Promise<{ s
     }
 }
 
+export async function addCashToPortfolio(amount: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) return { error: 'Non autorisé.' };
+
+    if (typeof amount !== 'number' || amount <= 0 || amount > 1000000) {
+        return { error: 'Veuillez entrer un montant valide entre 1 et 1,000,000.' };
+    }
+
+    try {
+        const user = await db.query.users.findFirst({
+            where: eq(users.id, session.id),
+            columns: { cash: true, initialCash: true }
+        });
+
+        if (!user) throw new Error("Utilisateur non trouvé.");
+
+        const currentCash = parseFloat(user.cash);
+        const currentInitialCash = parseFloat(user.initialCash);
+        
+        const newCash = currentCash + amount;
+        const newInitialCash = currentInitialCash + amount;
+
+        await db.update(users)
+            .set({ 
+                cash: newCash.toFixed(2),
+                initialCash: newInitialCash.toFixed(2)
+            })
+            .where(eq(users.id, session.id));
+
+        revalidatePath('/portfolio');
+        revalidatePath('/');
+        revalidatePath('/profile');
+        
+        return { success: `${amount.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })} ajoutés avec succès.` };
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue lors de l'ajout de fonds." };
+    }
+}
+
+
 export async function getAuthenticatedUserProfile() {
     const session = await getSession();
     if (!session?.id) {
