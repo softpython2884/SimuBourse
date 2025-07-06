@@ -26,12 +26,18 @@ export default function AssetDetailPage() {
   }
 
   if (!asset) {
+    // This part of the UI might be briefly shown if a user navigates
+    // to a company ticker URL directly. The router should redirect them,
+    // but as a fallback, we show a helpful message.
     return (
       <div className="text-center">
-        <h2 className="text-2xl font-bold">Actif non trouvé</h2>
-        <p className="text-muted-foreground">L'actif avec le ticker "{ticker}" n'existe pas.</p>
-        <Button onClick={() => router.push('/trading')} className="mt-4">
-          Retour à la Salle des Marchés
+        <h2 className="text-2xl font-bold">Actif non trouvé ou non listé</h2>
+        <p className="text-muted-foreground">L'actif "{ticker}" n'est pas sur le marché principal. Les entreprises de joueurs sont sur la page "Entreprises".</p>
+        <Button onClick={() => router.push('/companies')} className="mt-4 mr-2">
+          Aller à la Bourse des Entreprises
+        </Button>
+        <Button onClick={() => router.push('/trading')} className="mt-4" variant="secondary">
+          Aller à la Salle des Marchés
         </Button>
       </div>
     );

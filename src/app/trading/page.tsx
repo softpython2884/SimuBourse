@@ -68,7 +68,7 @@ export default function TradingPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
                 <CardTitle>Salle des Marchés</CardTitle>
-                <CardDescription>Achetez et vendez des actifs en utilisant les données du marché en temps réel.</CardDescription>
+                <CardDescription>Achetez et vendez des actions et des cryptos. Les entreprises de joueurs sont dans la section "Entreprises".</CardDescription>
             </div>
             <div className="flex items-center gap-2">
                 <div className="relative">

@@ -3,11 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { users, holdings, transactions, assets as assetsSchema, companies, companyShares } from '@/lib/db/schema';
+import { users, holdings, transactions, assets as assetsSchema } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { getSession } from '@/lib/session';
 import { getRigById } from '../mining';
-import { applyMarketImpactToCompany } from './companies';
 
 const profileUpdateSchema = z.object({
     displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
@@ -61,12 +60,16 @@ export async function getAuthenticatedUserProfile() {
                     orderBy: [desc(transactions.createdAt)],
                 },
                 miningRigs: true,
+                companyShares: { // Fetch company shares
+                    with: {
+                        company: true
+                    }
+                }
             }
         });
 
         if (!userProfile) return null;
 
-        // --- OFFLINE MINING CALCULATION ---
         const totalHashRateMhs = userProfile.miningRigs.reduce((total, rig) => {
             const rigData = getRigById(rig.rigId);
             return total + (rigData?.hashRateMhs || 0) * rig.quantity;
@@ -89,15 +92,31 @@ export async function getAuthenticatedUserProfile() {
                   .where(eq(users.id, session.id));
             }
         }
-        // --- END CALCULATION ---
-
-
-        const formattedHoldings = userProfile.holdings.map(h => ({
+        
+        const regularHoldings = userProfile.holdings.map(h => ({
             ...h,
+            isCompanyShare: false,
             quantity: parseFloat(h.quantity),
             avgCost: parseFloat(h.avgCost),
             updatedAt: new Date(h.updatedAt),
         }));
+
+        const companyShareHoldings = userProfile.companyShares.map(cs => {
+            const sharePrice = parseFloat(cs.company.sharePrice);
+            return {
+                id: cs.id,
+                userId: cs.userId,
+                ticker: cs.company.ticker,
+                name: cs.company.name,
+                type: 'Company Share',
+                isCompanyShare: true,
+                quantity: parseFloat(cs.quantity),
+                avgCost: sharePrice, // Using current price as avgCost for simplicity here
+                updatedAt: new Date(cs.company.createdAt), // A proxy date
+            }
+        });
+
+        const allHoldings = [...regularHoldings, ...companyShareHoldings];
 
         const formattedTransactions = userProfile.transactions.map(t => ({
             ...t,
@@ -114,7 +133,7 @@ export async function getAuthenticatedUserProfile() {
             cash: parseFloat(userProfile.cash),
             initialCash: parseFloat(userProfile.initialCash),
             unclaimedBtc: finalUnclaimedBtc,
-            holdings: formattedHoldings,
+            holdings: allHoldings,
             transactions: formattedTransactions,
             miningRigs: userProfile.miningRigs,
         };
@@ -129,95 +148,48 @@ export async function buyAssetAction(ticker: string, quantity: number): Promise<
     const session = await getSession();
     if (!session?.id) return { error: 'Non autorisé.' };
     
-    // Determine if it's a company or a regular asset
-    const company = await db.query.companies.findFirst({
-        where: and(eq(companies.ticker, ticker), eq(companies.isListed, true))
-    });
-
     try {
-        let tradeValue = 0;
-        let assetName = '';
-        
         const result = await db.transaction(async (tx) => {
-            const user = await tx.query.users.findFirst({
-                where: eq(users.id, session.id),
-                columns: { cash: true }
-            });
+            const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
             if (!user) throw new Error("Utilisateur non trouvé.");
             
-            if (company) {
-                // --- Logic for buying listed COMPANY SHARES (Secondary Market) ---
-                assetName = company.name;
-                const price = parseFloat(company.sharePrice);
-                tradeValue = price * quantity;
+            const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
+            if (!asset) throw new Error("Actif non trouvé.");
+            
+            const price = parseFloat(asset.price);
+            const tradeValue = price * quantity;
 
-                if (parseFloat(user.cash) < tradeValue) throw new Error("Fonds insuffisants.");
+            if (parseFloat(user.cash) < tradeValue) throw new Error("Fonds insuffisants.");
+            
+            await tx.update(users).set({ cash: (parseFloat(user.cash) - tradeValue).toString() }).where(eq(users.id, session.id));
 
-                // Debit user cash
-                await tx.update(users).set({ cash: (parseFloat(user.cash) - tradeValue).toFixed(2) }).where(eq(users.id, session.id));
+            const existingHolding = await tx.query.holdings.findFirst({
+                where: and(eq(holdings.userId, session.id), eq(holdings.ticker, asset.ticker)),
+            });
 
-                // The company's cash and total shares are NOT affected in a secondary market trade.
-                
-                // Add shares to user's portfolio.
-                const existingShares = await tx.query.companyShares.findFirst({
-                    where: and(eq(companyShares.userId, session.id), eq(companyShares.companyId, company.id))
-                });
-                if (existingShares) {
-                    const newQuantity = parseFloat(existingShares.quantity) + quantity;
-                    await tx.update(companyShares).set({ quantity: newQuantity.toString() }).where(eq(companyShares.id, existingShares.id));
-                } else {
-                    await tx.insert(companyShares).values({ userId: session.id, companyId: company.id, quantity: quantity.toString() });
-                }
-
+            if (existingHolding) {
+                const existingQuantity = parseFloat(existingHolding.quantity);
+                const existingAvgCost = parseFloat(existingHolding.avgCost);
+                const newTotalQuantity = existingQuantity + quantity;
+                const newAvgCost = ((existingAvgCost * existingQuantity) + tradeValue) / newTotalQuantity;
+                await tx.update(holdings).set({ quantity: newTotalQuantity.toString(), avgCost: newAvgCost.toString(), updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
             } else {
-                // --- Logic for buying REGULAR ASSETS ---
-                const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
-                if (!asset) throw new Error("Actif non trouvé.");
-                
-                assetName = asset.name;
-                const price = parseFloat(asset.price);
-                tradeValue = price * quantity;
-
-                if (parseFloat(user.cash) < tradeValue) throw new Error("Fonds insuffisants.");
-                
-                // Debit user
-                await tx.update(users).set({ cash: (parseFloat(user.cash) - tradeValue).toFixed(2) }).where(eq(users.id, session.id));
-
-                // Add asset to user holdings
-                const existingHolding = await tx.query.holdings.findFirst({
-                    where: and(eq(holdings.userId, session.id), eq(holdings.ticker, asset.ticker)),
-                });
-
-                if (existingHolding) {
-                    const existingQuantity = parseFloat(existingHolding.quantity);
-                    const existingAvgCost = parseFloat(existingHolding.avgCost);
-                    const newTotalQuantity = existingQuantity + quantity;
-                    const newAvgCost = ((existingAvgCost * existingQuantity) + tradeValue) / newTotalQuantity;
-                    await tx.update(holdings).set({ quantity: newTotalQuantity.toString(), avgCost: newAvgCost.toString(), updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
-                } else {
-                    await tx.insert(holdings).values({ userId: session.id, ticker: asset.ticker, name: asset.name, type: asset.type, quantity: quantity.toString(), avgCost: price.toString() });
-                }
+                await tx.insert(holdings).values({ userId: session.id, ticker: asset.ticker, name: asset.name, type: asset.type, quantity: quantity.toString(), avgCost: price.toString() });
             }
 
-            // Create a universal transaction record
             await tx.insert(transactions).values({
                 userId: session.id,
                 type: 'Buy',
                 ticker: ticker,
-                name: assetName,
+                name: asset.name,
                 quantity: quantity.toString(),
-                price: (tradeValue / quantity).toString(),
-                value: tradeValue.toFixed(2),
+                price: price.toString(),
+                value: tradeValue.toString(),
             });
             
             return { success: `Achat de ${quantity} ${ticker} réussi !` };
         });
 
-        // Apply market impact outside the transaction
-        if (result.success && company) {
-            await applyMarketImpactToCompany(ticker, tradeValue);
-        }
-        
         revalidatePath('/portfolio');
         revalidatePath('/profile');
         revalidatePath('/');
@@ -232,94 +204,46 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
     const session = await getSession();
     if (!session?.id) return { error: 'Non autorisé.' };
     
-    const company = await db.query.companies.findFirst({
-        where: and(eq(companies.ticker, ticker), eq(companies.isListed, true))
-    });
-
     try {
-        let tradeValue = 0;
-        let assetName = '';
-
         const result = await db.transaction(async (tx) => {
-            const user = await tx.query.users.findFirst({
-                where: eq(users.id, session.id),
-                columns: { cash: true }
-            });
+            const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
             if (!user) throw new Error("Utilisateur non trouvé.");
             
-            if (company) {
-                // --- Logic for selling listed COMPANY SHARES (Secondary Market) ---
-                assetName = company.name;
-                const price = parseFloat(company.sharePrice);
-                tradeValue = price * quantity;
+            const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
+            if (!asset) throw new Error("Actif non trouvé.");
+            
+            const price = parseFloat(asset.price);
+            const tradeValue = price * quantity;
 
-                const userShareHolding = await tx.query.companyShares.findFirst({
-                    where: and(eq(companyShares.userId, session.id), eq(companyShares.companyId, company.id))
-                });
+            const existingHolding = await tx.query.holdings.findFirst({
+                where: and(eq(holdings.userId, session.id), eq(holdings.ticker, asset.ticker)),
+            });
+            
+            const holdingQuantity = parseFloat(existingHolding?.quantity || '0');
+            if (!existingHolding || holdingQuantity < quantity) throw new Error("Quantité d'actifs insuffisante pour la vente.");
 
-                const sharesHeld = parseFloat(userShareHolding?.quantity || '0');
-                if (sharesHeld < quantity) throw new Error("Vous ne possédez pas assez de parts pour cette vente.");
-                
-                // The company's cash is NOT affected. The money comes from the buyer (market maker).
+            await tx.update(users).set({ cash: (parseFloat(user.cash) + tradeValue).toString() }).where(eq(users.id, session.id));
 
-                // Credit user
-                await tx.update(users).set({ cash: (parseFloat(user.cash) + tradeValue).toFixed(2) }).where(eq(users.id, session.id));
-
-                // Remove shares from user
-                const newSharesHeld = sharesHeld - quantity;
-                if (newSharesHeld < 1e-9) {
-                    await tx.delete(companyShares).where(eq(companyShares.id, userShareHolding!.id));
-                } else {
-                    await tx.update(companyShares).set({ quantity: newSharesHeld.toString() }).where(eq(companyShares.id, userShareHolding!.id));
-                }
-
+            const newQuantity = holdingQuantity - quantity;
+            if (newQuantity > 1e-9) { 
+                await tx.update(holdings).set({ quantity: newQuantity.toString(), updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
             } else {
-                // --- Logic for selling REGULAR ASSETS ---
-                const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
-                if (!asset) throw new Error("Actif non trouvé.");
-                
-                assetName = asset.name;
-                const price = parseFloat(asset.price);
-                tradeValue = price * quantity;
-
-                const existingHolding = await tx.query.holdings.findFirst({
-                    where: and(eq(holdings.userId, session.id), eq(holdings.ticker, asset.ticker)),
-                });
-                
-                const holdingQuantity = parseFloat(existingHolding?.quantity || '0');
-                if (!existingHolding || holdingQuantity < quantity) throw new Error("Quantité d'actifs insuffisante pour la vente.");
-
-                // Credit user
-                await tx.update(users).set({ cash: (parseFloat(user.cash) + tradeValue).toFixed(2) }).where(eq(users.id, session.id));
-
-                // Remove asset from holdings
-                const newQuantity = holdingQuantity - quantity;
-                if (newQuantity > 1e-9) { 
-                    await tx.update(holdings).set({ quantity: newQuantity.toString(), updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
-                } else {
-                    await tx.delete(holdings).where(eq(holdings.id, existingHolding.id));
-                }
+                await tx.delete(holdings).where(eq(holdings.id, existingHolding.id));
             }
 
-            // Create a universal transaction record
             await tx.insert(transactions).values({
                 userId: session.id,
                 type: 'Sell',
                 ticker: ticker,
-                name: assetName,
+                name: asset.name,
                 quantity: quantity.toString(),
-                price: (tradeValue / quantity).toString(),
-                value: tradeValue.toFixed(2),
+                price: price.toString(),
+                value: tradeValue.toString(),
             });
             
             return { success: `Vente de ${quantity} ${ticker} réussie !` };
         });
 
-        // Apply market impact outside the transaction
-        if (result.success && company) {
-            await applyMarketImpactToCompany(ticker, -tradeValue); // Negative value for sell impact
-        }
-        
         revalidatePath('/portfolio');
         revalidatePath('/profile');
         revalidatePath('/');
@@ -358,7 +282,6 @@ export async function claimMiningRewards(amountBtc: number): Promise<{ success?:
                 });
             }
 
-            // Reset mining counters in the database
             await tx.update(users)
                 .set({ unclaimedBtc: '0', lastMiningUpdateAt: new Date() })
                 .where(eq(users.id, session.id));

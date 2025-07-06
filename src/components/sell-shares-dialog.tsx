@@ -20,13 +20,14 @@ interface SellSharesDialogProps {
   sharePrice: number;
   sharesHeld: number;
   children: React.ReactNode;
+  isListed?: boolean;
 }
 
 const formSchema = z.object({
   quantity: z.coerce.number().positive({ message: 'La quantité doit être supérieure à zéro.' }),
 });
 
-export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHeld, children }: SellSharesDialogProps) {
+export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHeld, children, isListed = false }: SellSharesDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
@@ -41,6 +42,11 @@ export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHel
 
   const quantity = form.watch('quantity') || 0;
   const proceeds = quantity * sharePrice;
+  const title = isListed ? `Vendre des actions de ${companyName}` : `Vendre des parts de ${companyName}`;
+  const description = isListed 
+    ? `Prix de vente par action : $${sharePrice.toFixed(4)}. Parts détenues : ${sharesHeld.toLocaleString(undefined, {maximumFractionDigits: 4})}`
+    : `Prix de rachat par part : $${sharePrice.toFixed(4)}. Parts détenues : ${sharesHeld.toLocaleString(undefined, {maximumFractionDigits: 4})}`;
+
   
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (values.quantity > sharesHeld) {
@@ -67,9 +73,9 @@ export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHel
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Vendre des Parts de {companyName}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Prix de rachat par part : ${sharePrice.toFixed(2)}. Parts détenues : {sharesHeld.toLocaleString(undefined, {maximumFractionDigits: 4})}
+            {description}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

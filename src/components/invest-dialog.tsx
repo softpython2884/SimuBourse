@@ -19,13 +19,14 @@ import { useRouter } from 'next/navigation';
 interface InvestDialogProps {
   company: CompanyWithDetails;
   children: React.ReactNode;
+  isListed?: boolean;
 }
 
 const formSchema = z.object({
   amount: z.coerce.number().positive({ message: 'Le montant doit être supérieur à zéro.' }),
 });
 
-export function InvestDialog({ company, children }: InvestDialogProps) {
+export function InvestDialog({ company, children, isListed = false }: InvestDialogProps) {
   const [open, setOpen] = useState(false);
   const { cash, refreshPortfolio } = usePortfolio();
   const { toast } = useToast();
@@ -40,6 +41,9 @@ export function InvestDialog({ company, children }: InvestDialogProps) {
   const amount = form.watch('amount') || 0;
   const sharesToReceive = amount > 0 && company.sharePrice > 0 ? (amount / company.sharePrice) : 0;
   
+  const title = isListed ? `Acheter des actions ${company.name}` : `Investir dans ${company.name}`;
+  const buttonText = isListed ? `Acheter pour` : `Investir`;
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const result = await investInCompany(company.id, values.amount);
     if (result.error) {
@@ -61,9 +65,9 @@ export function InvestDialog({ company, children }: InvestDialogProps) {
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Investir dans {company.name}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Prix de l'action : ${company.sharePrice.toFixed(2)}. Fonds disponibles : ${cash.toFixed(2)}
+            Prix de l'action : ${company.sharePrice.toFixed(4)}. Fonds disponibles : ${cash.toFixed(2)}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -73,7 +77,7 @@ export function InvestDialog({ company, children }: InvestDialogProps) {
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Montant à investir</FormLabel>
+                  <FormLabel>Montant</FormLabel>
                   <div className="relative">
                     <FormControl>
                       <Input 
@@ -101,7 +105,7 @@ export function InvestDialog({ company, children }: InvestDialogProps) {
                <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
                <Button type="submit" disabled={form.formState.isSubmitting || amount > cash || !form.formState.isValid}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Investir ${amount > 0 ? amount.toFixed(2) : '0.00'}
+                {buttonText} ${amount > 0 ? amount.toFixed(2) : '0.00'}
               </Button>
             </DialogFooter>
           </form>

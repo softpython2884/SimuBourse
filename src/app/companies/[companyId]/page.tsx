@@ -84,7 +84,7 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
             )}
             {company.isListed ? (
                  <Button asChild>
-                    <Link href={`/trading/${company.ticker}`}>Trader sur le marché</Link>
+                    <Link href="/companies">Trader à la Bourse</Link>
                 </Button>
             ) : (
                 <InvestDialog company={company}>

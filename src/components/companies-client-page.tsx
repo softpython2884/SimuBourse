@@ -43,27 +43,39 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
                     <Link href={`/companies/${company.id}`}>Détails</Link>
                 </Button>
 
-                {hasShares && (
-                    company.isListed ? (
-                        <Button asChild variant="secondary" size="sm">
-                            <Link href={`/trading/${company.ticker}`}>Trader</Link>
-                        </Button>
-                    ) : (
-                        <SellSharesDialog
-                            companyId={company.id}
-                            companyName={company.name}
-                            sharePrice={company.sharePrice}
-                            sharesHeld={company.sharesHeld}
-                        >
-                            <Button size="sm" variant="destructive">Vendre</Button>
-                        </SellSharesDialog>
-                    )
-                )}
-
-                {type === 'other' && !company.isListed && (
-                    <InvestDialog company={company as CompanyWithDetails}>
-                        <Button size="sm">Investir</Button>
-                    </InvestDialog>
+                {company.isListed ? (
+                     <>
+                        <InvestDialog company={company as CompanyWithDetails} isListed>
+                            <Button size="sm">Acheter</Button>
+                        </InvestDialog>
+                        {hasShares && (
+                             <SellSharesDialog
+                                companyId={company.id}
+                                companyName={company.name}
+                                sharePrice={company.sharePrice}
+                                sharesHeld={company.sharesHeld}
+                                isListed
+                            >
+                                <Button size="sm" variant="destructive">Vendre</Button>
+                            </SellSharesDialog>
+                        )}
+                    </>
+                ) : ( // Not listed
+                    <>
+                        {hasShares && (
+                            <SellSharesDialog
+                                companyId={company.id}
+                                companyName={company.name}
+                                sharePrice={company.sharePrice}
+                                sharesHeld={company.sharesHeld}
+                            >
+                                <Button size="sm" variant="destructive">Vendre</Button>
+                            </SellSharesDialog>
+                        )}
+                        <InvestDialog company={company as CompanyWithDetails}>
+                            <Button size="sm">Investir</Button>
+                        </InvestDialog>
+                    </>
                 )}
             </TableCell>
         </TableRow>
@@ -121,8 +133,8 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Espace Entreprises</h1>
-                    <p className="text-muted-foreground">Créez, gérez et investissez dans des entreprises dirigées par des joueurs.</p>
+                    <h1 className="text-2xl font-bold tracking-tight">Espace Entreprises & Bourse</h1>
+                    <p className="text-muted-foreground">Créez, gérez et tradez des entreprises dirigées par des joueurs.</p>
                 </div>
                 <CreateCompanyDialog />
             </div>
@@ -146,8 +158,8 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
             )}
             
             <CompanyTable
-                title="Marché des Entreprises"
-                description="Toutes les entreprises disponibles à l'investissement."
+                title="Bourse des Entreprises"
+                description="Toutes les entreprises disponibles à l'investissement ou au trading."
                 companies={otherCompanies}
                 type="other"
             />

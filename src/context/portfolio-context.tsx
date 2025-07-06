@@ -7,7 +7,6 @@ import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileActi
 import { buyMiningRig as buyMiningRigAction } from '@/lib/actions/mining';
 import { getRigById } from '@/lib/mining';
 import { useMarketData } from './market-data-context';
-import type { AssetFromDb } from '@/lib/actions/assets';
 
 export interface Holding {
   id: number;
@@ -18,6 +17,7 @@ export interface Holding {
   quantity: number;
   avgCost: number;
   updatedAt: Date;
+  isCompanyShare: boolean;
 }
 
 export interface Transaction {
