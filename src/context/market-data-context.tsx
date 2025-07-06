@@ -45,8 +45,8 @@ const calculateNextPrice = (
     const seed = timestamp + ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const randomValue = seededRandom(seed);
     
-    // Low base volatility for background noise, making the chart less flat.
-    const volatility = 0.0001;
+    // Increased base volatility for more background noise and a lively market.
+    const volatility = 0.00002;
     
     // A tiny positive drift to simulate a generally healthy market over the long term.
     const baseDrift = 0.00000002;
@@ -80,7 +80,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const registerNewsEvent = useCallback((ticker: string, impactScore: number) => {
         // A max score of 10 creates a significant trend. We map it to a momentum value.
         // This value is the primary driver of price change for the next few hours.
-        const initialMomentum = impactScore * 0.00005; 
+        const initialMomentum = impactScore * 0.00008; 
 
         setMarketMomentum(prev => ({
             ...prev,
