@@ -1,3 +1,4 @@
+
 'use server';
 
 import { db } from '@/lib/db';
@@ -38,18 +39,28 @@ export async function ensureAiMarkets() {
             const closingAt = new Date();
             closingAt.setDate(closingAt.getDate() + closingInDays);
 
+            // Generate a random starting pot between $500 and $2500
+            const startingPool = Math.random() * 2000 + 500;
+            
+            // Distribute the pool randomly among outcomes
+            const randomWeights = marketData.outcomes.map(() => Math.random());
+            const totalWeight = randomWeights.reduce((sum, weight) => sum + weight, 0);
+            const outcomePools = randomWeights.map(weight => (weight / totalWeight) * startingPool);
+
             await db.transaction(async (tx) => {
                 const [newMarket] = await tx.insert(predictionMarkets).values({
                     title: marketData.title,
                     category: marketData.category,
                     closingAt: closingAt,
                     creatorDisplayName: AI_CREATOR_NAME,
+                    totalPool: startingPool.toFixed(2),
                 }).returning();
 
                 await tx.insert(marketOutcomes).values(
-                    marketData.outcomes.map(outcomeName => ({
+                    marketData.outcomes.map((outcomeName, index) => ({
                         marketId: newMarket.id,
                         name: outcomeName,
+                        pool: outcomePools[index].toFixed(2),
                     }))
                 );
             });
