@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { DetailedAsset, assets as initialAssetsList } from '@/lib/assets';
 
@@ -34,10 +34,10 @@ const calculateNextPrice = (previousPrice: number, ticker: string, timestamp: nu
 
     // Parameters for a simplified Geometric Brownian Motion
     const drift = 0.0000001; // A very slight upward trend over time
-    const volatility = 0.0005; // The "randomness" or fluctuation
+    const volatility = 0.003; // Increased volatility for more noticeable price swings
 
-    // Calculate the percentage change
-    const changePercent = drift + volatility * (randomValue - 0.5) * 5;
+    // Calculate the percentage change. (randomValue - 0.5) * 2 creates a value between -1 and 1
+    const changePercent = drift + volatility * (randomValue - 0.5) * 2;
 
     let newPrice = previousPrice * (1 + changePercent);
 
@@ -59,6 +59,11 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [assets, setAssets] = useState<AssetsMap>(initialAssetsMap);
     const [historicalData, setHistoricalData] = useState<HistoricalDataMap>({});
+
+    const assetsRef = useRef(assets);
+    assetsRef.current = assets;
+    const historicalDataRef = useRef(historicalData);
+    historicalDataRef.current = historicalData;
 
     useEffect(() => {
         const now = Date.now();
@@ -103,34 +108,49 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
 
         const intervalId = setInterval(() => {
             const now = Date.now();
+            const currentAssets = assetsRef.current;
+            const currentHistoricalData = historicalDataRef.current;
             
-            setAssets(prevAssets => {
-                const newAssets = { ...prevAssets };
-                for (const ticker in newAssets) {
-                    const currentAsset = newAssets[ticker];
-                    const initialAsset = initialAssetsMap[ticker];
-                    if (!currentAsset || !initialAsset) continue;
-                    
-                    const newPrice = calculateNextPrice(currentAsset.price, ticker, now, initialAsset.price);
-                    newAssets[ticker] = { ...currentAsset, price: newPrice };
-                }
-                return newAssets;
-            });
+            const newAssetsMap: AssetsMap = { ...currentAssets };
+            const newHistoricalDataMap: HistoricalDataMap = { ...currentHistoricalData };
 
-            setHistoricalData(prevHist => {
-                const newHist = { ...prevHist };
-                for (const ticker in newHist) {
-                    const lastPrice = newHist[ticker][newHist[ticker].length - 1]?.price || initialAssetsMap[ticker].price;
-                    const newPrice = calculateNextPrice(lastPrice, ticker, now, initialAssetsMap[ticker].price);
-                    const newPoint = { date: new Date(now).toISOString(), price: newPrice };
-                    const updatedHistory = [...(newHist[ticker] || []), newPoint];
-                    if (updatedHistory.length > 8760) { // Keep ~1 year of hourly data + some live ticks
-                         updatedHistory.shift();
-                    }
-                    newHist[ticker] = updatedHistory;
+            for (const ticker in newAssetsMap) {
+                const currentAsset = newAssetsMap[ticker];
+                const initialAsset = initialAssetsMap[ticker];
+                if (!currentAsset || !initialAsset) continue;
+
+                // 1. Calculate new price
+                const newPrice = calculateNextPrice(currentAsset.price, ticker, now, initialAsset.price);
+
+                // 2. Update history
+                const newPoint = { date: new Date(now).toISOString(), price: newPrice };
+                const updatedHistory = [...(newHistoricalDataMap[ticker] || []), newPoint];
+                 // Keep ~1 year of hourly data + ~1 day of 5-second ticks
+                if (updatedHistory.length > 8760 + 17280) { 
+                    updatedHistory.shift();
                 }
-                return newHist;
-            });
+                newHistoricalDataMap[ticker] = updatedHistory;
+                
+                // 3. Find price from 24h ago to calculate change
+                const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+                // Find the point in history closest to 24 hours ago
+                const closestPoint = updatedHistory.reduce((prev, curr) => {
+                    const currTime = new Date(curr.date).getTime();
+                    const prevTime = new Date(prev.date).getTime();
+                    return Math.abs(currTime - twentyFourHoursAgo) < Math.abs(prevTime - twentyFourHoursAgo) ? curr : prev;
+                }, updatedHistory[0]);
+                
+                const price24hAgo = closestPoint.price;
+                const changePercent = price24hAgo > 0 ? ((newPrice - price24hAgo) / price24hAgo) * 100 : 0;
+                const change24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+                
+                // 4. Update asset with new price and change
+                newAssetsMap[ticker] = { ...currentAsset, price: newPrice, change24h };
+            }
+
+            setAssets(newAssetsMap);
+            setHistoricalData(newHistoricalDataMap);
+
         }, 5000); // Update every 5 seconds
 
         return () => clearInterval(intervalId);
