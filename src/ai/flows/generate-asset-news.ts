@@ -1,8 +1,8 @@
 'use server';
 /**
- * @fileOverview Generates a plausible news snippet for a given financial asset.
+ * @fileOverview Generates plausible news snippets for a given financial asset.
  *
- * - generateAssetNews - A function that generates a news headline and article.
+ * - generateAssetNews - A function that generates news headlines and articles.
  * - GenerateAssetNewsInput - The input type for the function.
  * - GenerateAssetNewsOutput - The return type for the function.
  */
@@ -16,11 +16,13 @@ const GenerateAssetNewsInputSchema = z.object({
 });
 export type GenerateAssetNewsInput = z.infer<typeof GenerateAssetNewsInputSchema>;
 
-const GenerateAssetNewsOutputSchema = z.object({
+const NewsItemSchema = z.object({
   headline: z.string().describe('A plausible, short news headline (less than 15 words).'),
   article: z.string().describe('A brief, 2-3 sentence news article expanding on the headline.'),
   sentiment: z.enum(['positive', 'negative', 'neutral']).describe('The overall sentiment of the news regarding the asset.'),
 });
+
+const GenerateAssetNewsOutputSchema = z.array(NewsItemSchema);
 export type GenerateAssetNewsOutput = z.infer<typeof GenerateAssetNewsOutputSchema>;
 
 export async function generateAssetNews(input: GenerateAssetNewsInput): Promise<GenerateAssetNewsOutput> {
@@ -31,16 +33,16 @@ const prompt = ai.definePrompt({
     name: 'generateAssetNewsPrompt',
     input: {schema: GenerateAssetNewsInputSchema},
     output: {schema: GenerateAssetNewsOutputSchema},
-    prompt: `You are a financial news generator for a simulation game. Your task is to create a short, plausible, and impactful news event for a specific company. The news should feel realistic.
+    prompt: `You are a financial news generator for a simulation game. Your task is to create 3 short, plausible, and impactful news events for a specific company. The news should feel realistic.
 
-Generate a news item for the following asset:
+Generate 3 distinct news items for the following asset:
 Company Name: {{name}}
 Ticker: {{ticker}}
 
 The news can be positive (e.g., breakthrough product, beating earnings expectations), negative (e.g., product recall, regulatory fines, missed targets), or neutral (e.g., analyst rating update).
 
-Create a concise headline, a brief article (2-3 sentences), and determine the sentiment.
-Output in JSON format.`,
+For each news item, create a concise headline, a brief article (2-3 sentences), and determine the sentiment.
+Output in JSON format as an array of 3 objects.`,
 });
 
 const generateAssetNewsFlow = ai.defineFlow(

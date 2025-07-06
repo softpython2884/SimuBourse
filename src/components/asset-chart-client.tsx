@@ -14,6 +14,13 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { Button } from '@/components/ui/button';
 import { HistoricalData } from '@/context/market-data-context';
 import type { DetailedAsset } from '@/lib/assets';
@@ -35,7 +42,7 @@ interface AssetChartClientProps {
 export function AssetChartClient({ asset, initialHistoricalData }: AssetChartClientProps) {
   const { user } = useAuth();
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
-  const [news, setNews] = useState<GenerateAssetNewsOutput | null>(null);
+  const [news, setNews] = useState<GenerateAssetNewsOutput>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(true);
 
   useEffect(() => {
@@ -51,22 +58,25 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
 
             let isStale = true;
             if (newsDoc.exists()) {
-                isStale = newsDoc.data().generatedAt.toMillis() < oneHourAgo;
+                const data = newsDoc.data();
+                if (data.generatedAt) {
+                    isStale = data.generatedAt.toMillis() < oneHourAgo;
+                }
             }
 
             if (isStale && user) {
                 const result = await generateAssetNews({ ticker: asset.ticker, name: asset.name });
-                const dataToCache = { ...result, generatedAt: Timestamp.now() };
+                const dataToCache = { news: result, generatedAt: Timestamp.now() };
                 await setDoc(newsDocRef, dataToCache);
                 setNews(result);
             } else if (newsDoc.exists()) {
-                setNews(newsDoc.data() as GenerateAssetNewsOutput);
+                setNews(newsDoc.data().news as GenerateAssetNewsOutput);
             } else {
-                setNews(null);
+                setNews([]);
             }
         } catch (error) {
             console.error("Failed to fetch or generate AI news:", error);
-            setNews({ headline: 'Erreur de chargement', article: 'Impossible de récupérer les actualités.', sentiment: 'neutral' });
+            setNews([{ headline: 'Erreur de chargement', article: 'Impossible de récupérer les actualités.', sentiment: 'neutral' }]);
         } finally {
             setIsLoadingNews(false);
         }
@@ -119,9 +129,8 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
     }
   };
   
-  const sentimentIcon = useMemo(() => {
-    if (!news) return null;
-    switch (news.sentiment) {
+  const sentimentIcon = (sentiment: 'positive' | 'negative' | 'neutral') => {
+    switch (sentiment) {
       case 'positive':
         return <TrendingUp className="h-5 w-5 text-green-500" />;
       case 'negative':
@@ -129,28 +138,57 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
       default:
         return <Newspaper className="h-5 w-5 text-muted-foreground" />;
     }
-  }, [news]);
+  };
   
   const renderNewsContent = () => {
     if (isLoadingNews) {
       return (
-        <div className="flex items-center justify-center h-24">
+        <div className="flex items-center justify-center h-32">
            <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       );
     }
 
-    if (news) {
+    if (news && news.length > 0) {
+        if (news.length === 1 && news[0].headline === 'Erreur de chargement') {
+             return (
+                <Alert variant="destructive">
+                    <div className="flex items-center gap-2">
+                        {sentimentIcon(news[0].sentiment)}
+                        <AlertTitle>{news[0].headline}</AlertTitle>
+                    </div>
+                    <AlertDescription className="mt-2">
+                        {news[0].article}
+                    </AlertDescription>
+                </Alert>
+            )
+        }
         return (
-            <Alert>
-                <div className="flex items-center gap-2">
-                    {sentimentIcon}
-                    <AlertTitle>{news.headline}</AlertTitle>
-                </div>
-                <AlertDescription className="mt-2">
-                    {news.article}
-                </AlertDescription>
-            </Alert>
+            <Carousel className="w-full" opts={{ loop: news.length > 1 }}>
+              <CarouselContent>
+                {news.map((item, index) => (
+                  <CarouselItem key={index}>
+                    <div className="p-1">
+                      <Alert className="h-full flex flex-col justify-center min-h-[140px]">
+                          <div className="flex items-center gap-2">
+                              {sentimentIcon(item.sentiment)}
+                              <AlertTitle>{item.headline}</AlertTitle>
+                          </div>
+                          <AlertDescription className="mt-2">
+                              {item.article}
+                          </AlertDescription>
+                      </Alert>
+                    </div>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              {news.length > 1 && (
+                <>
+                    <CarouselPrevious />
+                    <CarouselNext />
+                </>
+              )}
+            </Carousel>
         );
     }
     
@@ -158,7 +196,7 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
          <Alert variant="default" className="bg-muted/50">
             <div className="flex items-center gap-2">
                 <Lock className="h-5 w-5 text-muted-foreground" />
-                <AlertTitle>Générer l'actualité du jour</AlertTitle>
+                <AlertTitle>Générer les actualités du jour</AlertTitle>
             </div>
             <AlertDescription className="mt-2">
                 Connectez-vous pour être le premier à générer l'analyse de l'IA pour cet actif.
@@ -232,7 +270,7 @@ export function AssetChartClient({ asset, initialHistoricalData }: AssetChartCli
             <Card>
                 <CardHeader>
                     <CardTitle>Actualités de l'IA</CardTitle>
-                    <CardDescription>Dernier événement généré par l'IA.</CardDescription>
+                    <CardDescription>Derniers événements générés par l'IA.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {renderNewsContent()}
