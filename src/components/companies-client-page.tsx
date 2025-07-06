@@ -8,7 +8,7 @@ import { CreateCompanyDialog } from '@/components/create-company-dialog';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { InvestDialog } from '@/components/invest-dialog';
-import type { CompanyWithDetails, ManagedCompany, InvestedCompany, OtherCompany } from '@/lib/actions/companies';
+import type { CompanyWithDetails, ManagedCompany, InvestedCompany, ListedCompany, OtherCompany } from '@/lib/actions/companies';
 import { SellSharesDialog } from '@/components/sell-shares-dialog';
 import { Area, AreaChart, Tooltip } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
@@ -18,13 +18,11 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
 
     return (
         <TableRow>
-            {/* Column 1: Entreprise */}
             <TableCell>
                 <div className="font-medium">{company.name} ({company.ticker})</div>
                 <div className="text-sm text-muted-foreground">{company.industry}</div>
             </TableCell>
 
-            {/* Columns 2 & 3 based on type */}
             {type === 'managed' && <>
                 <TableCell><Badge variant="secondary">{company.role.toUpperCase()}</Badge></TableCell>
                 <TableCell className="font-mono">{hasShares ? company.sharesHeld.toFixed(4) : '-'}</TableCell>
@@ -39,15 +37,23 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
                 <TableCell className="font-mono">${company.marketCap.toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
             </>}
 
-            {/* Actions Column */}
             <TableCell className="text-right space-x-2">
                 <Button asChild variant="outline" size="sm">
                     <Link href={`/companies/${company.id}`}>Détails</Link>
                 </Button>
-                {/* Note: Investing in private companies from this table */}
                 <InvestDialog company={company as CompanyWithDetails}>
                     <Button size="sm">Investir</Button>
                 </InvestDialog>
+                 {hasShares && (
+                    <SellSharesDialog
+                        companyId={company.id}
+                        companyName={company.name}
+                        sharePrice={company.sharePrice}
+                        sharesHeld={company.sharesHeld}
+                    >
+                        <Button size="sm" variant="secondary">Vendre</Button>
+                    </SellSharesDialog>
+                )}
             </TableCell>
         </TableRow>
     );
@@ -81,7 +87,7 @@ function CompanyTable({ title, description, companies, type }: { title: string, 
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={headers[type].length} className="h-24 text-center text-muted-foreground">
-                                    {type === 'managed' ? "Vous ne gérez aucune entreprise." : type === 'invested' ? "Vous n'avez investi dans aucune entreprise." : "Aucune entreprise privée disponible."}
+                                    {type === 'managed' ? "Vous ne gérez aucune entreprise." : type === 'invested' ? "Vous n'avez investi dans aucune entreprise privée." : "Aucune entreprise privée disponible."}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -93,7 +99,7 @@ function CompanyTable({ title, description, companies, type }: { title: string, 
 }
 
 
-function StockExchangeCard({ company }: { company: OtherCompany }) {
+function StockExchangeCard({ company }: { company: ListedCompany }) {
     const changeIsPositive = company.change24h.startsWith('+');
     const chartConfig = {
         price: {
@@ -175,13 +181,11 @@ function StockExchangeCard({ company }: { company: OtherCompany }) {
 interface CompaniesClientPageProps {
     managedCompanies: ManagedCompany[];
     investedCompanies: InvestedCompany[];
-    otherCompanies: OtherCompany[];
+    otherPrivateCompanies: OtherCompany[];
+    listedCompanies: ListedCompany[];
 }
 
-export function CompaniesClientPage({ managedCompanies, investedCompanies, otherCompanies }: CompaniesClientPageProps) {
-    const listedCompanies = otherCompanies.filter(c => c.isListed);
-    const privateCompanies = otherCompanies.filter(c => !c.isListed);
-
+export function CompaniesClientPage({ managedCompanies, investedCompanies, otherPrivateCompanies, listedCompanies }: CompaniesClientPageProps) {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -203,8 +207,8 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
 
             {investedCompanies.length > 0 && (
                 <CompanyTable
-                    title="Mes Investissements"
-                    description="Les entreprises dans lesquelles vous détenez des parts mais que vous ne gérez pas."
+                    title="Mes Investissements (Entreprises Privées)"
+                    description="Les entreprises privées dans lesquelles vous détenez des parts mais que vous ne gérez pas."
                     companies={investedCompanies}
                     type="invested"
                 />
@@ -224,11 +228,11 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
                 </CardContent>
             </Card>
 
-            {privateCompanies.length > 0 && (
+            {otherPrivateCompanies.length > 0 && (
                  <CompanyTable
                     title="Autres Entreprises Privées"
                     description="Entreprises non cotées dans lesquelles vous pouvez réaliser un investissement initial."
-                    companies={privateCompanies}
+                    companies={otherPrivateCompanies}
                     type="other"
                 />
             )}
