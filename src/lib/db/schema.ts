@@ -28,6 +28,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   predictionMarkets: many(predictionMarkets),
   marketBets: many(marketBets),
   miningRigs: many(userMiningRigs),
+  companyMemberships: many(companyMembers),
+  createdCompanies: many(companies),
 }));
 
 export const holdings = pgTable('holdings', {
@@ -160,6 +162,47 @@ export const userMiningRigs = pgTable('user_mining_rigs', {
 export const userMiningRigsRelations = relations(userMiningRigs, ({ one }) => ({
   user: one(users, {
     fields: [userMiningRigs.userId],
+    references: [users.id],
+  }),
+}));
+
+// Companies
+export const companies = pgTable('companies', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 256 }).notNull().unique(),
+  industry: varchar('industry', { length: 100 }).notNull(),
+  description: text('description').notNull(),
+  cash: numeric('cash', { precision: 15, scale: 2 }).default('0.00').notNull(),
+  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const companiesRelations = relations(companies, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [companies.creatorId],
+    references: [users.id],
+  }),
+  members: many(companyMembers),
+}));
+
+export const companyMembers = pgTable('company_members', {
+  id: serial('id').primaryKey(),
+  companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: varchar('role', { length: 50, enum: ['ceo', 'manager', 'member'] }).notNull(),
+}, (table) => {
+  return {
+    companyUserIdx: uniqueIndex('company_user_idx').on(table.companyId, table.userId),
+  }
+});
+
+export const companyMembersRelations = relations(companyMembers, ({ one }) => ({
+  company: one(companies, {
+    fields: [companyMembers.companyId],
+    references: [companies.id],
+  }),
+  user: one(users, {
+    fields: [companyMembers.userId],
     references: [users.id],
   }),
 }));

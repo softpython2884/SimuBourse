@@ -4,6 +4,7 @@ import { createContext, useContext, ReactNode, useState, useEffect, useCallback 
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileAction, ProfileUpdateInput, buyAssetAction, sellAssetAction, claimMiningRewards } from '@/lib/actions/portfolio';
+import { buyMiningRig as buyMiningRigAction } from '@/lib/actions/mining';
 import { getRigById } from '@/lib/mining';
 
 export interface Asset {
@@ -75,6 +76,7 @@ interface PortfolioContextType {
   sellAsset: (asset: Asset, quantity: number) => Promise<void>;
   getHoldingQuantity: (ticker: string) => number;
   updateUserProfile: (data: ProfileUpdateInput) => Promise<void>;
+  buyMiningRig: (rigId: string) => Promise<void>;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -141,6 +143,17 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
+  const buyMiningRig = async (rigId: string) => {
+    const result = await buyMiningRigAction(rigId);
+    if (result.error) {
+      toast({ variant: 'destructive', title: "Échec de l'achat", description: result.error });
+    }
+    if (result.success) {
+      toast({ title: "Achat réussi", description: result.success });
+      await fetchPortfolio();
+    }
+  }
+
   const getHoldingQuantity = (ticker: string) => {
     const holding = portfolioData?.holdings.find(h => h.ticker === ticker);
     return holding ? holding.quantity : 0;
@@ -155,11 +168,6 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!user || loading || totalHashRateMhs === 0) return;
 
-    // This is a magic number for simulation purposes.
-    // It determines how much BTC is generated per MH/s per second.
-    // Let's set it so a starter rig (150 MH/s) earns a noticeable amount.
-    // e.g., 150 MH/s * 3600s/hr * 24h/day * X = 0.0001 BTC/day
-    // X = 0.0001 / (150 * 3600 * 24) ~= 7.7e-12
     const BTC_PER_MHS_PER_SECOND = 7.7e-12;
 
     const miningInterval = setInterval(() => {
@@ -204,7 +212,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     unclaimedRewards,
     totalHashRateMhs,
     loading: authLoading || loading,
-    buyAsset, sellAsset, getHoldingQuantity, updateUserProfile
+    buyAsset, sellAsset, getHoldingQuantity, updateUserProfile, buyMiningRig
   };
 
   return (

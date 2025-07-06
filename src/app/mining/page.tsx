@@ -7,12 +7,11 @@ import { Cpu, Zap, Gem, Loader2, Server, Coins, Network } from "lucide-react";
 import { MINING_RIGS } from '@/lib/mining';
 import { usePortfolio } from '@/context/portfolio-context';
 import { useMarketData } from '@/context/market-data-context';
-import { buyMiningRig } from '@/lib/actions/mining';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 export default function MiningPage() {
-    const { userProfile, loading: portfolioLoading, unclaimedRewards, totalHashRateMhs } = usePortfolio();
+    const { userProfile, loading: portfolioLoading, unclaimedRewards, totalHashRateMhs, buyMiningRig } = usePortfolio();
     const { getAssetByTicker } = useMarketData();
     const { toast } = useToast();
     const [isBuying, setIsBuying] = useState<string | null>(null);
@@ -20,7 +19,8 @@ export default function MiningPage() {
     const btcPrice = getAssetByTicker('BTC')?.price || 0;
 
     const ownedRigs = useMemo(() => {
-        return userProfile?.miningRigs.map(ownedRig => {
+        if (!userProfile?.miningRigs) return [];
+        return userProfile.miningRigs.map(ownedRig => {
             const rigData = MINING_RIGS.find(r => r.id === ownedRig.rigId);
             return {
                 ...rigData,
@@ -37,13 +37,7 @@ export default function MiningPage() {
 
     const handleBuyRig = async (rigId: string) => {
         setIsBuying(rigId);
-        const result = await buyMiningRig(rigId);
-        if (result.error) {
-            toast({ variant: 'destructive', title: "Échec de l'achat", description: result.error });
-        }
-        if (result.success) {
-            toast({ title: "Achat réussi", description: result.success });
-        }
+        await buyMiningRig(rigId);
         setIsBuying(null);
     }
     
@@ -99,7 +93,7 @@ export default function MiningPage() {
                 <CardHeader><CardTitle>Mon Matériel</CardTitle></CardHeader>
                 <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {ownedRigs.map((rig, index) => (
-                         <Alert key={index}>
+                         <Alert key={`${rig.id}-${index}`}>
                             <Server className="h-4 w-4" />
                             <AlertTitle>{rig.name}</AlertTitle>
                             <AlertDescription>
