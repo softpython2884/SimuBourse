@@ -11,23 +11,12 @@ import {
   limit,
   Timestamp,
   getDocs,
-  writeBatch,
-  doc,
-  runTransaction,
-  getDoc,
 } from 'firebase/firestore';
-import { assets as initialAssets, DetailedAsset } from '@/lib/assets';
-import { useAuth } from './auth-context';
+import { DetailedAsset } from '@/lib/assets';
 
 export type HistoricalDataPoint = {
     date: string;
     price: number;
-};
-
-type FirestoreAsset = DetailedAsset & {
-    lastUpdate: Timestamp;
-    price24hAgo: number;
-    price24hAgoLastUpdate: Timestamp;
 };
 
 type AssetsMap = { [ticker: string]: DetailedAsset };
@@ -42,190 +31,65 @@ interface MarketDataContextType {
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
 
-export const MARKET_UPDATE_INTERVAL_SECONDS = 60; // Update every minute when a user is active
-const OFFLINE_SIMULATION_INTERVAL_SECONDS = 3600; // Simulate every hour for offline catch-up
-const VOLATILITY_FACTOR = 0.0005; // Base fluctuation for live updates
+// Helper function for deterministic price simulation
+const calculateDeterministicPrice = (initialPrice: number, ticker: string, timestamp: number) => {
+    // A combination of sine waves to create a pseudo-random but deterministic walk
+    const timeFactor1 = timestamp / 60000;  // Slow wave (1 minute cycle)
+    const timeFactor2 = timestamp / 20000;  // Medium wave (20 second cycle)
+    const timeFactor3 = timestamp / 5000;   // Fast wave for jitter (5 second cycle)
 
-async function updateMarketData() {
-  console.log('Checking if market data needs seeding or updating...');
-  
-  const marketStateRef = collection(db, 'market_state');
-  
-  // --- Seed new assets not present in Firestore ---
-  const existingAssetsSnapshot = await getDocs(marketStateRef);
-  const existingTickers = new Set(existingAssetsSnapshot.docs.map(d => d.id));
-  const batch = writeBatch(db);
-  let hasNewAssets = false;
-
-  for (const asset of initialAssets) {
-    if (!existingTickers.has(asset.ticker)) {
-      hasNewAssets = true;
-      console.log(`New asset found: ${asset.ticker}. Seeding...`);
-      const assetRef = doc(marketStateRef, asset.ticker);
-      const now = Timestamp.now();
-      const initialData = {
-        ...asset,
-        lastUpdate: now,
-        price24hAgo: asset.price,
-        price24hAgoLastUpdate: now,
-      };
-      batch.set(assetRef, initialData);
-
-      const historyRef = doc(collection(db, 'historical_data'), asset.ticker);
-      const historyDoc = await getDoc(historyRef);
-      if (!historyDoc.exists()) {
-        batch.set(historyRef, { lastUpdate: now });
-        const pointsRef = collection(historyRef, 'points');
-        const initialPointRef = doc(pointsRef);
-        batch.set(initialPointRef, { date: now, price: asset.price });
-      }
-    }
-  }
-  if (hasNewAssets) {
-    await batch.commit();
-    console.log('New assets have been seeded.');
-  }
-
-  // --- Run simulation for time passed since last update ---
-  try {
-    const assetDocs = await getDocs(query(collection(db, 'market_state')));
-    if (assetDocs.empty) {
-        console.log("No assets in market_state to simulate.");
-        return;
-    }
+    const tickerFactor1 = ticker.charCodeAt(0) / 10;
+    const tickerFactor2 = ticker.length;
     
-    await runTransaction(db, async (transaction) => {
-        console.log('Running market simulation transaction...');
-        const now = Timestamp.now();
-        
-        // --- PHASE 1: READS ---
-        console.log("Transaction Phase 1: Reading all AI news sentiments...");
-        const newsSentiments = new Map<string, string>();
-        for (const assetDoc of assetDocs.docs) {
-            const newsDocRef = doc(db, 'asset_news', assetDoc.id);
-            const newsDocSnap = await transaction.get(newsDocRef);
-            const sentiment = newsDocSnap.exists() ? newsDocSnap.data().sentiment : 'neutral';
-            newsSentiments.set(assetDoc.id, sentiment);
-        }
-        console.log("Transaction Phase 1 Complete.");
+    // Base trend
+    const sin1 = Math.sin(timeFactor1 + tickerFactor1);
+    // Medium variations
+    const sin2 = Math.sin(timeFactor2 + tickerFactor2);
+    // Small, quick jitter
+    const sin3 = Math.sin(timeFactor3 + tickerFactor1 + tickerFactor2);
 
-        // --- PHASE 2: CALCULATIONS & WRITES ---
-        console.log("Transaction Phase 2: Calculating and writing all market updates...");
-        for (const assetDoc of assetDocs.docs) {
-            const assetRef = doc(db, 'market_state', assetDoc.id);
-            const assetData = assetDoc.data() as FirestoreAsset;
-            const secondsSinceLastUpdate = now.seconds - (assetData.lastUpdate?.seconds || 0);
+    // Combine the waves with different weights
+    const noise = (sin1 * 0.02) + (sin2 * 0.015) + (sin3 * 0.005); // Max ~4% total volatility
+    
+    // Force a "mean reversion" to prevent prices from drifting too far
+    const reversionStrength = 0.05; 
+    const drift = noise - (reversionStrength * noise);
 
-            if (secondsSinceLastUpdate < MARKET_UPDATE_INTERVAL_SECONDS) {
-                continue;
-            }
-
-            const sentiment = newsSentiments.get(assetData.ticker) || 'neutral';
-            const sentimentModifier = sentiment === 'positive' ? VOLATILITY_FACTOR / 2 : sentiment === 'negative' ? -VOLATILITY_FACTOR / 2 : 0;
-            
-            let newPrice = assetData.price;
-            let lastSimulatedDate = assetData.lastUpdate || now;
-
-            const offlineIntervals = Math.floor(secondsSinceLastUpdate / OFFLINE_SIMULATION_INTERVAL_SECONDS);
-            if (offlineIntervals > 0) {
-                for (let i = 0; i < offlineIntervals; i++) {
-                    const fluctuation = (Math.random() - 0.5) * 2 * (VOLATILITY_FACTOR * 10);
-                    newPrice *= (1 + fluctuation + sentimentModifier);
-                    newPrice = Math.max(newPrice, 0.01);
-                    lastSimulatedDate = new Timestamp(lastSimulatedDate.seconds + OFFLINE_SIMULATION_INTERVAL_SECONDS, 0);
-                    transaction.set(doc(collection(db, 'historical_data', assetData.ticker, 'points')), { date: lastSimulatedDate, price: newPrice });
-                }
-            }
-            
-            const remainingSeconds = secondsSinceLastUpdate % OFFLINE_SIMULATION_INTERVAL_SECONDS;
-            const liveIntervals = Math.floor(remainingSeconds / MARKET_UPDATE_INTERVAL_SECONDS);
-            if (liveIntervals > 0) {
-                 for (let i = 0; i < liveIntervals; i++) {
-                    const fluctuation = (Math.random() - 0.5) * 2 * VOLATILITY_FACTOR;
-                    newPrice *= (1 + fluctuation + sentimentModifier);
-                    newPrice = Math.max(newPrice, 0.01);
-                    lastSimulatedDate = new Timestamp(lastSimulatedDate.seconds + MARKET_UPDATE_INTERVAL_SECONDS, 0);
-                    transaction.set(doc(collection(db, 'historical_data', assetData.ticker, 'points')), { date: lastSimulatedDate, price: newPrice });
-                }
-            }
-
-            let price24hAgo = assetData.price24hAgo || assetData.price;
-            const needs24hUpdate = !assetData.price24hAgoLastUpdate || (now.seconds - assetData.price24hAgoLastUpdate.seconds > 24 * 3600);
-            if (needs24hUpdate) {
-                price24hAgo = assetData.price;
-            }
-            
-            const change = newPrice - price24hAgo;
-            const changePercent = (price24hAgo > 0) ? (change / price24hAgo) * 100 : 0;
-            const newChange24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
-
-            const updatePayload: { [key: string]: any } = {
-                price: newPrice,
-                change24h: newChange24h,
-                lastUpdate: now,
-            };
-            if (needs24hUpdate) {
-                updatePayload.price24hAgo = price24hAgo;
-                updatePayload.price24hAgoLastUpdate = now;
-            }
-            transaction.update(assetRef, updatePayload);
-        }
-        console.log("Transaction Phase 2 Complete.");
-    });
-    console.log('Market simulation completed successfully.');
-  } catch (error) {
-    console.error("Failed to run market simulation:", error);
-  }
-}
+    return initialPrice * (1 + drift);
+};
 
 
 export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
-    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [assets, setAssets] = useState<AssetsMap>({});
     const [historicalData, setHistoricalData] = useState<HistoricalDataMap>({});
+    const [initialAssetsMap, setInitialAssetsMap] = useState<AssetsMap>({});
 
+    // This effect runs once to fetch the initial state of the market from Firestore.
     useEffect(() => {
-        if (user) {
-            console.log("User logged in, starting market updates.");
-            const performUpdate = () => updateMarketData().catch(err => {
-              console.error("An error occurred during market update:", err);
-            });
-            
-            performUpdate(); // Initial update on login
-
-            const intervalId = setInterval(performUpdate, MARKET_UPDATE_INTERVAL_SECONDS * 1000);
-
-            return () => {
-                console.log("User session ending, stopping market updates.");
-                clearInterval(intervalId);
-            };
-        }
-    }, [user]);
-
-    useEffect(() => {
-        const unsubscribeFunctions: (() => void)[] = [];
-
-        const assetsUnsubscribe = onSnapshot(collection(db, 'market_state'), (snapshot) => {
-            if (snapshot.empty && !Object.keys(assets).length) {
-              console.log("Market state is empty, attempting to seed.");
-              updateMarketData().then(() => setLoading(false)).catch(console.error);
-              return;
+        console.log("Fetching initial market state...");
+        const assetsQuery = query(collection(db, 'market_state'));
+        
+        const assetsUnsubscribe = onSnapshot(assetsQuery, async (snapshot) => {
+            if (snapshot.empty) {
+                console.log("Market state is empty. Seeding is handled by a separate function if needed.");
+                setLoading(false);
+                return;
             }
 
             const newAssetsData: AssetsMap = {};
+            const historicalDataPromises: Promise<void>[] = [];
+
             snapshot.forEach((doc) => {
-                newAssetsData[doc.id] = doc.data() as DetailedAsset;
-            });
-            setAssets(newAssetsData);
-            
-            snapshot.docs.forEach(doc => {
+                const assetData = doc.data() as DetailedAsset;
+                newAssetsData[doc.id] = assetData;
+
                 const ticker = doc.id;
-                if (!historicalData[ticker] || unsubscribeFunctions.length <= snapshot.docs.length) { 
-                    const pointsCollectionRef = collection(db, 'historical_data', ticker, 'points');
-                    const q = query(pointsCollectionRef, orderBy('date', 'desc'), limit(1440));
-                    
-                    const unsubscribe = onSnapshot(q, (pointsSnapshot) => {
+                const pointsCollectionRef = collection(db, 'historical_data', ticker, 'points');
+                const q = query(pointsCollectionRef, orderBy('date', 'desc'), limit(1440));
+                
+                historicalDataPromises.push(
+                    getDocs(q).then(pointsSnapshot => {
                         const points = pointsSnapshot.docs.map(pointDoc => {
                             const data = pointDoc.data();
                             return {
@@ -235,25 +99,75 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
                         }).reverse();
                         
                         setHistoricalData(prev => ({ ...prev, [ticker]: points }));
-                    }, (error) => {
-                      console.error(`Error fetching historical data for ${ticker}:`, error);
-                    });
-                    unsubscribeFunctions.push(unsubscribe);
-                }
+                    })
+                );
             });
+            
+            await Promise.all(historicalDataPromises);
+            
+            setAssets(newAssetsData);
+            setInitialAssetsMap(newAssetsData); // Save the initial state for the simulation baseline
             setLoading(false);
+            console.log("Initial market state loaded.");
         }, (error) => {
             console.error("Firebase market_state listener error:", error);
             setLoading(false);
         });
         
-        unsubscribeFunctions.push(assetsUnsubscribe);
+        return () => {
+            assetsUnsubscribe();
+        };
+    }, []);
+
+    // This effect runs the client-side simulation loop once the initial data is loaded.
+    useEffect(() => {
+        if (Object.keys(initialAssetsMap).length === 0 || loading) return;
+
+        console.log("Starting client-side market simulation.");
+        const intervalId = setInterval(() => {
+            const now = Date.now();
+            const today = new Date(now);
+
+            // Functional updates ensure we always have the latest state without stale closures.
+            setAssets(prevAssets => {
+                const newAssets = { ...prevAssets };
+                for (const ticker in newAssets) {
+                    const initialAsset = initialAssetsMap[ticker];
+                    if (!initialAsset) continue;
+                    
+                    const newPrice = calculateDeterministicPrice(initialAsset.price, ticker, now);
+                    const price24hAgo = calculateDeterministicPrice(initialAsset.price, ticker, now - 86400000);
+                    const changePercent = ((newPrice - price24hAgo) / price24hAgo) * 100;
+                    const newChange24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+
+                    newAssets[ticker] = { ...newAssets[ticker], price: newPrice, change24h: newChange24h };
+                }
+                return newAssets;
+            });
+
+            setHistoricalData(prevHist => {
+                const newHist = { ...prevHist };
+                for (const ticker in prevHist) {
+                    const initialAsset = initialAssetsMap[ticker];
+                    if (!initialAsset) continue;
+                    
+                    const newPrice = calculateDeterministicPrice(initialAsset.price, ticker, now);
+                    const newPoint = { date: today.toISOString(), price: newPrice };
+                    const history = newHist[ticker] ? [...newHist[ticker], newPoint] : [newPoint];
+                    
+                    // Keep history from growing too large in memory
+                    newHist[ticker] = history.slice(-1500); 
+                }
+                return newHist;
+            });
+        }, 2000); // Update every 2 seconds
 
         return () => {
-            unsubscribeFunctions.forEach(unsub => unsub());
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+            console.log("Stopping client-side market simulation.");
+            clearInterval(intervalId);
+        }
+    }, [initialAssetsMap, loading]);
+
 
     const getAssetByTicker = useCallback((ticker: string): DetailedAsset | undefined => {
         return assets[ticker];
@@ -274,7 +188,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     
     return (
         <MarketDataContext.Provider value={value}>
-            {loading && !Object.keys(assets).length ? (
+            {loading ? (
                 <div className="flex h-screen w-full items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin" />
                 </div>
