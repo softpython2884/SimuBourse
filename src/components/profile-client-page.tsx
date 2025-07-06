@@ -1,20 +1,18 @@
 'use client';
 
-import { useMemo, useEffect } from "react";
+import { useEffect } from "react";
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { usePortfolio } from "@/context/portfolio-context";
-import { useMarketData } from "@/context/market-data-context";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/context/auth-context";
+import { Input } from "./ui/input";
 
 const profileFormSchema = z.object({
   displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
@@ -23,37 +21,50 @@ const profileFormSchema = z.object({
 
 
 export default function ProfileClientPage() {
-    const { user } = useAuth();
-    const { userProfile, updateUserProfile, transactions, cash, holdings, initialCash } = usePortfolio();
-    const { getAssetByTicker } = useMarketData();
+    const { userProfile, updateUserProfile, transactions, cash, initialCash, loading } = usePortfolio();
 
     const form = useForm<z.infer<typeof profileFormSchema>>({
       resolver: zodResolver(profileFormSchema),
-      values: { 
-        displayName: userProfile?.displayName || '',
-        phoneNumber: userProfile?.phoneNumber || '',
+      defaultValues: { 
+        displayName: '',
+        phoneNumber: '',
       },
     });
+
+    useEffect(() => {
+        if (userProfile) {
+            form.reset({
+                displayName: userProfile.displayName,
+                phoneNumber: userProfile.phoneNumber || '',
+            })
+        }
+    }, [userProfile, form]);
 
     const getInitials = (displayName: string | undefined) => {
         if (!displayName) return 'U';
         return displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     }
     
-    // La logique de calcul sera rétablie avec les données de PostgreSQL.
-    const allAssetsPerformance = []; 
-    const portfolioValue = initialCash;
-    const totalGains = 0;
-    const totalGainsPercentage = 0;
+    const portfolioValue = userProfile?.cash ?? 0; // Simplified for now
+    const totalGains = userProfile ? userProfile.cash - userProfile.initialCash : 0;
+    const totalGainsPercentage = userProfile && userProfile.initialCash > 0 ? (totalGains / userProfile.initialCash) * 100 : 0;
 
     async function onProfileSubmit(values: z.infer<typeof profileFormSchema>) {
       await updateUserProfile(values);
     }
 
-    if (!user && !userProfile) {
+    if (loading) {
+        return (
+            <div className="flex h-64 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        )
+    }
+
+    if (!userProfile) {
         return (
             <div className="text-center">
-                <p>Veuillez vous connecter pour voir votre profil.</p>
+                <p>Impossible de charger les données du profil. Veuillez vous reconnecter.</p>
             </div>
         )
     }
@@ -194,7 +205,7 @@ export default function ProfileClientPage() {
                                   <FormItem>
                                       <FormLabel>Numéro de téléphone</FormLabel>
                                       <FormControl>
-                                          <Input placeholder="+33 6 12 34 56 78" {...field} />
+                                          <Input placeholder="+33 6 12 34 56 78" {...field} value={field.value ?? ''} />
                                       </FormControl>
                                       <FormMessage />
                                   </FormItem>
