@@ -27,6 +27,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   transactions: many(transactions),
   predictionMarkets: many(predictionMarkets),
   marketBets: many(marketBets),
+  miningRigs: many(userMiningRigs),
 }));
 
 export const holdings = pgTable('holdings', {
@@ -141,5 +142,24 @@ export const marketBetsRelations = relations(marketBets, ({ one }) => ({
   outcome: one(marketOutcomes, {
     fields: [marketBets.outcomeId],
     references: [marketOutcomes.id],
+  }),
+}));
+
+export const userMiningRigs = pgTable('user_mining_rigs', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  rigId: varchar('rig_id', { length: 50 }).notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    userRigIdx: uniqueIndex('user_rig_idx').on(table.userId, table.rigId),
+  }
+});
+
+export const userMiningRigsRelations = relations(userMiningRigs, ({ one }) => ({
+  user: one(users, {
+    fields: [userMiningRigs.userId],
+    references: [users.id],
   }),
 }));

@@ -58,6 +58,7 @@ export async function getAuthenticatedUserProfile() {
                 transactions: {
                     orderBy: [desc(transactions.createdAt)],
                 },
+                miningRigs: true,
             }
         });
 
@@ -87,7 +88,8 @@ export async function getAuthenticatedUserProfile() {
             cash: parseFloat(userProfile.cash),
             initialCash: parseFloat(userProfile.initialCash),
             holdings: formattedHoldings,
-            transactions: formattedTransactions
+            transactions: formattedTransactions,
+            miningRigs: userProfile.miningRigs,
         };
     } catch (error) {
         console.error('getAuthenticatedUserProfile error:', error);
@@ -235,5 +237,44 @@ export async function sellAssetAction(asset: z.infer<typeof assetSchema>, quanti
 
     } catch (error: any) {
         return { error: error.message || "Une erreur est survenue lors de la vente." };
+    }
+}
+
+export async function claimMiningRewards(amountBtc: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) return { error: 'Non autorisé.' };
+    if (amountBtc <= 0) return { error: 'Aucune récompense à réclamer.' };
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const existingHolding = await tx.query.holdings.findFirst({
+                where: and(eq(holdings.userId, session.id), eq(holdings.ticker, 'BTC')),
+            });
+
+            if (existingHolding) {
+                const newQuantity = parseFloat(existingHolding.quantity) + amountBtc;
+                await tx.update(holdings)
+                    .set({ quantity: newQuantity.toString(), updatedAt: new Date() })
+                    .where(eq(holdings.id, existingHolding.id));
+            } else {
+                // If the user has no BTC, create a new holding.
+                // Mined crypto has no cost basis in this simulation, so avgCost is 0.
+                await tx.insert(holdings).values({
+                    userId: session.id,
+                    ticker: 'BTC',
+                    name: 'Bitcoin',
+                    type: 'Crypto',
+                    quantity: amountBtc.toString(),
+                    avgCost: '0', 
+                });
+            }
+
+            return { success: `${amountBtc.toFixed(8)} BTC réclamés !` };
+        });
+
+        revalidatePath('/portfolio');
+        return result;
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue lors de la réclamation des récompenses." };
     }
 }
