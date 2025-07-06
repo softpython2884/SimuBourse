@@ -17,6 +17,8 @@ export const assets: DetailedAsset[] = [
     { name: 'Alphabet Inc. (Google)', ticker: 'GOOGL', price: 179.00, type: 'Stock', description: 'An American multinational conglomerate holding company. It is the parent company of Google.', marketCap: '$2.2T', change24h: '+0.00%' },
     { name: 'Meta Platforms, Inc.', ticker: 'META', price: 500.00, type: 'Stock', description: 'Engages in the development of social media applications. It builds technology that helps people connect, find communities, and grow businesses.', marketCap: '$1.2T', change24h: '+0.00%' },
     { name: 'Tesla, Inc.', ticker: 'TSLA', price: 180.00, type: 'Stock', description: 'Designs, develops, manufactures, leases, and sells electric vehicles, and energy generation and storage systems.', marketCap: '$570B', change24h: '+0.00%' },
+    { name: 'Samsung Electronics', ticker: 'SMSG', price: 1550.00, type: 'Stock', description: 'A South Korean multinational electronics corporation headquartered in Yeongtong-gu, Suwon.', marketCap: '$450B', change24h: '+0.00%' },
+    { name: 'Nokia Corporation', ticker: 'NOK', price: 3.80, type: 'Stock', description: 'A Finnish multinational telecommunications, information technology, and consumer electronics company.', marketCap: '$21B', change24h: '+0.00%' },
 
     // Crypto
     { name: 'Bitcoin', ticker: 'BTC', price: 68000.00, type: 'Crypto', description: 'A decentralized digital currency, without a central bank or single administrator.', marketCap: '$1.3T', change24h: '+0.00%' },
@@ -28,8 +30,18 @@ export const assets: DetailedAsset[] = [
     { name: 'OVH Groupe', ticker: 'OVH', price: 10.00, type: 'Stock', description: 'A French cloud computing company that offers VPS, dedicated servers and other web services.', marketCap: '€1.7B', change24h: '+0.00%' },
     { name: 'Dassault Systèmes', ticker: 'DSY', price: 35.00, type: 'Stock', description: 'A French software company that develops 3D design, 3D digital mock-up, and product lifecycle management (PLM) software.', marketCap: '€46B', change24h: '+0.00%' },
     { name: 'Capgemini SE', ticker: 'CAP', price: 200.00, type: 'Stock', description: 'A French multinational information technology services and consulting company.', marketCap: '€34B', change24h: '+0.00%' },
+    { name: 'Ubisoft Entertainment', ticker: 'UBI', price: 22.00, type: 'Stock', description: 'A French video game company, known for publishing games in several acclaimed video game franchises.', marketCap: '€2.8B', change24h: '+0.00%' },
 
-    // Global Brands
+    // Entertainment & Gaming
+    { name: 'The Walt Disney Company', ticker: 'DIS', price: 102.00, type: 'Stock', description: 'A multinational mass media and entertainment conglomerate.', marketCap: '$186B', change24h: '+0.00%' },
+    { name: 'Netflix, Inc.', ticker: 'NFLX', price: 670.00, type: 'Stock', description: 'A subscription streaming service and production company.', marketCap: '$290B', change24h: '+0.00%' },
+    { name: 'Nintendo Co., Ltd.', ticker: 'NTDOY', price: 13.50, type: 'Stock', description: 'A Japanese multinational video game company that develops, publishes, and releases video games and gaming consoles.', marketCap: '$65B', change24h: '+0.00%' },
+    { name: 'Take-Two Interactive', ticker: 'TTWO', price: 160.00, type: 'Stock', description: 'An American video game holding company that owns publishers Rockstar Games and 2K.', marketCap: '$27B', change24h: '+0.00%' },
+    { name: 'Spotify Technology S.A.', ticker: 'SPOT', price: 315.00, type: 'Stock', description: 'A Swedish audio streaming and media services provider.', marketCap: '$62B', change24h: '+0.00%' },
+
+    // Global Brands & Services
+    { name: 'Uber Technologies, Inc.', ticker: 'UBER', price: 70.00, type: 'Stock', description: 'A technology company that offers services including ride-hailing, food delivery (Uber Eats), and freight transport.', marketCap: '$145B', change24h: '+0.00%' },
+    { name: 'Starbucks Corporation', ticker: 'SBUX', price: 80.00, type: 'Stock', description: 'An American multinational chain of coffeehouses and roastery reserves.', marketCap: '$90B', change24h: '+0.00%' },
     { name: 'McDonald\'s Corp.', ticker: 'MCD', price: 260.00, type: 'Stock', description: 'Operates and franchises McDonald\'s restaurants worldwide.', marketCap: '$186B', change24h: '+0.00%' },
     { name: 'The Coca-Cola Company', ticker: 'KO', price: 63.00, type: 'Stock', description: 'A beverage company that manufactures, markets, and sells various nonalcoholic beverages worldwide.', marketCap: '$270B', change24h: '+0.00%' },
     { name: 'NIKE, Inc.', ticker: 'NKE', price: 95.00, type: 'Stock', description: 'Engages in the design, development, marketing, and sale of athletic footwear, apparel, equipment, and accessories.', marketCap: '$143B', change24h: '+0.00%' },
@@ -39,6 +51,5 @@ export const assets: DetailedAsset[] = [
     // Commodities & Forex
     { name: 'Gold Spot', ticker: 'XAU', price: 2350.00, type: 'Commodity', description: 'Represents the price for one troy ounce of gold on the spot market.', marketCap: '$15.8T', change24h: '+0.00%' },
     { name: 'Crude Oil (WTI)', ticker: 'OIL', price: 80.00, type: 'Commodity', description: 'West Texas Intermediate crude oil, a benchmark in oil pricing.', marketCap: 'N/A', change24h: '+0.00%' },
-    { name: 'EUR/USD', ticker: 'EURUSD', price: 1.07, type: 'Forex', description: 'The currency exchange rate for the Euro and the U.S. Dollar.', marketCap: 'N/A', change24h: '+0.00%' },
     { name: 'GBP/JPY', ticker: 'GBPJPY', price: 200.50, type: 'Forex', description: 'The currency exchange rate for the British Pound and the Japanese Yen.', marketCap: 'N/A', change24h: '+0.00%' },
 ];

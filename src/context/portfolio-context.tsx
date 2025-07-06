@@ -75,7 +75,7 @@ interface PortfolioContextType {
   unclaimedRewards: number;
   totalHashRateMhs: number;
   loading: boolean;
-  buyAsset: (ticker: string, quantity: number) => Promise<void>;
+  buyAsset: (ticker: string, quantity: number, stopLoss?: number, takeProfit?: number) => Promise<void>;
   sellAsset: (ticker: string, quantity: number) => Promise<void>;
   getHoldingQuantity: (ticker: string) => number;
   updateUserProfile: (data: ProfileUpdateInput) => Promise<void>;
@@ -130,8 +130,8 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const buyAsset = async (ticker: string, quantity: number) => {
-    const result = await buyAssetAction(ticker, quantity);
+  const buyAsset = async (ticker: string, quantity: number, stopLoss?: number, takeProfit?: number) => {
+    const result = await buyAssetAction(ticker, quantity, stopLoss, takeProfit);
     if (result.error) {
       toast({ variant: 'destructive', title: "Échec de l'achat", description: result.error });
     } else {

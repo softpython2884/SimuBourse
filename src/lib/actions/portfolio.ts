@@ -4,7 +4,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { users, holdings, transactions, assets as assetsSchema } from '@/lib/db/schema';
+import { users, holdings, transactions, assets as assetsSchema, automaticOrders } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { getSession } from '@/lib/session';
 import { getRigById } from '../mining';
@@ -96,7 +96,6 @@ export async function getAuthenticatedUserProfile() {
         
         const regularHoldings = userProfile.holdings.map(h => ({
             ...h,
-            id: -1, // Dummy ID for regular assets to avoid conflicts
             isCompanyShare: false,
             quantity: parseFloat(h.quantity),
             avgCost: parseFloat(h.avgCost),
@@ -107,7 +106,7 @@ export async function getAuthenticatedUserProfile() {
         const companyShareHoldings = userProfile.companyShares.map(cs => {
             const sharePrice = parseFloat(cs.company.sharePrice);
             return {
-                id: cs.company.id, // Use company.id as the primary identifier
+                id: cs.id, // Using the share ID now
                 userId: cs.userId,
                 ticker: cs.company.ticker,
                 name: cs.company.name,
@@ -153,7 +152,7 @@ export async function getAuthenticatedUserProfile() {
 }
 
 
-export async function buyAssetAction(ticker: string, quantity: number): Promise<{ success?: string; error?: string }> {
+export async function buyAssetAction(ticker: string, quantity: number, stopLoss?: number, takeProfit?: number): Promise<{ success?: string; error?: string }> {
     const session = await getSession();
     if (!session?.id) return { error: 'Non autorisé.' };
     
@@ -176,14 +175,17 @@ export async function buyAssetAction(ticker: string, quantity: number): Promise<
                 where: and(eq(holdings.userId, session.id), eq(holdings.ticker, asset.ticker)),
             });
 
+            let holdingId: number;
             if (existingHolding) {
                 const existingQuantity = parseFloat(existingHolding.quantity);
                 const existingAvgCost = parseFloat(existingHolding.avgCost);
                 const newTotalQuantity = existingQuantity + quantity;
                 const newAvgCost = ((existingAvgCost * existingQuantity) + tradeValue) / newTotalQuantity;
                 await tx.update(holdings).set({ quantity: newTotalQuantity.toString(), avgCost: newAvgCost.toString(), updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
+                holdingId = existingHolding.id;
             } else {
-                await tx.insert(holdings).values({ userId: session.id, ticker: asset.ticker, name: asset.name, type: asset.type, quantity: quantity.toString(), avgCost: price.toString() });
+                const [newHolding] = await tx.insert(holdings).values({ userId: session.id, ticker: asset.ticker, name: asset.name, type: asset.type, quantity: quantity.toString(), avgCost: price.toString() }).returning({id: holdings.id});
+                holdingId = newHolding.id;
             }
 
             await tx.insert(transactions).values({
@@ -195,8 +197,33 @@ export async function buyAssetAction(ticker: string, quantity: number): Promise<
                 price: price.toString(),
                 value: tradeValue.toString(),
             });
+
+            // Create automatic orders if specified
+            if (stopLoss) {
+                await tx.insert(automaticOrders).values({
+                    userId: session.id,
+                    holdingId: holdingId,
+                    type: 'stop-loss',
+                    triggerPrice: stopLoss.toString(),
+                    quantity: quantity.toString(),
+                });
+            }
+             if (takeProfit) {
+                await tx.insert(automaticOrders).values({
+                    userId: session.id,
+                    holdingId: holdingId,
+                    type: 'take-profit',
+                    triggerPrice: takeProfit.toString(),
+                    quantity: quantity.toString(),
+                });
+            }
             
-            return { success: `Achat de ${quantity} ${ticker} réussi !` };
+            let successMessage = `Achat de ${quantity} ${ticker} réussi !`;
+            if (stopLoss || takeProfit) {
+                successMessage += " Ordres automatiques placés."
+            }
+
+            return { success: successMessage };
         });
 
         revalidatePath('/portfolio');
@@ -237,6 +264,8 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
             if (newQuantity > 1e-9) { 
                 await tx.update(holdings).set({ quantity: newQuantity.toString(), updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
             } else {
+                // If selling all, also cancel any associated automatic orders
+                await tx.delete(automaticOrders).where(eq(automaticOrders.holdingId, existingHolding.id));
                 await tx.delete(holdings).where(eq(holdings.id, existingHolding.id));
             }
 

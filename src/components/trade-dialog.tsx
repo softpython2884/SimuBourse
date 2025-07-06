@@ -20,7 +20,6 @@ import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 import { AssetFromDb } from '@/lib/actions/assets';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Badge } from '@/components/ui/badge';
 
 interface TradeDialogProps {
   asset: AssetFromDb;
@@ -30,17 +29,34 @@ interface TradeDialogProps {
 
 const formSchema = z.object({
   quantity: z.coerce.number().positive({ message: 'La quantité doit être positive.' }),
+  stopLoss: z.coerce.number().optional(),
+  takeProfit: z.coerce.number().optional(),
 });
 
 export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
   const [open, setOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const { buyAsset, sellAsset, cash, getHoldingQuantity } = usePortfolio();
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  const formSchemaWithPriceValidation = formSchema.refine(
+    (data) => !data.stopLoss || data.stopLoss < asset.price,
+    {
+      message: `Le Stop-Loss doit être inférieur au prix actuel ($${asset.price.toFixed(2)}).`,
+      path: ['stopLoss'],
+    }
+  ).refine(
+    (data) => !data.takeProfit || data.takeProfit > asset.price,
+    {
+       message: `Le Take-Profit doit être supérieur au prix actuel ($${asset.price.toFixed(2)}).`,
+       path: ['takeProfit'],
+    }
+  );
+
+  const form = useForm<z.infer<typeof formSchemaWithPriceValidation>>({
+    resolver: zodResolver(formSchemaWithPriceValidation),
     defaultValues: {
       quantity: undefined,
+      stopLoss: undefined,
+      takeProfit: undefined,
     },
     mode: 'onChange',
   });
@@ -58,14 +74,12 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
       isTradeDisabled = true;
   }
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true);
+  async function onSubmit(values: z.infer<typeof formSchemaWithPriceValidation>) {
     if (tradeType === 'Buy') {
-      await buyAsset(asset.ticker, values.quantity);
+      await buyAsset(asset.ticker, values.quantity, values.stopLoss, values.takeProfit);
     } else {
       await sellAsset(asset.ticker, values.quantity);
     }
-    setIsLoading(false);
     form.reset();
     setOpen(false);
   }
@@ -133,36 +147,62 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
               )}
             />
             
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="item-1">
-                  <AccordionTrigger>Ordre Automatique (Avancé)</AccordionTrigger>
-                  <AccordionContent>
-                      <div className="space-y-4 pt-2">
-                          <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-medium">Définir des ordres Stop-Loss / Take-Profit</h4>
-                              <Badge variant="outline">Bientôt disponible</Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                              Ces ordres se déclencheront automatiquement pour vendre vos actifs si le prix atteint les seuils que vous avez définis.
-                          </p>
-                          <div className="grid grid-cols-2 gap-4">
-                              <FormItem>
-                                  <FormLabel>Prix Stop-Loss</FormLabel>
-                                  <FormControl>
-                                      <Input type="number" placeholder={`< ${asset.price.toFixed(2)}`} disabled />
-                                  </FormControl>
-                              </FormItem>
-                               <FormItem>
-                                  <FormLabel>Prix Take-Profit</FormLabel>
-                                  <FormControl>
-                                      <Input type="number" placeholder={`> ${asset.price.toFixed(2)}`} disabled />
-                                  </FormControl>
-                              </FormItem>
-                          </div>
-                      </div>
-                  </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+             {tradeType === 'Buy' && (
+                <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="item-1">
+                    <AccordionTrigger>Ordre Automatique (Avancé)</AccordionTrigger>
+                    <AccordionContent>
+                        <div className="space-y-4 pt-2">
+                            <p className="text-sm text-muted-foreground">
+                                Définissez des ordres pour vendre automatiquement vos actifs si le prix atteint les seuils définis.
+                            </p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="stopLoss"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Stop-Loss</FormLabel>
+                                            <FormControl>
+                                                <Input 
+                                                    type="number" 
+                                                    step="any" 
+                                                    placeholder={`< ${asset.price.toFixed(2)}`} 
+                                                    {...field}
+                                                    value={field.value ?? ''}
+                                                    onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                 <FormField
+                                    control={form.control}
+                                    name="takeProfit"
+                                    render={({ field }) => (
+                                         <FormItem>
+                                            <FormLabel>Take-Profit</FormLabel>
+                                            <FormControl>
+                                                <Input 
+                                                    type="number" 
+                                                    step="any" 
+                                                    placeholder={`> ${asset.price.toFixed(2)}`} 
+                                                    {...field}
+                                                    value={field.value ?? ''}
+                                                    onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+                </Accordion>
+             )}
 
             <div className="text-sm font-medium pt-2">
               {tradeType === 'Buy' ? 'Coût total' : 'Produit total'}: ${totalValue.toFixed(2)}
@@ -172,8 +212,8 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
                 Annuler
               </Button>
-              <Button type="submit" disabled={isLoading || isTradeDisabled || !form.formState.isValid}>
-                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type="submit" disabled={form.formState.isSubmitting || isTradeDisabled || !form.formState.isValid}>
+                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Confirmer {tradeTypeFr}
               </Button>
             </DialogFooter>

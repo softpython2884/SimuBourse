@@ -34,6 +34,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   companyMemberships: many(companyMembers),
   createdCompanies: many(companies),
   companyShares: many(companyShares),
+  automaticOrders: many(automaticOrders),
 }));
 
 export const assets = pgTable('assets', {
@@ -61,11 +62,12 @@ export const holdings = pgTable('holdings', {
   }
 });
 
-export const holdingsRelations = relations(holdings, ({ one }) => ({
+export const holdingsRelations = relations(holdings, ({ one, many }) => ({
   user: one(users, {
     fields: [holdings.userId],
     references: [users.id],
   }),
+  automaticOrders: many(automaticOrders),
 }));
 
 export const transactions = pgTable('transactions', {
@@ -292,5 +294,32 @@ export const companyMiningRigsRelations = relations(companyMiningRigs, ({ one })
   company: one(companies, {
     fields: [companyMiningRigs.companyId],
     references: [companies.id],
+  }),
+}));
+
+
+export const automaticOrders = pgTable('automatic_orders', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  holdingId: integer('holding_id').notNull().references(() => holdings.id, { onDelete: 'cascade' }),
+  type: varchar('type', { length: 20, enum: ['stop-loss', 'take-profit'] }).notNull(),
+  triggerPrice: numeric('trigger_price', { precision: 18, scale: 8 }).notNull(),
+  quantity: numeric('quantity', { precision: 18, scale: 8 }).notNull(),
+  status: varchar('status', { length: 20, enum: ['active', 'triggered', 'cancelled'] }).default('active').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    userHoldingIdx: index('auto_order_user_holding_idx').on(table.userId, table.holdingId),
+  }
+});
+
+export const automaticOrdersRelations = relations(automaticOrders, ({ one }) => ({
+  user: one(users, {
+    fields: [automaticOrders.userId],
+    references: [users.id],
+  }),
+  holding: one(holdings, {
+    fields: [automaticOrders.holdingId],
+    references: [holdings.id],
   }),
 }));
