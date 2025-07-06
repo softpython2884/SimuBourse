@@ -90,12 +90,17 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
     revalidatePath('/');
     return result;
   } catch (error: any) {
-    if (error?.code === '23505') { // Handles unique constraint violations for both name and ticker
+    if (error?.code === '23505') { 
         return { error: "Une entreprise avec un nom ou un ticker similaire existe déjà." };
     }
     return { error: error.message || "Une erreur est survenue lors de la création de l'entreprise." };
   }
 }
+
+export type CompanyHistoricalPoint = {
+    date: string;
+    price: number;
+};
 
 export async function getCompaniesForUserDashboard() {
     const session = await getSession();
@@ -110,12 +115,34 @@ export async function getCompaniesForUserDashboard() {
         const sharePrice = parseFloat(company.sharePrice);
         const marketCap = totalShares * sharePrice;
 
+        const historicalData: CompanyHistoricalPoint[] = [];
+        const now = new Date();
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        let lastPrice = sharePrice / (1 + (Math.random() - 0.45) * 0.1); 
+        
+        for (let i = 0; i < 24; i++) {
+            const date = new Date(yesterday.getTime() + i * 60 * 60 * 1000);
+            lastPrice *= (1 + (Math.random() - 0.5) * 0.05);
+            if (lastPrice <= 0) lastPrice = 0.0001;
+            historicalData.push({ date: date.toISOString(), price: lastPrice });
+        }
+        historicalData.push({ date: now.toISOString(), price: sharePrice });
+
+        const startPrice = historicalData[0]?.price || sharePrice;
+        const change = sharePrice - startPrice;
+        const changePercent = startPrice > 0 ? (change / startPrice) * 100 : 0;
+        const change24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+
         return {
             ...company,
             cash: cash,
             marketCap: marketCap,
             sharePrice: sharePrice,
             totalShares: totalShares,
+            historicalData,
+            change24h,
         }
     });
 
@@ -136,7 +163,7 @@ export async function getCompaniesForUserDashboard() {
     const membershipsByCompanyId = new Map(userMemberships.map(m => [m.companyId, m]));
 
     const managedCompanies: any[] = [];
-    let investedCompanies: any[] = [];
+    const investedCompanies: any[] = [];
     const otherCompanies: any[] = [];
 
     for (const company of companiesWithMarketData) {
@@ -144,26 +171,24 @@ export async function getCompaniesForUserDashboard() {
         const shareData = sharesByCompanyId.get(company.id);
         const sharesHeld = parseFloat(shareData?.quantity || '0');
 
-        if (membership) {
-            managedCompanies.push({
-                ...company,
-                role: membership.role,
-                sharesHeld: sharesHeld,
-                sharesValue: sharesHeld * company.sharePrice,
-            });
-        } else if (shareData) {
-            investedCompanies.push({
-                ...company,
-                sharesHeld: sharesHeld,
-                sharesValue: sharesHeld * company.sharePrice,
-            });
+        const isManaged = !!membership;
+        const isInvested = sharesHeld > 0;
+        
+        const companyData = {
+            ...company,
+            sharesHeld: sharesHeld,
+            sharesValue: sharesHeld * company.sharePrice,
+            role: membership?.role,
+        };
+
+        if (isManaged) {
+            managedCompanies.push(companyData);
+        } else if (isInvested) {
+            investedCompanies.push(companyData);
         } else {
-            otherCompanies.push(company);
+            otherCompanies.push(companyData);
         }
     }
-
-    const managedCompanyIds = new Set(managedCompanies.map(c => c.id));
-    investedCompanies = investedCompanies.filter(c => !managedCompanyIds.has(c.id));
 
     return { managedCompanies, investedCompanies, otherCompanies };
 }
@@ -870,5 +895,3 @@ export async function claimCompanyBtc(companyId: number): Promise<{ success?: st
         return { error: error.message || "Une erreur est survenue lors de la réclamation des récompenses." };
     }
 }
-
-    

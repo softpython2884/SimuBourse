@@ -1,6 +1,7 @@
+
 'use client';
 
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { CreateCompanyDialog } from '@/components/create-company-dialog';
@@ -9,7 +10,8 @@ import Link from 'next/link';
 import { InvestDialog } from '@/components/invest-dialog';
 import type { CompanyWithDetails, ManagedCompany, InvestedCompany, OtherCompany } from '@/lib/actions/companies';
 import { SellSharesDialog } from '@/components/sell-shares-dialog';
-
+import { Area, AreaChart, Tooltip } from 'recharts';
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 
 function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'invested' | 'other' }) {
     const hasShares = company.sharesHeld > 0;
@@ -42,41 +44,10 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
                 <Button asChild variant="outline" size="sm">
                     <Link href={`/companies/${company.id}`}>Détails</Link>
                 </Button>
-
-                {company.isListed ? (
-                     <>
-                        <InvestDialog company={company as CompanyWithDetails} isListed>
-                            <Button size="sm">Acheter</Button>
-                        </InvestDialog>
-                        {hasShares && (
-                             <SellSharesDialog
-                                companyId={company.id}
-                                companyName={company.name}
-                                sharePrice={company.sharePrice}
-                                sharesHeld={company.sharesHeld}
-                                isListed
-                            >
-                                <Button size="sm" variant="destructive">Vendre</Button>
-                            </SellSharesDialog>
-                        )}
-                    </>
-                ) : ( // Not listed
-                    <>
-                        {hasShares && (
-                            <SellSharesDialog
-                                companyId={company.id}
-                                companyName={company.name}
-                                sharePrice={company.sharePrice}
-                                sharesHeld={company.sharesHeld}
-                            >
-                                <Button size="sm" variant="destructive">Vendre</Button>
-                            </SellSharesDialog>
-                        )}
-                        <InvestDialog company={company as CompanyWithDetails}>
-                            <Button size="sm">Investir</Button>
-                        </InvestDialog>
-                    </>
-                )}
+                {/* Note: Investing in private companies from this table */}
+                <InvestDialog company={company as CompanyWithDetails}>
+                    <Button size="sm">Investir</Button>
+                </InvestDialog>
             </TableCell>
         </TableRow>
     );
@@ -86,8 +57,8 @@ function CompanyTable({ title, description, companies, type }: { title: string, 
     const headers = {
         managed: ["Entreprise", "Mon Rôle", "Mes Parts", "Valeur des Parts", ""],
         invested: ["Entreprise", "Parts Détenues", "Valeur des Parts", ""],
-        other: ["Entreprise", "Trésorerie", "Cap. Boursière", ""]
-    }
+        other: ["Entreprise", "Trésorerie", "Cap. Boursière", ""],
+    };
     
     return (
         <Card>
@@ -110,7 +81,7 @@ function CompanyTable({ title, description, companies, type }: { title: string, 
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={headers[type].length} className="h-24 text-center text-muted-foreground">
-                                    {type === 'managed' ? "Vous ne gérez aucune entreprise." : type === 'invested' ? "Vous n'avez investi dans aucune entreprise." : "Aucune autre entreprise disponible."}
+                                    {type === 'managed' ? "Vous ne gérez aucune entreprise." : type === 'invested' ? "Vous n'avez investi dans aucune entreprise." : "Aucune entreprise privée disponible."}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -118,7 +89,87 @@ function CompanyTable({ title, description, companies, type }: { title: string, 
                 </Table>
             </CardContent>
         </Card>
-    )
+    );
+}
+
+
+function StockExchangeCard({ company }: { company: OtherCompany }) {
+    const changeIsPositive = company.change24h.startsWith('+');
+    const chartConfig = {
+        price: {
+            label: 'Prix',
+            color: changeIsPositive ? 'hsl(var(--chart-1))' : 'hsl(var(--destructive))',
+        },
+    };
+
+    return (
+        <Card className="flex flex-col">
+            <CardHeader>
+                <div className="flex items-start justify-between">
+                    <div>
+                        <CardTitle className="text-base">{company.name} ({company.ticker})</CardTitle>
+                        <CardDescription>{company.industry}</CardDescription>
+                    </div>
+                    <Badge variant="secondary">En Bourse</Badge>
+                </div>
+            </CardHeader>
+            <CardContent className="flex-grow space-y-4">
+                 <div className="h-[100px] w-full -translate-x-4">
+                    <ChartContainer config={chartConfig}>
+                        <AreaChart
+                            accessibilityLayer
+                            data={company.historicalData}
+                            margin={{ top: 5, right: 10, left: 10, bottom: 0 }}
+                        >
+                             <defs>
+                                <linearGradient id={`fill-${company.ticker}`} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="var(--color-price)" stopOpacity={0.8}/>
+                                    <stop offset="95%" stopColor="var(--color-price)" stopOpacity={0.1}/>
+                                </linearGradient>
+                            </defs>
+                            <Tooltip
+                                cursor={false}
+                                content={<ChartTooltipContent indicator="dot" hideLabel />}
+                            />
+                            <Area
+                                dataKey="price"
+                                type="natural"
+                                fill={`url(#fill-${company.ticker})`}
+                                strokeWidth={2}
+                                stroke="var(--color-price)"
+                                stackId="a"
+                            />
+                        </AreaChart>
+                    </ChartContainer>
+                </div>
+                <div>
+                     <div className="text-xl font-bold">${company.sharePrice.toFixed(4)}</div>
+                     <p className={`text-xs ${changeIsPositive ? 'text-green-500' : 'text-red-500'}`}>
+                        {company.change24h} (24h)
+                    </p>
+                </div>
+            </CardContent>
+            <CardFooter className="flex justify-end gap-2">
+                <Button asChild variant="outline" size="sm">
+                    <Link href={`/companies/${company.id}`}>Détails</Link>
+                </Button>
+                 <InvestDialog company={company as any} isListed>
+                    <Button size="sm">Acheter</Button>
+                </InvestDialog>
+                {company.sharesHeld > 0 && (
+                    <SellSharesDialog
+                        companyId={company.id}
+                        companyName={company.name}
+                        sharePrice={company.sharePrice}
+                        sharesHeld={company.sharesHeld}
+                        isListed
+                    >
+                        <Button size="sm" variant="secondary">Vendre</Button>
+                    </SellSharesDialog>
+                )}
+            </CardFooter>
+        </Card>
+    );
 }
 
 interface CompaniesClientPageProps {
@@ -128,7 +179,9 @@ interface CompaniesClientPageProps {
 }
 
 export function CompaniesClientPage({ managedCompanies, investedCompanies, otherCompanies }: CompaniesClientPageProps) {
-    
+    const listedCompanies = otherCompanies.filter(c => c.isListed);
+    const privateCompanies = otherCompanies.filter(c => !c.isListed);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -157,12 +210,28 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
                 />
             )}
             
-            <CompanyTable
-                title="Bourse des Entreprises"
-                description="Toutes les entreprises disponibles à l'investissement ou au trading."
-                companies={otherCompanies}
-                type="other"
-            />
+            <Card>
+                <CardHeader>
+                    <CardTitle>Bourse des Entreprises</CardTitle>
+                    <CardDescription>Entreprises cotées disponibles pour le trading public.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {listedCompanies.length > 0 ? (
+                        listedCompanies.map((company) => <StockExchangeCard key={company.id} company={company} />)
+                    ) : (
+                        <p className="col-span-full py-12 text-center text-muted-foreground">Aucune entreprise n'est actuellement cotée en bourse.</p>
+                    )}
+                </CardContent>
+            </Card>
+
+            {privateCompanies.length > 0 && (
+                 <CompanyTable
+                    title="Autres Entreprises Privées"
+                    description="Entreprises non cotées dans lesquelles vous pouvez réaliser un investissement initial."
+                    companies={privateCompanies}
+                    type="other"
+                />
+            )}
         </div>
     );
 }

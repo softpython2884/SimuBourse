@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -24,11 +25,10 @@ export default function PortfolioClientPage() {
             const isCompany = holding.type === 'Company Share';
             const asset = !isCompany ? getAssetByTicker(holding.ticker) : undefined;
             
-            // For company shares, the price is stored directly in the holding from the portfolio context
             const currentPrice = isCompany ? holding.avgCost : (asset?.price || holding.avgCost);
             
             const currentValue = holding.quantity * currentPrice;
-            const totalCost = holding.quantity * holding.avgCost; // This might be less accurate for company shares over time, but good for a start
+            const totalCost = holding.quantity * holding.avgCost;
             const pnl = currentValue - totalCost;
             const pnlPercent = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
             return {
@@ -100,7 +100,7 @@ export default function PortfolioClientPage() {
                         <TableBody>
                             {holdingsWithMarketData.length > 0 ? (
                                 holdingsWithMarketData.map(holding => (
-                                    <TableRow key={holding.ticker}>
+                                    <TableRow key={`${holding.ticker}-${holding.isCompanyShare}`}>
                                         <TableCell>
                                             <div className="font-medium">{holding.name}</div>
                                             <div className="text-sm text-muted-foreground">{holding.ticker}</div>
@@ -119,7 +119,7 @@ export default function PortfolioClientPage() {
                                                         companyName={holding.name}
                                                         sharePrice={holding.currentPrice}
                                                         sharesHeld={holding.quantity}
-                                                        isListed={true}
+                                                        isListed={holding.company?.isListed}
                                                     >
                                                         <Button variant="secondary" size="sm">Vendre</Button>
                                                     </SellSharesDialog>

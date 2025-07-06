@@ -1,3 +1,4 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -95,16 +96,18 @@ export async function getAuthenticatedUserProfile() {
         
         const regularHoldings = userProfile.holdings.map(h => ({
             ...h,
+            id: -1, // Dummy ID for regular assets to avoid conflicts
             isCompanyShare: false,
             quantity: parseFloat(h.quantity),
             avgCost: parseFloat(h.avgCost),
             updatedAt: new Date(h.updatedAt),
+            company: null,
         }));
 
         const companyShareHoldings = userProfile.companyShares.map(cs => {
             const sharePrice = parseFloat(cs.company.sharePrice);
             return {
-                id: cs.id,
+                id: cs.company.id, // Use company.id as the primary identifier
                 userId: cs.userId,
                 ticker: cs.company.ticker,
                 name: cs.company.name,
@@ -112,8 +115,14 @@ export async function getAuthenticatedUserProfile() {
                 isCompanyShare: true,
                 quantity: parseFloat(cs.quantity),
                 avgCost: sharePrice, // Using current price as avgCost for simplicity here
-                updatedAt: new Date(cs.company.createdAt), // A proxy date
-            }
+                updatedAt: new Date(cs.company.createdAt),
+                company: {
+                    ...cs.company,
+                    sharePrice,
+                    cash: parseFloat(cs.company.cash),
+                    totalShares: parseFloat(cs.company.totalShares),
+                },
+            };
         });
 
         const allHoldings = [...regularHoldings, ...companyShareHoldings];
