@@ -188,6 +188,31 @@ export async function getCompanyById(companyId: number) {
         return null;
     }
     
+    // --- OFFLINE MINING CALCULATION FOR COMPANY ---
+    const totalCompanyHashRate = company.miningRigs.reduce((total, ownedRig) => {
+        const rigData = getRigById(ownedRig.rigId);
+        return total + (rigData?.hashRateMhs || 0) * ownedRig.quantity;
+    }, 0);
+
+    let finalUnclaimedBtc = parseFloat(company.unclaimedBtc);
+
+    if (totalCompanyHashRate > 0) {
+        const now = new Date();
+        const lastUpdate = new Date(company.lastMiningUpdateAt);
+        const secondsElapsed = (now.getTime() - lastUpdate.getTime()) / 1000;
+
+        if (secondsElapsed > 1) {
+            const BTC_PER_MHS_PER_SECOND = 7.7e-12; // Same as user's
+            const earnedOffline = totalCompanyHashRate * BTC_PER_MHS_PER_SECOND * secondsElapsed;
+            finalUnclaimedBtc += earnedOffline;
+            
+            await db.update(companies)
+                .set({ unclaimedBtc: finalUnclaimedBtc.toString(), lastMiningUpdateAt: now })
+                .where(eq(companies.id, company.id));
+        }
+    }
+    // --- END CALCULATION ---
+
     // Fetch all asset prices for valuation
     const allAssets = await db.query.assets.findMany();
     const priceMap = allAssets.reduce((map, asset) => {
@@ -200,8 +225,15 @@ export async function getCompanyById(companyId: number) {
       return sum + (parseFloat(holding.quantity) * currentPrice);
     }, 0);
 
+    const miningRigsValue = company.miningRigs.reduce((total, ownedRig) => {
+        const rigData = getRigById(ownedRig.rigId);
+        return total + (rigData?.price || 0) * ownedRig.quantity;
+    }, 0);
+
+    const unclaimedBtcValue = finalUnclaimedBtc * (priceMap['BTC'] || 0);
+
     const companyCash = parseFloat(company.cash);
-    const companyValue = companyCash + portfolioValue;
+    const companyValue = companyCash + portfolioValue + miningRigsValue + unclaimedBtcValue;
     const totalShares = parseFloat(company.totalShares);
     const sharePrice = totalShares > 0 ? companyValue / totalShares : parseFloat(company.sharePrice);
 
@@ -211,6 +243,8 @@ export async function getCompanyById(companyId: number) {
       sharePrice: sharePrice,
       totalShares: totalShares,
       marketCap: companyValue,
+      miningRigsValue: miningRigsValue,
+      unclaimedBtc: finalUnclaimedBtc,
       shares: company.shares.map(s => ({...s, quantity: parseFloat(s.quantity)})),
       holdings: company.holdings.map(h => ({
         ...h,

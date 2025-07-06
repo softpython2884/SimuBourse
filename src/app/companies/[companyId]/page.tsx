@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent, Package, Cpu, Settings } from 'lucide-react';
+import { ArrowLeft, Landmark, Users, DollarSign, LineChart, Briefcase, Percent, Package, Cpu, Settings, Server, Bitcoin } from 'lucide-react';
 import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -70,7 +70,7 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Trésorerie</CardTitle>
@@ -109,6 +109,26 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
               <CardContent>
                   <div className="text-2xl font-bold">{company.members.length}</div>
                   <p className="text-xs text-muted-foreground">Personnes gérant l'entreprise</p>
+              </CardContent>
+          </Card>
+          <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Valeur du Matériel de Minage</CardTitle>
+                  <Server className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold">${company.miningRigsValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                  <p className="text-xs text-muted-foreground">Valeur totale du matériel détenu</p>
+              </CardContent>
+          </Card>
+          <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Récompenses BTC non réclamées</CardTitle>
+                  <Bitcoin className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold">{company.unclaimedBtc.toFixed(8)} BTC</div>
+                  <p className="text-xs text-muted-foreground">Généré par les opérations de minage</p>
               </CardContent>
           </Card>
       </div>
