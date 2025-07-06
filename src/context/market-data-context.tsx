@@ -13,9 +13,9 @@ export type HistoricalDataPoint = {
 type AssetsMap = { [ticker: string]: DetailedAsset };
 type HistoricalDataMap = { [ticker:string]: HistoricalDataPoint[] };
 
-interface NewsEvent {
-    impactScore: number;
-    timestamp: number;
+interface MomentumData {
+    momentum: number; // The initial momentum value from the news
+    timestamp: number; // The time the news event occurred
 }
 
 interface MarketDataContextType {
@@ -28,8 +28,7 @@ interface MarketDataContextType {
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
 
-// A mulberry32 pseudo-random number generator. It's simple and provides better
-// distribution than Math.sin() for this kind of simulation.
+// A mulberry32 pseudo-random number generator.
 const seededRandom = (seed: number) => {
     let t = seed + 0x6D2B79F5;
     t = Math.imul(t ^ t >>> 15, t | 1);
@@ -41,29 +40,19 @@ const calculateNextPrice = (
     previousPrice: number, 
     ticker: string, 
     timestamp: number, 
-    event?: NewsEvent
+    momentum: number
 ) => {
-    // If a news event just occurred, apply a one-time price shock.
-    if (event) {
-        // impactScore is -10 to 10. We'll map this to a percentage change.
-        // A max impact is a 4% change. So, impactScore * 0.4%.
-        const shockPercentage = event.impactScore * 0.004;
-        const shockedPrice = previousPrice * (1 + shockPercentage);
-        return shockedPrice > 0 ? shockedPrice : 0.01;
-    }
-
-    // Otherwise, perform a gentle random walk (jitter)
     const seed = timestamp + ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const randomValue = seededRandom(seed);
     
-    // A moderate volatility to ensure the chart isn't flat, but not chaotic either.
-    const volatility = 0.0005; 
+    // Low base volatility for background noise, making the chart less flat.
+    const volatility = 0.0001;
     
-    // A tiny positive drift to counteract the downward pressure of a multiplicative
-    // random walk and to simulate a generally bullish market over the long term.
-    const drift = 0.00000002; // Corresponds to ~10-15% annual growth
+    // A tiny positive drift to simulate a generally healthy market over the long term.
+    const baseDrift = 0.00000002;
     
-    const changePercent = drift + volatility * (randomValue - 0.5) * 2;
+    // The total change is the sum of the long-term drift, the current news-driven momentum, and the random noise.
+    const changePercent = baseDrift + momentum + volatility * (randomValue - 0.5) * 2;
     const newPrice = previousPrice * (1 + changePercent);
     
     return newPrice > 0 ? newPrice : 0.01;
@@ -79,19 +68,23 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [assets, setAssets] = useState<AssetsMap>(initialAssetsMap);
     const [historicalData, setHistoricalData] = useState<HistoricalDataMap>({});
-    const [newsEvents, setNewsEvents] = useState<{ [ticker: string]: NewsEvent }>({});
+    const [marketMomentum, setMarketMomentum] = useState<{ [ticker: string]: MomentumData }>({});
 
     const assetsRef = useRef(assets);
     assetsRef.current = assets;
     const historicalDataRef = useRef(historicalData);
     historicalDataRef.current = historicalData;
-    const newsEventsRef = useRef(newsEvents);
-    newsEventsRef.current = newsEvents;
+    const marketMomentumRef = useRef(marketMomentum);
+    marketMomentumRef.current = marketMomentum;
 
     const registerNewsEvent = useCallback((ticker: string, impactScore: number) => {
-        setNewsEvents(prev => ({
+        // A max score of 10 creates a significant trend. We map it to a momentum value.
+        // This value is the primary driver of price change for the next few hours.
+        const initialMomentum = impactScore * 0.00005; 
+
+        setMarketMomentum(prev => ({
             ...prev,
-            [ticker]: { impactScore, timestamp: Date.now() },
+            [ticker]: { momentum: initialMomentum, timestamp: Date.now() },
         }));
     }, []);
 
@@ -109,8 +102,8 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
             const data: HistoricalDataPoint[] = [];
             for (let i = 0; i < totalHours; i++) {
                 const timestamp = oneYearAgo + i * 60 * 60 * 1000;
-                // Generate initial history with only the jitter
-                currentPrice = calculateNextPrice(currentPrice, asset.ticker, timestamp);
+                // Generate initial history with only the base drift and jitter (momentum is 0)
+                currentPrice = calculateNextPrice(currentPrice, asset.ticker, timestamp, 0);
                 data.push({ date: new Date(timestamp).toISOString(), price: currentPrice });
             }
             
@@ -135,24 +128,35 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
             const now = Date.now();
             const currentAssets = assetsRef.current;
             const currentHistoricalData = historicalDataRef.current;
-            const currentNewsEvents = newsEventsRef.current;
+            const currentMarketMomentum = marketMomentumRef.current;
             
             const newAssetsMap: AssetsMap = { ...currentAssets };
             const newHistoricalDataMap: HistoricalDataMap = { ...currentHistoricalData };
-            const updatedNewsEvents: { [ticker: string]: NewsEvent } = { ...currentNewsEvents };
-            let anEventOccurred = false;
+            const newMarketMomentum = { ...currentMarketMomentum };
 
             for (const ticker in newAssetsMap) {
                 const currentAsset = newAssetsMap[ticker];
                 if (!currentAsset) continue;
+                
+                let activeMomentum = 0;
+                const momentumData = newMarketMomentum[ticker];
 
-                const eventForTicker = updatedNewsEvents[ticker];
-                const newPrice = calculateNextPrice(currentAsset.price, ticker, now, eventForTicker);
+                if (momentumData) {
+                    const timeSinceEvent = now - momentumData.timestamp;
+                    const DECAY_HOURS = 4; // The news effect will fade over 4 hours
+                    const DECAY_CONSTANT = DECAY_HOURS * 60 * 60 * 1000;
+                    
+                    // Exponential decay of the momentum
+                    const decayFactor = Math.exp(-timeSinceEvent / DECAY_CONSTANT);
+                    activeMomentum = momentumData.momentum * decayFactor;
 
-                if (eventForTicker) {
-                    delete updatedNewsEvents[ticker];
-                    anEventOccurred = true;
+                    // If momentum is negligible, remove it to stop calculations
+                    if (Math.abs(activeMomentum) < 1e-9) {
+                        delete newMarketMomentum[ticker];
+                    }
                 }
+
+                const newPrice = calculateNextPrice(currentAsset.price, ticker, now, activeMomentum);
                 
                 const newPoint = { date: new Date(now).toISOString(), price: newPrice };
                 const updatedHistory = [...(newHistoricalDataMap[ticker] || []), newPoint];
@@ -174,10 +178,8 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
                 
                 newAssetsMap[ticker] = { ...currentAsset, price: newPrice, change24h };
             }
-
-            if (anEventOccurred) {
-                setNewsEvents(updatedNewsEvents);
-            }
+            
+            setMarketMomentum(newMarketMomentum);
             setAssets(newAssetsMap);
             setHistoricalData(newHistoricalDataMap);
 
