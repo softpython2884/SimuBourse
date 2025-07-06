@@ -186,7 +186,7 @@ export const companies = pgTable('companies', {
   industry: varchar('industry', { length: 100 }).notNull(),
   description: text('description').notNull(),
   cash: numeric('cash', { precision: 15, scale: 2 }).default('0.00').notNull(),
-  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   sharePrice: numeric('share_price', { precision: 10, scale: 2 }).default('0.10').notNull(),
   totalShares: numeric('total_shares', { precision: 20, scale: 8 }).default('10000.00').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
