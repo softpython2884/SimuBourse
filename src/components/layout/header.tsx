@@ -15,17 +15,12 @@ import Link from 'next/link';
 import { Logo } from '@/components/icons';
 import { NAV_LINKS } from './sidebar';
 import { useAuth } from '@/context/auth-context';
-import { usePortfolio } from '@/context/portfolio-context';
-import { useRouter } from 'next/navigation';
 
 export function AppHeader() {
-  const { user } = useAuth();
-  const { userProfile } = usePortfolio();
-  const router = useRouter();
+  const { user, logout } = useAuth();
 
   const handleLogout = async () => {
-    // La logique de déconnexion sera implémentée avec la nouvelle gestion de session.
-    router.push('/login');
+    await logout();
   };
 
   return (
@@ -76,7 +71,7 @@ export function AppHeader() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{userProfile?.displayName || user.email}</DropdownMenuLabel>
+            <DropdownMenuLabel>{user.displayName || user.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/profile">Profil</Link>

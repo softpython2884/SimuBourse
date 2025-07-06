@@ -12,10 +12,11 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
+import { login, LoginInput } from '@/lib/actions/user';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Adresse e-mail invalide.' }),
-  password: z.string().min(6, { message: 'Le mot de passe doit comporter au moins 6 caractères.' }),
+  password: z.string().min(1, { message: 'Le mot de passe est requis.' }),
 });
 
 export default function LoginPage() {
@@ -31,15 +32,25 @@ export default function LoginPage() {
     },
   });
 
-  // La logique de connexion sera implémentée à la prochaine étape.
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: LoginInput) {
     setIsLoading(true);
-    toast({
-        variant: 'destructive',
-        title: 'Fonctionnalité non disponible',
-        description: 'La connexion sera mise en place prochainement.',
-    });
+    const result = await login(values);
     setIsLoading(false);
+
+    if (result?.error) {
+      toast({
+        variant: 'destructive',
+        title: 'Échec de la connexion',
+        description: result.error,
+      });
+    } else {
+      toast({
+        title: 'Connexion réussie !',
+        description: 'Vous allez être redirigé.',
+      });
+      // A full page refresh is better to re-trigger AuthProvider and other server components.
+      window.location.href = '/';
+    }
   }
 
   return (

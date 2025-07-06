@@ -1,9 +1,8 @@
 'use client';
 
-import { createContext, useContext, ReactNode } from 'react';
-// import { User } from 'firebase/auth'; // Remplacé
+import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
+import { getSession, deleteSession } from '@/lib/session';
 
-// Un type utilisateur simple pour la transition. Sera étoffé plus tard.
 export type User = {
   id: number;
   displayName: string;
@@ -13,17 +12,39 @@ export type User = {
 type AuthContextType = {
   user: User | null;
   loading: boolean;
+  logout: () => Promise<void>;
 };
 
-// Contexte temporaire qui simule un utilisateur non connecté.
-// Il sera remplacé par une gestion de session (ex: JWT) dans les prochaines étapes.
-const AuthContext = createContext<AuthContextType>({ user: null, loading: false });
+const AuthContext = createContext<AuthContextType>({ user: null, loading: true, logout: async () => {} });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchUserSession() {
+      try {
+        const sessionUser = await getSession();
+        setUser(sessionUser);
+      } catch (e) {
+        console.error("Failed to fetch session", e);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchUserSession();
+  }, []);
+
+  const logout = async () => {
+    // deleteSession handles redirecting the user
+    await deleteSession();
+  };
 
   const value = {
-    user: null, // L'utilisateur est toujours déconnecté pour l'instant
-    loading: false, // Le chargement est terminé
+    user,
+    loading,
+    logout,
   };
 
   return (

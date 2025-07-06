@@ -5,6 +5,7 @@ import { users } from '@/lib/db/schema';
 import { db } from '@/lib/db';
 import bcrypt from 'bcrypt';
 import { eq } from 'drizzle-orm';
+import { setSession } from '@/lib/session';
 
 const signupSchema = z.object({
   displayName: z.string().min(3, "Le nom d'utilisateur doit comporter au moins 3 caractères."),
@@ -45,4 +46,43 @@ export async function signup(values: SignupInput): Promise<{ success?: string; e
     console.error('Signup error:', error);
     return { error: 'Une erreur est survenue lors de la création du compte.' };
   }
+}
+
+const loginSchema = z.object({
+  email: z.string().email('Adresse e-mail invalide.'),
+  password: z.string().min(1, 'Le mot de passe est requis.'),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
+export async function login(values: LoginInput): Promise<{ error?: string }> {
+  const validatedFields = loginSchema.safeParse(values);
+  if (!validatedFields.success) {
+    return { error: 'Champs invalides.' };
+  }
+  const { email, password } = validatedFields.data;
+
+  try {
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.email, email),
+    });
+
+    if (!existingUser) {
+      return { error: 'Email ou mot de passe incorrect.' };
+    }
+
+    const passwordMatch = await bcrypt.compare(password, existingUser.passwordHash);
+
+    if (!passwordMatch) {
+      return { error: 'Email ou mot de passe incorrect.' };
+    }
+
+    await setSession(existingUser.id);
+    
+  } catch (error) {
+    console.error('Login error:', error);
+    return { error: 'Une erreur est survenue lors de la connexion.' };
+  }
+  
+  return {};
 }
