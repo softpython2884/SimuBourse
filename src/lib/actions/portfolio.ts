@@ -137,7 +137,6 @@ export async function buyAssetAction(ticker: string, quantity: number): Promise<
     try {
         let tradeValue = 0;
         let assetName = '';
-        let assetType = '';
         
         const result = await db.transaction(async (tx) => {
             const user = await tx.query.users.findFirst({
@@ -147,19 +146,19 @@ export async function buyAssetAction(ticker: string, quantity: number): Promise<
             if (!user) throw new Error("Utilisateur non trouvé.");
             
             if (company) {
-                // --- Logic for buying COMPANY SHARES ---
+                // --- Logic for buying listed COMPANY SHARES (Secondary Market) ---
                 assetName = company.name;
-                assetType = 'Company Share';
                 const price = parseFloat(company.sharePrice);
                 tradeValue = price * quantity;
 
                 if (parseFloat(user.cash) < tradeValue) throw new Error("Fonds insuffisants.");
 
-                // Debit user, credit company
+                // Debit user cash
                 await tx.update(users).set({ cash: (parseFloat(user.cash) - tradeValue).toFixed(2) }).where(eq(users.id, session.id));
-                await tx.update(companies).set({ cash: (parseFloat(company.cash) + tradeValue).toFixed(2) }).where(eq(companies.id, company.id));
+
+                // The company's cash and total shares are NOT affected in a secondary market trade.
                 
-                // Add shares to user
+                // Add shares to user's portfolio.
                 const existingShares = await tx.query.companyShares.findFirst({
                     where: and(eq(companyShares.userId, session.id), eq(companyShares.companyId, company.id))
                 });
@@ -176,7 +175,6 @@ export async function buyAssetAction(ticker: string, quantity: number): Promise<
                 if (!asset) throw new Error("Actif non trouvé.");
                 
                 assetName = asset.name;
-                assetType = asset.type;
                 const price = parseFloat(asset.price);
                 tradeValue = price * quantity;
 
@@ -216,10 +214,8 @@ export async function buyAssetAction(ticker: string, quantity: number): Promise<
         });
 
         // Apply market impact outside the transaction
-        if (result.success) {
-            if (company) {
-                await applyMarketImpactToCompany(ticker, tradeValue);
-            }
+        if (result.success && company) {
+            await applyMarketImpactToCompany(ticker, tradeValue);
         }
         
         revalidatePath('/portfolio');
@@ -252,7 +248,7 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
             if (!user) throw new Error("Utilisateur non trouvé.");
             
             if (company) {
-                // --- Logic for selling COMPANY SHARES ---
+                // --- Logic for selling listed COMPANY SHARES (Secondary Market) ---
                 assetName = company.name;
                 const price = parseFloat(company.sharePrice);
                 tradeValue = price * quantity;
@@ -263,15 +259,10 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
 
                 const sharesHeld = parseFloat(userShareHolding?.quantity || '0');
                 if (sharesHeld < quantity) throw new Error("Vous ne possédez pas assez de parts pour cette vente.");
-                if (parseFloat(company.cash) < tradeValue) throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter ces parts.");
+                
+                // The company's cash is NOT affected. The money comes from the buyer (market maker).
 
-                const newTotalShares = parseFloat(company.totalShares) - quantity;
-
-                // Debit company, credit user
-                await tx.update(companies).set({ 
-                    cash: (parseFloat(company.cash) - tradeValue).toFixed(2),
-                    totalShares: newTotalShares.toString(),
-                }).where(eq(companies.id, company.id));
+                // Credit user
                 await tx.update(users).set({ cash: (parseFloat(user.cash) + tradeValue).toFixed(2) }).where(eq(users.id, session.id));
 
                 // Remove shares from user
@@ -325,10 +316,8 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
         });
 
         // Apply market impact outside the transaction
-        if (result.success) {
-            if (company) {
-                await applyMarketImpactToCompany(ticker, -tradeValue); // Negative value for sell impact
-            }
+        if (result.success && company) {
+            await applyMarketImpactToCompany(ticker, -tradeValue); // Negative value for sell impact
         }
         
         revalidatePath('/portfolio');

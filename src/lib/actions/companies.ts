@@ -398,11 +398,23 @@ export async function addCashToCompany(companyId: number, amount: number): Promi
             if (!user) throw new Error("Utilisateur non trouvé.");
             if (parseFloat(user.cash) < amount) throw new Error("Fonds personnels insuffisants.");
 
-            const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId), columns: { cash: true } });
+            const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId) });
             if (!company) throw new Error("Entreprise non trouvée.");
 
+            const newCompanyCash = parseFloat(company.cash) + amount;
+            const updates: { cash: string; sharePrice?: string } = { cash: newCompanyCash.toFixed(2) };
+
+            if (!company.isListed) {
+                const totalShares = parseFloat(company.totalShares);
+                if (totalShares > 0) {
+                    const oldTotalValue = parseFloat(company.sharePrice) * totalShares;
+                    const newTotalValue = oldTotalValue + amount;
+                    updates.sharePrice = (newTotalValue / totalShares).toString();
+                }
+            }
+
             await tx.update(users).set({ cash: (parseFloat(user.cash) - amount).toFixed(2) }).where(eq(users.id, session.id));
-            await tx.update(companies).set({ cash: (parseFloat(company.cash) + amount).toFixed(2) }).where(eq(companies.id, companyId));
+            await tx.update(companies).set(updates).where(eq(companies.id, companyId));
 
             return { success: `${amount.toFixed(2)}$ ajoutés à la trésorerie de l'entreprise.` };
         });
@@ -428,14 +440,26 @@ export async function withdrawFromCompanyTreasury(companyId: number, amount: num
             const member = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)) });
             if (!member || member.role !== 'ceo') throw new Error("Seul le PDG peut retirer des fonds de la trésorerie.");
 
-            const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId), columns: { cash: true } });
+            const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId) });
             if (!company) throw new Error("Entreprise non trouvée.");
             if (parseFloat(company.cash) < amount) throw new Error("Trésorerie de l'entreprise insuffisante.");
             
             const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
             if (!user) throw new Error("Utilisateur non trouvé.");
+            
+            const newCompanyCash = parseFloat(company.cash) - amount;
+            const updates: { cash: string; sharePrice?: string } = { cash: newCompanyCash.toFixed(2) };
 
-            await tx.update(companies).set({ cash: (parseFloat(company.cash) - amount).toFixed(2) }).where(eq(companies.id, companyId));
+            if (!company.isListed) {
+                const totalShares = parseFloat(company.totalShares);
+                if (totalShares > 0) {
+                    const oldTotalValue = parseFloat(company.sharePrice) * totalShares;
+                    const newTotalValue = oldTotalValue - amount;
+                    updates.sharePrice = (newTotalValue / totalShares).toString();
+                }
+            }
+
+            await tx.update(companies).set(updates).where(eq(companies.id, companyId));
             await tx.update(users).set({ cash: (parseFloat(user.cash) + amount).toFixed(2) }).where(eq(users.id, session.id));
 
             return { success: `${amount.toFixed(2)}$ retirés de la trésorerie de l'entreprise.` };
