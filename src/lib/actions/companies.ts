@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { companies, companyMembers } from '@/lib/db/schema';
 import { getSession } from '../session';
 import { revalidatePath } from 'next/cache';
+import { eq } from 'drizzle-orm';
+import { notFound } from 'next/navigation';
 
 const createCompanySchema = z.object({
   name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50),
@@ -56,7 +58,9 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
 
 export async function getCompanies() {
   try {
-    const allCompanies = await db.query.companies.findMany();
+    const allCompanies = await db.query.companies.findMany({
+        orderBy: (companies, { desc }) => [desc(companies.createdAt)],
+    });
     return allCompanies;
   } catch (error) {
     console.error("Error fetching companies:", error);
@@ -65,3 +69,46 @@ export async function getCompanies() {
 }
 
 export type Company = Awaited<ReturnType<typeof getCompanies>>[0];
+
+
+export async function getCompanyById(companyId: number) {
+  try {
+    const company = await db.query.companies.findFirst({
+      where: eq(companies.id, companyId),
+      with: {
+        creator: {
+          columns: {
+            displayName: true,
+          }
+        },
+        members: {
+          with: {
+            user: {
+              columns: {
+                displayName: true,
+                id: true,
+              }
+            }
+          },
+           orderBy: (companyMembers, { asc }) => [asc(companyMembers.id)],
+        }
+      }
+    });
+
+    if (!company) {
+        return null;
+    }
+
+    // Convert numeric strings to numbers for easier use on the client
+    return {
+      ...company,
+      cash: parseFloat(company.cash),
+    };
+
+  } catch (error) {
+    console.error("Error fetching company by ID:", error);
+    return null;
+  }
+}
+
+export type CompanyWithDetails = NonNullable<Awaited<ReturnType<typeof getCompanyById>>>;

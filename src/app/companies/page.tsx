@@ -1,12 +1,36 @@
-import { getCompanies } from '@/lib/actions/companies';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { getCompanies, Company } from '@/lib/actions/companies';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { CreateCompanyDialog } from '@/components/create-company-dialog';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
 
-export default async function CompaniesPage() {
-  const companies = await getCompanies();
+export default function CompaniesPage() {
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchCompanies() {
+        setLoading(true);
+        const companiesData = await getCompanies();
+        setCompanies(companiesData);
+        setLoading(false);
+    }
+    fetchCompanies();
+  }, []);
+
+  if (loading) {
+    return (
+        <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+    )
+  }
 
   return (
     <Card>
@@ -39,7 +63,9 @@ export default async function CompaniesPage() {
                   </TableCell>
                   <TableCell className="font-mono">${parseFloat(company.cash).toFixed(2)}</TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="sm">Détails</Button>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/companies/${company.id}`}>Détails</Link>
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
