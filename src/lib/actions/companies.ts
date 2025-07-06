@@ -3,12 +3,11 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { companies, companyMembers, users, companyShares, companyHoldings, assets as assetsSchema, transactions } from '@/lib/db/schema';
+import { companies, companyMembers, users, companyShares, companyHoldings, assets as assetsSchema, transactions, companyMiningRigs } from '@/lib/db/schema';
 import { getSession } from '../session';
 import { revalidatePath } from 'next/cache';
 import { eq, and, desc, or, ilike, notInArray, inArray, sql } from 'drizzle-orm';
 import { getRigById } from '@/lib/mining';
-import { usePortfolio } from '@/context/portfolio-context';
 
 const createCompanySchema = z.object({
   name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50, "Le nom ne doit pas dépasser 50 caractères."),
@@ -107,27 +106,28 @@ export type CompanyHistoricalPoint = {
 export async function getCompaniesForUserDashboard() {
     const session = await getSession();
 
-    const allCompanies = await db.query.companies.findMany({
+    // First, update all company share prices based on their current NAV.
+    const allCompaniesList = await db.query.companies.findMany();
+    for (const company of allCompaniesList) {
+        const nav = await getCompanyNAV(company.id, db);
+        const totalShares = parseFloat(company.totalShares);
+        const newSharePrice = totalShares > 0 ? nav / totalShares : 0;
+        if (Math.abs(newSharePrice - parseFloat(company.sharePrice)) > 1e-9) {
+            await db.update(companies).set({ sharePrice: newSharePrice.toString() }).where(eq(companies.id, company.id));
+        }
+    }
+
+    const allCompaniesWithData = await db.query.companies.findMany({
         orderBy: (companies, { desc }) => [desc(companies.createdAt)],
     });
 
-    const companiesWithMarketData = await Promise.all(allCompanies.map(async (company) => {
-        const nav = await getCompanyNAV(company.id, db);
-        const totalShares = parseFloat(company.totalShares);
-        const sharePrice = totalShares > 0 ? nav / totalShares : 0;
-        
-        if (Math.abs(sharePrice - parseFloat(company.sharePrice)) > 1e-9) {
-            await db.update(companies).set({ sharePrice: sharePrice.toString() }).where(eq(companies.id, company.id));
-        }
-
-        const marketCap = totalShares * sharePrice;
-
+    const companiesWithMarketData = await Promise.all(allCompaniesWithData.map(async (company) => {
         const historicalData: CompanyHistoricalPoint[] = [];
         const now = new Date();
         const yesterday = new Date(now);
         yesterday.setDate(yesterday.getDate() - 1);
 
-        let lastPrice = sharePrice / (1 + (Math.random() - 0.45) * 0.1); 
+        let lastPrice = parseFloat(company.sharePrice) / (1 + (Math.random() - 0.45) * 0.1); 
         
         for (let i = 0; i < 24; i++) {
             const date = new Date(yesterday.getTime() + i * 60 * 60 * 1000);
@@ -135,17 +135,20 @@ export async function getCompaniesForUserDashboard() {
             if (lastPrice <= 0) lastPrice = 0.0001;
             historicalData.push({ date: date.toISOString(), price: lastPrice });
         }
-        historicalData.push({ date: now.toISOString(), price: sharePrice });
+        historicalData.push({ date: now.toISOString(), price: parseFloat(company.sharePrice) });
 
-        const startPrice = historicalData[0]?.price || sharePrice;
-        const change = sharePrice - startPrice;
+        const startPrice = historicalData[0]?.price || parseFloat(company.sharePrice);
+        const change = parseFloat(company.sharePrice) - startPrice;
         const changePercent = startPrice > 0 ? (change / startPrice) * 100 : 0;
         const change24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
-
+        
+        const totalShares = parseFloat(company.totalShares);
+        const sharePrice = parseFloat(company.sharePrice);
+        
         return {
             ...company,
             cash: parseFloat(company.cash),
-            marketCap: marketCap,
+            marketCap: totalShares * sharePrice,
             sharePrice: sharePrice,
             totalShares: totalShares,
             historicalData,
@@ -153,20 +156,21 @@ export async function getCompaniesForUserDashboard() {
         }
     }));
     
-    // Separate listed from private companies first
-    const listedCompanies = companiesWithMarketData.filter(c => c.isListed);
-    const privateCompanies = companiesWithMarketData.filter(c => !c.isListed);
+    // Get all listed companies, regardless of user
+    const allListedCompanies = companiesWithMarketData.filter(c => c.isListed);
 
-
+    // If there's no user, return all companies split into listed/private
     if (!session?.id) {
+        const privateCompanies = companiesWithMarketData.filter(c => !c.isListed);
         return {
             managedCompanies: [],
             investedCompanies: [],
             otherPrivateCompanies: privateCompanies,
-            listedCompanies: listedCompanies,
+            listedCompanies: allListedCompanies,
         };
     }
 
+    // If there is a user, determine their relationship with each company
     const [userMemberships, userShares] = await Promise.all([
         db.query.companyMembers.findMany({ where: eq(companyMembers.userId, session.id) }),
         db.query.companyShares.findMany({ where: eq(companyShares.userId, session.id) }),
@@ -174,23 +178,23 @@ export async function getCompaniesForUserDashboard() {
 
     const sharesByCompanyId = new Map(userShares.map(s => [s.companyId, s]));
     const membershipsByCompanyId = new Map(userMemberships.map(m => [m.companyId, m]));
-
+    
+    const userRelatedPrivateCompanyIds = new Set<number>();
+    const managedCompanyIds = new Set<number>();
+    userMemberships.forEach(m => {
+        userRelatedPrivateCompanyIds.add(m.companyId);
+        managedCompanyIds.add(m.companyId);
+    });
+    userShares.forEach(s => userRelatedPrivateCompanyIds.add(s.companyId));
+    
     const managedCompanies: any[] = [];
     const investedCompanies: any[] = [];
-    const otherPrivateCompanies: any[] = [];
-
-    // Process listed companies for the user's holdings
-    for(const company of listedCompanies) {
-         const shareData = sharesByCompanyId.get(company.id);
-         if (shareData) {
-            company.sharesHeld = parseFloat(shareData.quantity);
-         } else {
-            company.sharesHeld = 0;
-         }
-    }
     
-    // Process private companies for the user's holdings
+    const privateCompanies = companiesWithMarketData.filter(c => !c.isListed);
+
+    // Process private companies the user is related to
     for (const company of privateCompanies) {
+      if (userRelatedPrivateCompanyIds.has(company.id)) {
         const membership = membershipsByCompanyId.get(company.id);
         const shareData = sharesByCompanyId.get(company.id);
         const sharesHeld = parseFloat(shareData?.quantity || '0');
@@ -206,12 +210,27 @@ export async function getCompaniesForUserDashboard() {
             managedCompanies.push(companyData);
         } else if (sharesHeld > 0) {
             investedCompanies.push(companyData);
-        } else {
-            otherPrivateCompanies.push(companyData);
         }
+      }
+    }
+    
+    // Filter out private companies the user is related to from the "other" list
+    const otherPrivateCompanies = privateCompanies.filter(c => !userRelatedPrivateCompanyIds.has(c.id));
+    
+    // Add user's share data to listed companies
+    for(const company of allListedCompanies) {
+         const shareData = sharesByCompanyId.get(company.id);
+         if (shareData) {
+            (company as any).sharesHeld = parseFloat(shareData.quantity);
+         } else {
+            (company as any).sharesHeld = 0;
+         }
     }
 
-    return { managedCompanies, investedCompanies, otherPrivateCompanies, listedCompanies };
+    const listedCompaniesTheUserIsRelatedTo = new Set(allListedCompanies.filter(c => sharesByCompanyId.has(c.id) || managedCompanyIds.has(c.id)).map(c => c.id));
+    const finalListedCompanies = allListedCompanies.filter(c => !listedCompaniesTheUserIsRelatedTo.has(c.id));
+
+    return { managedCompanies, investedCompanies, otherPrivateCompanies, listedCompanies: allListedCompanies };
 }
 
 export type ManagedCompany = Awaited<ReturnType<typeof getCompaniesForUserDashboard>>['managedCompanies'][0];
@@ -250,7 +269,7 @@ export async function getCompanyById(companyId: number) {
               }
             }
           },
-           orderBy: (companyShares, { desc }) => [desc(companyShares.quantity)],
+           orderBy: (companyShares, { desc }) => [desc(sql`CAST(${companyShares.quantity} AS numeric)`)],
         },
         holdings: {
            orderBy: (companyHoldings, { desc }) => [desc(companyHoldings.updatedAt)],
@@ -347,8 +366,12 @@ export async function getCompanyNAV(companyId: number, tx: any) {
     const miningRigsValue = company.miningRigs.reduce((sum, r) => {
         return sum + ((getRigById(r.rigId)?.price ?? 0) * r.quantity);
     }, 0);
+    
+    const btcAsset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, 'BTC'), columns: { price: true } });
+    const btcPrice = btcAsset ? parseFloat(btcAsset.price) : 0;
+    const unclaimedBtcValue = parseFloat(company.unclaimedBtc) * btcPrice;
 
-    return parseFloat(company.cash) + holdingsValue + miningRigsValue;
+    return parseFloat(company.cash) + holdingsValue + miningRigsValue + unclaimedBtcValue;
 }
 
 export async function investInCompany(companyId: number, amount: number): Promise<{ success?: string; error?: string }> {
@@ -419,8 +442,7 @@ export async function investInCompany(companyId: number, amount: number): Promis
             return { success: `Vous avez investi ${amount.toFixed(2)}$ dans ${companyData.name} !` };
         });
 
-        revalidatePath(`/companies`);
-        revalidatePath(`/companies/${companyId}`);
+        revalidatePath(`/companies`, 'layout');
         revalidatePath('/portfolio');
         revalidatePath('/profile');
         revalidatePath('/');
@@ -487,8 +509,7 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
             return { success: `Vous avez vendu ${quantity.toFixed(4)} parts de ${company.name} pour ${proceeds.toFixed(2)}$.` };
         });
 
-        revalidatePath('/companies');
-        revalidatePath(`/companies/${companyId}`);
+        revalidatePath('/companies', 'layout');
         revalidatePath('/portfolio');
         revalidatePath('/profile');
         revalidatePath('/');
@@ -665,7 +686,7 @@ export async function listCompanyOnMarket(companyId: number): Promise<{ success?
             return { success: 'Entreprise mise en bourse avec succès !' };
         });
 
-      revalidatePath(`/companies`);
+      revalidatePath(`/companies`, 'layout');
       revalidatePath(`/companies/${companyId}`);
   
       return result;
@@ -776,8 +797,7 @@ export async function buyAssetForCompany(companyId: number, ticker: string, quan
             return { success: `L'entreprise a acheté ${quantity} de ${ticker}.` };
         });
 
-        revalidatePath(`/companies`);
-        revalidatePath(`/companies/${companyId}`);
+        revalidatePath(`/companies`, 'layout');
         return result;
     } catch (error: any) {
         return { error: error.message || "Une erreur est survenue lors de l'achat de l'actif." };
@@ -817,11 +837,71 @@ export async function sellAssetForCompany(companyId: number, holdingId: number, 
             return { success: `L'entreprise a vendu ${quantity} de ${asset.ticker}.` };
         });
 
-        revalidatePath(`/companies`);
-        revalidatePath(`/companies/${companyId}`);
+        revalidatePath(`/companies`, 'layout');
         return result;
 
     } catch (error: any) {
         return { error: error.message || "Une erreur est survenue lors de la vente de l'actif." };
+    }
+}
+
+export async function buyMiningRigForCompany(companyId: number, rigId: string): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) return { error: 'Non autorisé.' };
+
+    const rigToBuy = getRigById(rigId);
+    if (!rigToBuy) {
+        return { error: 'Matériel de minage non valide.' };
+    }
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const member = await tx.query.companyMembers.findFirst({ where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)) });
+            if (!member || member.role !== 'ceo') {
+                throw new Error("Seul le PDG peut acheter du matériel de minage.");
+            }
+
+            const company = await tx.query.companies.findFirst({
+                where: eq(companies.id, companyId),
+                columns: { cash: true }
+            });
+
+            if (!company) {
+                throw new Error("Entreprise non trouvée.");
+            }
+
+            if (parseFloat(company.cash) < rigToBuy.price) {
+                throw new Error("Trésorerie de l'entreprise insuffisante.");
+            }
+
+            // Deduct cost
+            const newCash = parseFloat(company.cash) - rigToBuy.price;
+            await tx.update(companies).set({ cash: newCash.toFixed(2) }).where(eq(companies.id, companyId));
+
+            // Add or update rig
+            const existingRig = await tx.query.companyMiningRigs.findFirst({
+                where: and(eq(companyMiningRigs.companyId, companyId), eq(companyMiningRigs.rigId, rigId)),
+            });
+
+            if (existingRig) {
+                await tx.update(companyMiningRigs)
+                    .set({ quantity: existingRig.quantity + 1 })
+                    .where(eq(companyMiningRigs.id, existingRig.id));
+            } else {
+                await tx.insert(companyMiningRigs).values({
+                    companyId: companyId,
+                    rigId: rigId,
+                    quantity: 1,
+                });
+            }
+
+            return { success: `${rigToBuy.name} acheté avec succès pour l'entreprise !` };
+        });
+
+        revalidatePath(`/companies/${companyId}`);
+        return result;
+
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue lors de l'achat." };
     }
 }
