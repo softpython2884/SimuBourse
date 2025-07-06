@@ -65,9 +65,7 @@ export async function ensureAiMarkets() {
                 );
             });
         }
-        // This was causing an error because it was called during render.
-        // The page is dynamic anyway, so it will get fresh data on the next request.
-        // revalidatePath('/markets');
+        revalidatePath('/markets');
     } catch (error) {
         console.error("Error ensuring AI markets:", error);
         // Don't throw, just log the error. The page can still render with fewer markets.
@@ -186,6 +184,7 @@ export async function placeBet(outcomeId: number, marketId: number, amount: numb
         revalidatePath('/markets');
         revalidatePath('/portfolio'); // For cash update
         revalidatePath('/profile'); // For cash update
+        revalidatePath('/'); // For cash update in dashboard
         return result;
 
     } catch (error: any) {

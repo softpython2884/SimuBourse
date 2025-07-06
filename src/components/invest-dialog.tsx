@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { CompanyWithDetails } from '@/lib/actions/companies';
 import { investInCompany } from '@/lib/actions/companies';
+import { useRouter } from 'next/navigation';
 
 interface InvestDialogProps {
   company: CompanyWithDetails;
@@ -26,8 +27,9 @@ const formSchema = z.object({
 
 export function InvestDialog({ company, children }: InvestDialogProps) {
   const [open, setOpen] = useState(false);
-  const { cash } = usePortfolio();
+  const { cash, refreshPortfolio } = usePortfolio();
   const { toast } = useToast();
+  const router = useRouter();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -44,6 +46,8 @@ export function InvestDialog({ company, children }: InvestDialogProps) {
       toast({ variant: 'destructive', title: 'Erreur', description: result.error });
     } else if (result.success) {
       toast({ title: 'Succès', description: result.success });
+      await refreshPortfolio();
+      router.refresh();
       setOpen(false);
       form.reset();
     }
@@ -97,7 +101,7 @@ export function InvestDialog({ company, children }: InvestDialogProps) {
                <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
                <Button type="submit" disabled={form.formState.isSubmitting || amount > cash || !form.formState.isValid}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Investir ${amount.toFixed(2)}
+                Investir ${amount > 0 ? amount.toFixed(2) : '0.00'}
               </Button>
             </DialogFooter>
           </form>

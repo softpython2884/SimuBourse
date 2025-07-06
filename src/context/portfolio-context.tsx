@@ -74,6 +74,7 @@ interface PortfolioContextType {
   updateUserProfile: (data: ProfileUpdateInput) => Promise<void>;
   buyMiningRig: (rigId: string) => Promise<void>;
   claimRewardsNow: () => Promise<void>;
+  refreshPortfolio: () => Promise<void>;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -213,6 +214,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     loading: authLoading || loading,
     buyAsset, sellAsset, getHoldingQuantity, updateUserProfile, buyMiningRig,
     claimRewardsNow,
+    refreshPortfolio: fetchPortfolio,
   };
 
   return (

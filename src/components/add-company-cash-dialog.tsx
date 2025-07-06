@@ -12,6 +12,7 @@ import { usePortfolio } from '@/context/portfolio-context';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { addCashToCompany } from '@/lib/actions/companies';
+import { useRouter } from 'next/navigation';
 
 interface AddCompanyCashDialogProps {
   companyId: number;
@@ -24,8 +25,9 @@ const formSchema = z.object({
 
 export function AddCompanyCashDialog({ companyId, children }: AddCompanyCashDialogProps) {
   const [open, setOpen] = useState(false);
-  const { cash } = usePortfolio();
+  const { cash, refreshPortfolio } = usePortfolio();
   const { toast } = useToast();
+  const router = useRouter();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -41,6 +43,8 @@ export function AddCompanyCashDialog({ companyId, children }: AddCompanyCashDial
       toast({ variant: 'destructive', title: 'Erreur', description: result.error });
     } else if (result.success) {
       toast({ title: 'Succès', description: result.success });
+      await refreshPortfolio();
+      router.refresh();
       setOpen(false);
       form.reset();
     }

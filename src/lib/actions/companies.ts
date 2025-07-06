@@ -64,6 +64,8 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
 
     revalidatePath('/companies');
     revalidatePath('/portfolio');
+    revalidatePath('/profile');
+    revalidatePath('/');
     return result;
   } catch (error: any) {
     // Check for unique constraint violation
@@ -429,6 +431,7 @@ export async function addCashToCompany(companyId: number, amount: number): Promi
         revalidatePath(`/companies/${companyId}`);
         revalidatePath('/portfolio');
         revalidatePath('/profile');
+        revalidatePath('/');
         return result;
 
     } catch (error: any) {

@@ -39,7 +39,7 @@ const companyFormSchema = z.object({
 export function CreateCompanyDialog() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
-  const { cash } = usePortfolio();
+  const { cash, refreshPortfolio } = usePortfolio();
   const router = useRouter();
   const creationCost = 1000;
 
@@ -59,6 +59,7 @@ export function CreateCompanyDialog() {
       toast({ variant: 'destructive', title: "Échec de la création", description: result.error });
     } else if (result.success) {
       toast({ title: "Succès", description: result.success });
+      await refreshPortfolio();
       setOpen(false);
       form.reset();
       router.refresh();

@@ -15,6 +15,7 @@ import { placeBet } from '@/lib/actions/markets';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { MarketWithOutcomes } from '@/lib/actions/markets';
+import { useRouter } from 'next/navigation';
 
 interface PlaceBetDialogProps {
   market: MarketWithOutcomes;
@@ -28,8 +29,9 @@ const formSchema = z.object({
 
 export function PlaceBetDialog({ market, children }: PlaceBetDialogProps) {
   const [open, setOpen] = useState(false);
-  const { cash } = usePortfolio();
+  const { cash, refreshPortfolio } = usePortfolio();
   const { toast } = useToast();
+  const router = useRouter();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -46,6 +48,8 @@ export function PlaceBetDialog({ market, children }: PlaceBetDialogProps) {
       toast({ variant: 'destructive', title: 'Erreur', description: result.error });
     } else if (result.success) {
       toast({ title: 'Succès', description: result.success });
+      await refreshPortfolio();
+      router.refresh();
       setOpen(false);
       form.reset();
     }
@@ -119,7 +123,7 @@ export function PlaceBetDialog({ market, children }: PlaceBetDialogProps) {
                <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
                <Button type="submit" disabled={form.formState.isSubmitting || amount > cash || !form.formState.isValid}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Parier ${amount.toFixed(2)}
+                Parier ${amount > 0 ? amount.toFixed(2) : '0.00'}
               </Button>
             </DialogFooter>
           </form>
