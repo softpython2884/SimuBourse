@@ -54,7 +54,9 @@ export async function ensureAiMarkets() {
                 );
             });
         }
-        revalidatePath('/markets');
+        // This was causing an error because it was called during render.
+        // The page is dynamic anyway, so it will get fresh data on the next request.
+        // revalidatePath('/markets');
     } catch (error) {
         console.error("Error ensuring AI markets:", error);
         // Don't throw, just log the error. The page can still render with fewer markets.

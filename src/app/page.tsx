@@ -31,6 +31,7 @@ export default function Home() {
         const currentPrice = getAssetByTicker(holding.ticker)?.price || holding.avgCost;
         return total + (currentPrice * holding.quantity);
     }, 0);
+    // The total portfolio value is the sum of cash and the value of all assets.
     return cash + assetsValue;
   }, [cash, holdings, getAssetByTicker]);
 
