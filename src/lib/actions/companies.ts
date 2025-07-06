@@ -324,6 +324,73 @@ export async function investInCompany(companyId: number, amount: number): Promis
     }
 }
 
+export async function sellShares(companyId: number, quantity: number): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) {
+        return { error: "Vous devez être connecté pour vendre des parts." };
+    }
+    if (quantity <= 0) {
+        return { error: "La quantité doit être positive." };
+    }
+
+    try {
+        const result = await db.transaction(async (tx) => {
+            const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
+            if (!user) throw new Error("Utilisateur non trouvé.");
+
+            const companyData = await getCompanyById(companyId); // This function calculates current share price
+            if (!companyData) throw new Error("Entreprise non trouvée.");
+
+            const userShareHolding = await tx.query.companyShares.findFirst({
+                where: and(eq(companyShares.userId, session.id), eq(companyShares.companyId, companyId))
+            });
+
+            const sharesHeld = parseFloat(userShareHolding?.quantity || '0');
+            if (sharesHeld < quantity) {
+                throw new Error("Vous ne possédez pas assez de parts pour cette vente.");
+            }
+
+            const proceeds = quantity * companyData.sharePrice;
+            if (companyData.cash < proceeds) {
+                throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter ces parts.");
+            }
+            
+            // Perform transaction
+            const newCompanyCash = companyData.cash - proceeds;
+            const newTotalShares = companyData.totalShares - quantity;
+            const newUserCash = parseFloat(user.cash) + proceeds;
+            
+            await tx.update(companies).set({ 
+                cash: newCompanyCash.toFixed(2),
+                totalShares: newTotalShares.toString(),
+            }).where(eq(companies.id, companyId));
+
+            await tx.update(users).set({ cash: newUserCash.toFixed(2) }).where(eq(users.id, session.id));
+            
+            const newSharesHeld = sharesHeld - quantity;
+            if (newSharesHeld < 1e-9) { // If selling all shares
+                await tx.delete(companyShares).where(eq(companyShares.id, userShareHolding!.id));
+            } else {
+                await tx.update(companyShares)
+                    .set({ quantity: newSharesHeld.toString() })
+                    .where(eq(companyShares.id, userShareHolding!.id));
+            }
+
+            return { success: `Vous avez vendu ${quantity.toFixed(4)} parts de ${companyData.name} pour ${proceeds.toFixed(2)}$.` };
+        });
+
+        revalidatePath(`/companies`);
+        revalidatePath(`/companies/${companyId}`);
+        revalidatePath('/portfolio');
+        revalidatePath('/profile');
+        revalidatePath('/');
+        return result;
+
+    } catch (error: any) {
+        return { error: error.message || "Une erreur est survenue lors de la vente." };
+    }
+}
+
 export async function buyAssetForCompany(companyId: number, ticker: string, quantity: number): Promise<{ success?: string; error?: string }> {
     const session = await getSession();
     if (!session?.id) return { error: "Vous devez être connecté pour effectuer cette action." };

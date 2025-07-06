@@ -1,3 +1,5 @@
+'use client';
+
 import { getCompaniesForUserDashboard, ManagedCompany, InvestedCompany, OtherCompany } from '@/lib/actions/companies';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -7,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { InvestDialog } from '@/components/invest-dialog';
 import type { CompanyWithDetails } from '@/lib/actions/companies';
+import { SellSharesDialog } from '@/components/sell-shares-dialog';
 
 
 function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'invested' | 'other' }) {
@@ -37,7 +40,17 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
                 <Button asChild variant="outline" size="sm">
                   <Link href={`/companies/${company.id}`}>Détails</Link>
                 </Button>
-                {type === 'other' && (
+                {type === 'invested' && (
+                    <SellSharesDialog
+                        companyId={company.id}
+                        companyName={company.name}
+                        sharePrice={company.sharePrice}
+                        sharesHeld={company.sharesHeld}
+                    >
+                        <Button size="sm" variant="destructive">Vendre</Button>
+                    </SellSharesDialog>
+                )}
+                {type !== 'managed' && (
                     <InvestDialog company={company as CompanyWithDetails}>
                         <Button size="sm">Investir</Button>
                     </InvestDialog>
