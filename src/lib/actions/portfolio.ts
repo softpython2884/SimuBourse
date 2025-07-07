@@ -1,4 +1,3 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -103,7 +102,9 @@ export async function getAuthenticatedUserProfile() {
             company: null,
         }));
 
-        const companyShareHoldings = userProfile.companyShares.map(cs => {
+        const companyShareHoldings = userProfile.companyShares
+          .filter(cs => !!cs.company) // Filter out shares with no company data
+          .map(cs => {
             const sharePrice = parseFloat(cs.company.sharePrice);
             return {
                 id: cs.id, // Using the share ID now
