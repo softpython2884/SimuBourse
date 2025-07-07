@@ -756,7 +756,7 @@ export async function claimCompanyBtc(companyId: number): Promise<{ success?: st
             return { success: `Vous avez réclamé ${amountBtc.toFixed(8)} BTC pour l'entreprise.` };
         });
 
-        revalidatePath(`/companies/${companyId}`);
+        revalidatePath('/companies', 'layout');
         return result;
 
     } catch (error: any) {

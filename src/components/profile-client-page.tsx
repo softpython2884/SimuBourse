@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useMarketData } from "@/context/market-data-context";
 import { Switch } from "./ui/switch";
+import { Label } from "./ui/label";
 
 const profileFormSchema = z.object({
   displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
