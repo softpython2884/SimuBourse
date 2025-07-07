@@ -5,3 +5,4 @@ import '@/ai/flows/summarize-financial-news.ts';
 import '@/ai/flows/recommend-investments.ts';
 import '@/ai/flows/generate-asset-news.ts';
 import '@/ai/flows/create-prediction-market.ts';
+import '@/ai/flows/auto-trader-flow.ts';

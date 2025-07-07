@@ -7,6 +7,7 @@ import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileActi
 import { buyMiningRig as buyMiningRigAction } from '@/lib/actions/mining';
 import { getRigById } from '@/lib/mining';
 import { useMarketData } from './market-data-context';
+import { getAiTradingActions } from '@/lib/actions/autotrader';
 
 export interface Holding {
   id: number;
@@ -236,38 +237,53 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (loading || market.loading || !isAutoTraderEnabled || !portfolioData) return;
 
-    const autoTradeInterval = setInterval(() => {
-        const shouldBuy = Math.random() > 0.5;
+    const runAiTrader = async () => {
+      if (!portfolioData || market.assets.length === 0) return;
 
-        if (shouldBuy && portfolioData.cash > 100) {
-            const eligibleAssets = market.assets.filter(a => a.type === 'Stock' || a.type === 'Crypto');
-            if (eligibleAssets.length === 0) return;
+      console.log('[AutoTrader] AI is thinking...');
+      
+      const aiInput = {
+        cash: portfolioData.cash,
+        holdings: portfolioData.holdings
+          .filter(h => !h.isCompanyShare) // AI only trades market assets for now
+          .map(h => ({ ticker: h.ticker, name: h.name, quantity: h.quantity, avgCost: h.avgCost })),
+        marketAssets: market.assets.map(a => ({ ticker: a.ticker, name: a.name, price: a.price, change24h: a.change24h })),
+      };
+      
+      const { trades, summary } = await getAiTradingActions(aiInput);
 
-            const assetToBuy = eligibleAssets[Math.floor(Math.random() * eligibleAssets.length)];
-            const budget = portfolioData.cash * (Math.random() * 0.05 + 0.01);
-            const quantity = budget / assetToBuy.price;
-            
-            if (quantity > 0) {
-                console.log(`[AutoTrader] Buying ${quantity.toFixed(4)} of ${assetToBuy.ticker}`);
-                buyAsset(assetToBuy.ticker, quantity, undefined, undefined, false);
-            }
-        } else {
-            const holdingsToSell = portfolioData.holdings.filter(h => h.quantity > 0 && !h.isCompanyShare);
-            if (holdingsToSell.length === 0) return;
+      if (trades.length > 0) {
+        toast({
+            title: "🤖 Bot de Trading IA",
+            description: summary,
+        });
 
-            const holdingToSell = holdingsToSell[Math.floor(Math.random() * holdingsToSell.length)];
-            const quantity = holdingToSell.quantity * (Math.random() * 0.05 + 0.01);
-            
-            if (quantity > 0) {
-                console.log(`[AutoTrader] Selling ${quantity.toFixed(4)} of ${holdingToSell.ticker}`);
-                sellAsset(holdingToSell.ticker, quantity, false);
+        for (const trade of trades) {
+            console.log(`[AutoTrader] Executing ${trade.action}: ${trade.quantity} of ${trade.ticker}. Reason: ${trade.reason}`);
+            if (trade.action === 'buy') {
+                const assetPrice = market.getAssetByTicker(trade.ticker)?.price || 0;
+                if (assetPrice > 0 && portfolioData.cash > (assetPrice * trade.quantity)) {
+                     await buyAsset(trade.ticker, trade.quantity, undefined, undefined, false);
+                }
+            } else if (trade.action === 'sell') {
+                const holdingQty = getHoldingQuantity(trade.ticker);
+                if (trade.quantity <= holdingQty) {
+                     await sellAsset(trade.ticker, trade.quantity, false);
+                }
             }
         }
-    }, 20000);
+      } else {
+        console.log('[AutoTrader] AI decided to take no action this cycle.');
+      }
+    };
+
+    // Run once, then set interval
+    runAiTrader();
+    const autoTradeInterval = setInterval(runAiTrader, 60000); // Run every 60 seconds
 
     return () => clearInterval(autoTradeInterval);
 
-  }, [isAutoTraderEnabled, portfolioData, market.assets, market.loading, loading, buyAsset, sellAsset]);
+  }, [isAutoTraderEnabled, portfolioData, market.assets, market.loading, loading, buyAsset, sellAsset, getHoldingQuantity, market, toast]);
 
 
   const value = {
