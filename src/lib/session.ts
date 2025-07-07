@@ -1,38 +1,76 @@
 'use server';
 
 import 'server-only';
+import { SignJWT, jwtVerify } from 'jose';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { db } from './db';
+import { eq } from 'drizzle-orm';
+import { users } from './db/schema';
 
-// This function will now do nothing related to cookies.
-// It's kept for flow compatibility with the login action.
+const secretKey = process.env.JWT_SECRET_KEY;
+if (!secretKey) {
+    throw new Error('JWT_SECRET_KEY is not set in environment variables');
+}
+const key = new TextEncoder().encode(secretKey);
+
+const SESSION_COOKIE_NAME = 'session';
+
+export async function encrypt(payload: any) {
+    return await new SignJWT(payload)
+        .setProtectedHeader({ alg: 'HS256' })
+        .setIssuedAt()
+        .setExpirationTime('24h')
+        .sign(key);
+}
+
+export async function decrypt(input: string): Promise<any> {
+    try {
+        const { payload } = await jwtVerify(input, key, {
+            algorithms: ['HS256'],
+        });
+        return payload;
+    } catch (e) {
+        // This can happen if the token is expired or invalid
+        return null;
+    }
+}
+
 export async function setSession(userId: number) {
-  // No-op. The client will handle redirection after login.
+    // Create the session
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const session = await encrypt({ userId, expires });
+
+    // Save the session in a cookie
+    cookies().set(SESSION_COOKIE_NAME, session, { expires, httpOnly: true, path: '/' });
 }
 
-// This function will always return the FIRST user from the database,
-// acting as a mock logged-in user for development. This avoids using cookies.
 export async function getSession() {
-  try {
-    // To make this work, a user must exist in the database.
-    // The signup page should be used to create at least one user.
-    const mockUser = await db.query.users.findFirst({
-        columns: {
-            id: true,
-            displayName: true,
-            email: true,
-        }
-    });
-  
-    return mockUser || null; // Return the first user found, or null if DB is empty.
-  } catch (error) {
-    console.error("Mock session retrieval error:", error);
-    return null;
-  }
+    const sessionCookie = cookies().get(SESSION_COOKIE_NAME)?.value;
+    if (!sessionCookie) return null;
+
+    const sessionPayload = await decrypt(sessionCookie);
+    if (!sessionPayload?.userId) return null;
+    
+    // Fetch user details from DB to ensure they still exist and have the latest info
+    try {
+        const user = await db.query.users.findFirst({
+            where: eq(users.id, sessionPayload.userId),
+            columns: {
+                id: true,
+                displayName: true,
+                email: true,
+            }
+        });
+        return user || null;
+    } catch (error) {
+        console.error("Session user retrieval error:", error);
+        return null;
+    }
 }
 
-// This function will now just redirect to the login page, simulating a logout.
 export async function deleteSession() {
-  // No cookie to delete.
-  redirect('/login');
+    // Delete the session cookie
+    cookies().set(SESSION_COOKIE_NAME, '', { httpOnly: true, expires: new Date(0), path: '/' });
+    redirect('/login');
 }
