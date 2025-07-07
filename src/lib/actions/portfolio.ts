@@ -334,3 +334,22 @@ export async function claimMiningRewards(amountBtc: number): Promise<{ success?:
         return { error: error.message || "Une erreur est survenue lors de la réclamation des récompenses." };
     }
 }
+
+export async function toggleAutoTraderStatus(isEnabled: boolean): Promise<{ success?: string; error?: string }> {
+    const session = await getSession();
+    if (!session?.id) {
+        return { error: 'Non autorisé.' };
+    }
+
+    try {
+        await db.update(users)
+            .set({ isAutoTraderEnabled: isEnabled })
+            .where(eq(users.id, session.id));
+        
+        revalidatePath('/profile');
+        return { success: `Trading automatique ${isEnabled ? 'activé' : 'désactivé'}.` };
+    } catch (error) {
+        console.error('Toggle auto trader error:', error);
+        return { error: 'Une erreur est survenue.' };
+    }
+}

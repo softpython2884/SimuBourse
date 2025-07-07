@@ -16,6 +16,7 @@ import { Input } from "./ui/input";
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useMarketData } from "@/context/market-data-context";
+import { Switch } from "./ui/switch";
 
 const profileFormSchema = z.object({
   displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
@@ -24,7 +25,7 @@ const profileFormSchema = z.object({
 
 
 export default function ProfileClientPage() {
-    const { userProfile, updateUserProfile, transactions, holdings, cash, initialCash, loading } = usePortfolio();
+    const { userProfile, updateUserProfile, transactions, holdings, cash, initialCash, loading, isAutoTraderEnabled, toggleAutoTrader } = usePortfolio();
     const { getAssetByTicker } = useMarketData();
 
     const form = useForm<z.infer<typeof profileFormSchema>>({
@@ -62,6 +63,10 @@ export default function ProfileClientPage() {
 
     async function onProfileSubmit(values: z.infer<typeof profileFormSchema>) {
       await updateUserProfile(values);
+    }
+
+    async function handleToggleAutoTrader(isEnabled: boolean) {
+        await toggleAutoTrader(isEnabled);
     }
 
     if (loading) {
@@ -180,47 +185,74 @@ export default function ProfileClientPage() {
       </TabsContent>
 
       <TabsContent value="settings">
-          <Card>
-              <CardHeader>
-                  <CardTitle>Modifier le Profil</CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onProfileSubmit)} className="space-y-4 max-w-lg">
-                          <FormField
-                              control={form.control}
-                              name="displayName"
-                              render={({ field }) => (
-                                  <FormItem>
-                                      <FormLabel>Nom d'utilisateur</FormLabel>
-                                      <FormControl>
-                                          <Input placeholder="Votre nom" {...field} />
-                                      </FormControl>
-                                      <FormMessage />
-                                  </FormItem>
-                              )}
-                          />
-                          <FormField
-                              control={form.control}
-                              name="phoneNumber"
-                              render={({ field }) => (
-                                  <FormItem>
-                                      <FormLabel>Numéro de téléphone</FormLabel>
-                                      <FormControl>
-                                          <Input placeholder="+33 6 12 34 56 78" {...field} value={field.value ?? ''} />
-                                      </FormControl>
-                                      <FormMessage />
-                                  </FormItem>
-                              )}
-                          />
-                          <Button type="submit" disabled={form.formState.isSubmitting}>
-                              {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                              Enregistrer les modifications
-                          </Button>
-                      </form>
-                  </Form>
-              </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Modifier le Profil</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onProfileSubmit)} className="space-y-4 max-w-lg">
+                            <FormField
+                                control={form.control}
+                                name="displayName"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Nom d'utilisateur</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="Votre nom" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="phoneNumber"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Numéro de téléphone</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="+33 6 12 34 56 78" {...field} value={field.value ?? ''} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Enregistrer les modifications
+                            </Button>
+                        </form>
+                    </Form>
+                </CardContent>
+            </Card>
+
+             <Card>
+                <CardHeader>
+                    <CardTitle>Trading Automatique Intelligent</CardTitle>
+                    <CardDescription>
+                        Activez notre bot pour gérer votre portefeuille. Il achètera et vendra des actifs pour vous.
+                        Une commission de 15% sera prélevée sur les bénéfices de chaque transaction rentable.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center space-x-4 rounded-lg border p-4">
+                        <Switch 
+                            id="autotrader-switch" 
+                            checked={isAutoTraderEnabled}
+                            onCheckedChange={handleToggleAutoTrader}
+                        />
+                        <Label htmlFor="autotrader-switch" className="flex flex-col space-y-1 cursor-pointer">
+                            <span>Activer le bot de trading</span>
+                            <span className="font-normal leading-snug text-muted-foreground">
+                                Le bot commencera à trader en votre nom en arrière-plan.
+                            </span>
+                        </Label>
+                    </div>
+                </CardContent>
+            </Card>
+          </div>
       </TabsContent>
     </Tabs>
   );

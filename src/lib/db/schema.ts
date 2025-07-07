@@ -23,6 +23,7 @@ export const users = pgTable('users', {
   unclaimedBtc: numeric('unclaimed_btc', { precision: 18, scale: 8 }).default('0').notNull(),
   lastMiningUpdateAt: timestamp('last_mining_update_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  isAutoTraderEnabled: boolean('is_auto_trader_enabled').default(false).notNull(),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({

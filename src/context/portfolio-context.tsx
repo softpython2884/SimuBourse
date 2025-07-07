@@ -3,7 +3,7 @@
 import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileAction, ProfileUpdateInput, buyAssetAction, sellAssetAction, claimMiningRewards as claimMiningRewardsAction } from '@/lib/actions/portfolio';
+import { getAuthenticatedUserProfile, updateUserProfile as updateUserProfileAction, ProfileUpdateInput, buyAssetAction, sellAssetAction, claimMiningRewards as claimMiningRewardsAction, toggleAutoTraderStatus } from '@/lib/actions/portfolio';
 import { buyMiningRig as buyMiningRigAction } from '@/lib/actions/mining';
 import { getRigById } from '@/lib/mining';
 import { useMarketData } from './market-data-context';
@@ -57,6 +57,7 @@ export interface UserProfile {
   initialCash: number;
   unclaimedBtc: number;
   createdAt: Date;
+  isAutoTraderEnabled: boolean;
 }
 
 interface PortfolioData extends UserProfile {
@@ -75,12 +76,14 @@ interface PortfolioContextType {
   unclaimedRewards: number;
   totalHashRateMhs: number;
   loading: boolean;
-  buyAsset: (ticker: string, quantity: number, stopLoss?: number, takeProfit?: number) => Promise<void>;
-  sellAsset: (ticker: string, quantity: number) => Promise<void>;
+  isAutoTraderEnabled: boolean;
+  buyAsset: (ticker: string, quantity: number, stopLoss?: number, takeProfit?: number, showToast?: boolean) => Promise<void>;
+  sellAsset: (ticker: string, quantity: number, showToast?: boolean) => Promise<void>;
   getHoldingQuantity: (ticker: string) => number;
   updateUserProfile: (data: ProfileUpdateInput) => Promise<void>;
   buyMiningRig: (rigId: string) => Promise<void>;
   claimRewardsNow: () => Promise<void>;
+  toggleAutoTrader: (isEnabled: boolean) => Promise<void>;
   refreshPortfolio: () => Promise<void>;
 }
 
@@ -95,6 +98,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [unclaimedRewards, setUnclaimedRewards] = useState(0);
+  const [isAutoTraderEnabled, setIsAutoTraderEnabled] = useState(false);
 
   const fetchPortfolio = useCallback(async () => {
     if (!user) {
@@ -107,6 +111,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     if (data) {
       setPortfolioData(data as any);
       setUnclaimedRewards(data.unclaimedBtc);
+      setIsAutoTraderEnabled(data.isAutoTraderEnabled);
     } else {
       toast({ variant: 'destructive', title: 'Erreur', description: "Impossible de charger les données du portefeuille." });
       setPortfolioData(null);
@@ -130,27 +135,35 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const buyAsset = async (ticker: string, quantity: number, stopLoss?: number, takeProfit?: number) => {
+  const buyAsset = useCallback(async (ticker: string, quantity: number, stopLoss?: number, takeProfit?: number, showToast = true) => {
     const result = await buyAssetAction(ticker, quantity, stopLoss, takeProfit);
-    if (result.error) {
-      toast({ variant: 'destructive', title: "Échec de l'achat", description: result.error });
-    } else {
-      toast({ title: 'Succès', description: result.success });
-      await fetchPortfolio();
-      await market.refreshData();
+    if (showToast) {
+        if (result.error) {
+          toast({ variant: 'destructive', title: "Échec de l'achat", description: result.error });
+        } else {
+          toast({ title: 'Succès', description: result.success });
+        }
     }
-  }
+    if(!result.error){
+        await fetchPortfolio();
+        await market.refreshData();
+    }
+  }, [fetchPortfolio, market, toast]);
 
-  const sellAsset = async (ticker: string, quantity: number) => {
+  const sellAsset = useCallback(async (ticker: string, quantity: number, showToast = true) => {
     const result = await sellAssetAction(ticker, quantity);
-    if (result.error) {
-      toast({ variant: 'destructive', title: 'Échec de la vente', description: result.error });
-    } else {
-      toast({ title: 'Succès', description: result.success });
-      await fetchPortfolio();
-      await market.refreshData();
+    if (showToast) {
+        if (result.error) {
+          toast({ variant: 'destructive', title: 'Échec de la vente', description: result.error });
+        } else {
+          toast({ title: 'Succès', description: result.success });
+        }
     }
-  }
+    if(!result.error){
+        await fetchPortfolio();
+        await market.refreshData();
+    }
+  }, [fetchPortfolio, market, toast]);
 
   const buyMiningRig = async (rigId: string) => {
     const result = await buyMiningRigAction(rigId);
@@ -186,6 +199,17 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const toggleAutoTrader = async (isEnabled: boolean) => {
+    setIsAutoTraderEnabled(isEnabled); 
+    const result = await toggleAutoTraderStatus(isEnabled);
+    if (result.error) {
+        setIsAutoTraderEnabled(!isEnabled);
+        toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+    } else {
+        toast({ title: 'Succès', description: result.success });
+    }
+  };
+
   const getHoldingQuantity = (ticker: string) => {
     const holding = portfolioData?.holdings.find(h => h.ticker === ticker);
     return holding ? holding.quantity : 0;
@@ -209,6 +233,43 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     return () => clearInterval(miningInterval);
   }, [user, loading, totalHashRateMhs]);
 
+  useEffect(() => {
+    if (loading || market.loading || !isAutoTraderEnabled || !portfolioData) return;
+
+    const autoTradeInterval = setInterval(() => {
+        const shouldBuy = Math.random() > 0.5;
+
+        if (shouldBuy && portfolioData.cash > 100) {
+            const eligibleAssets = market.assets.filter(a => a.type === 'Stock' || a.type === 'Crypto');
+            if (eligibleAssets.length === 0) return;
+
+            const assetToBuy = eligibleAssets[Math.floor(Math.random() * eligibleAssets.length)];
+            const budget = portfolioData.cash * (Math.random() * 0.05 + 0.01);
+            const quantity = budget / assetToBuy.price;
+            
+            if (quantity > 0) {
+                console.log(`[AutoTrader] Buying ${quantity.toFixed(4)} of ${assetToBuy.ticker}`);
+                buyAsset(assetToBuy.ticker, quantity, undefined, undefined, false);
+            }
+        } else {
+            const holdingsToSell = portfolioData.holdings.filter(h => h.quantity > 0 && !h.isCompanyShare);
+            if (holdingsToSell.length === 0) return;
+
+            const holdingToSell = holdingsToSell[Math.floor(Math.random() * holdingsToSell.length)];
+            const quantity = holdingToSell.quantity * (Math.random() * 0.05 + 0.01);
+            
+            if (quantity > 0) {
+                console.log(`[AutoTrader] Selling ${quantity.toFixed(4)} of ${holdingToSell.ticker}`);
+                sellAsset(holdingToSell.ticker, quantity, false);
+            }
+        }
+    }, 20000);
+
+    return () => clearInterval(autoTradeInterval);
+
+  }, [isAutoTraderEnabled, portfolioData, market.assets, market.loading, loading, buyAsset, sellAsset]);
+
+
   const value = {
     userProfile: portfolioData,
     cash: portfolioData?.cash ?? 0,
@@ -219,8 +280,10 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     unclaimedRewards,
     totalHashRateMhs,
     loading: authLoading || loading,
+    isAutoTraderEnabled,
     buyAsset, sellAsset, getHoldingQuantity, updateUserProfile, buyMiningRig,
     claimRewardsNow,
+    toggleAutoTrader,
     refreshPortfolio: fetchPortfolio,
   };
 
