@@ -89,16 +89,15 @@ export function AssetChartClient({ asset }: AssetChartClientProps) {
 
     const priceRange = maxPrice - minPrice;
     
-    // For the 1H/1D view, if the price variation is very small (e.g., <1%),
-    // we create an artificial window to make the changes visible.
+    // If price variation is very small (e.g., <1%), create an artificial window to make changes visible.
     // This prevents the chart from looking flat.
-    if ((timeRange === '1H' || timeRange === '1D') && (priceRange / minPrice) < 0.01) { // less than 1% variation
+    if ((priceRange / minPrice) < 0.01) {
         const midPrice = (minPrice + maxPrice) / 2;
         const artificialPadding = midPrice * 0.005; // Creates a 1% total window
         return [midPrice - artificialPadding, midPrice + artificialPadding];
     }
 
-    // For other time ranges or larger 1D variations, use a standard 10% padding.
+    // For larger variations, use a standard 10% padding.
     const padding = priceRange * 0.1;
     
     return [minPrice - padding, maxPrice + padding];
