@@ -1,6 +1,6 @@
 # 👋 Bienvenue !
 
-Bienvenue dans ce projet publié sous le label **NightFury Devs** ⚙️  
+Bienvenue dans ce projet publié sous le label **Night Devs** ⚙️  
 Ici, tu trouveras des outils, des idées, des scripts ou des plateformes — toujours pensés pour être **utiles**, **concrets**, et souvent **mis en ligne**.
 
 ---
