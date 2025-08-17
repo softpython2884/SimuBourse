@@ -5,7 +5,7 @@ Ici, tu trouveras des outils, des idées, des scripts ou des plateformes — tou
 
 ---
 
-## 🧠 C’est quoi *NightFury Devs* ?
+## 🧠 C’est quoi *Night Devs* ?
 
 Ce n’est pas une équipe, ni un collectif.  
 C’est juste moi — un dev solo — qui bosse sur plein de projets random mais réfléchis, souvent orientés web ou outils pratiques.
