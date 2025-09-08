@@ -19,6 +19,11 @@ import { ClaimBtcButton } from '@/components/claim-btc-button';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+interface CompanyDetailPageProps {
+    params: {
+        companyId: string;
+    }
+}
 
 function getInitials(name: string) {
     if (!name) return '?';
@@ -31,7 +36,7 @@ const formatHashRate = (mhs: number) => {
     return `${mhs.toFixed(0)} MH/s`;
 };
 
-export default async function CompanyDetailPage({ params }: { params: { companyId: string } }) {
+export default async function CompanyDetailPage({ params }: CompanyDetailPageProps) {
   const companyId = parseInt(params.companyId, 10);
   if (isNaN(companyId)) {
     notFound();
