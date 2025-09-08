@@ -1,0 +1,26 @@
+{
+  "name": "SimuBourse",
+  "short_name": "SimuBourse",
+  "description": "An immersive financial simulation platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#114B5F",
+  "theme_color": "#114B5F",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-256x256.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src: "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
