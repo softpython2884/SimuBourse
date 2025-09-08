@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
-import { getAssets, AssetFromDb } from '@/lib/actions/assets';
+import { getAssets, AssetFromDb, updateAllAssetPrices } from '@/lib/actions/assets';
 import { subDays } from 'date-fns';
 
 export type HistoricalDataPoint = {
@@ -26,11 +26,9 @@ const MarketDataContext = createContext<MarketDataContextType | undefined>(undef
 export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [assets, setAssets] = useState<AssetsMap>({});
-    const [initialAssets, setInitialAssets] = useState<AssetsMap>({});
     const [historicalData, setHistoricalData] = useState<HistoricalDataMap>({});
 
-    const initializeMarket = useCallback(async () => {
-        setLoading(true);
+    const fetchData = useCallback(async () => {
         const assetsData = await getAssets();
         
         const assetsMap = assetsData.reduce((acc, asset) => {
@@ -38,80 +36,44 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
             return acc;
         }, {} as AssetsMap);
 
-        const initialAssetsMap = JSON.parse(JSON.stringify(assetsMap));
-
         setAssets(assetsMap);
-        setInitialAssets(initialAssetsMap);
+        
+        setHistoricalData(currentHistData => {
+            const newHistData = { ...currentHistData };
+            const now = new Date().toISOString();
 
-        const now = Date.now();
-        const initialHist: HistoricalDataMap = {};
-        for (const ticker in assetsMap) {
-            const asset = assetsMap[ticker];
-            const oneDayAgo = subDays(now, 1);
-            const data: HistoricalDataPoint[] = [];
-            for (let i = 0; i < 48; i++) {
-                const timestamp = oneDayAgo.getTime() + i * 30 * 60 * 1000;
-                const priceFluctuation = asset.price * (1 + (Math.random() - 0.5) * 0.1);
-                data.push({ date: new Date(timestamp).toISOString(), price: priceFluctuation });
+            for (const ticker in assetsMap) {
+                const newPoint = { date: now, price: assetsMap[ticker].price };
+                if (!newHistData[ticker] || newHistData[ticker].length === 0) {
+                     // Generate some fake historical data on first load
+                    const initialData: HistoricalDataPoint[] = [];
+                    for(let i=48; i>0; i--) {
+                        const pastDate = subDays(new Date(), i/48);
+                        const priceFluctuation = assetsMap[ticker].price * (1 + (Math.random() - 0.5) * 0.1);
+                        initialData.push({ date: pastDate.toISOString(), price: priceFluctuation });
+                    }
+                    initialData.push(newPoint);
+                    newHistData[ticker] = initialData;
+                } else {
+                    const updatedHistory = [...newHistData[ticker], newPoint].slice(-100);
+                    newHistData[ticker] = updatedHistory;
+                }
             }
-             data.push({ date: new Date(now).toISOString(), price: asset.price });
-            initialHist[ticker] = data;
-        }
+            return newHistData;
+        });
 
-        setHistoricalData(initialHist);
         setLoading(false);
     }, []);
 
     useEffect(() => {
-        initializeMarket();
-    }, [initializeMarket]);
-    
-    useEffect(() => {
-        if (loading || Object.keys(initialAssets).length === 0) return;
+        fetchData();
+        const priceUpdateInterval = setInterval(async () => {
+            await updateAllAssetPrices();
+            await fetchData();
+        }, 5000); // Update prices every 5 seconds
 
-        const simulationInterval = setInterval(() => {
-            setAssets(currentAssets => {
-                const newAssets = { ...currentAssets };
-                const updatedTickers: { [ticker: string]: number } = {};
-                
-                for (const ticker in newAssets) {
-                    const asset = { ...newAssets[ticker] };
-                    const initialPrice = initialAssets[ticker]?.price;
-                    if (!initialPrice) continue;
-
-                    const volatility = asset.type === 'Crypto' || asset.type === 'Forex' ? 0.015 : 0.005;
-                    const changeFactor = 1 + (Math.random() - 0.5) * 2 * volatility;
-                    asset.price *= changeFactor;
-                    updatedTickers[ticker] = asset.price;
-                    
-                    if (isNaN(asset.price) || !isFinite(asset.price) || asset.price <= 0) {
-                        asset.price = initialPrice;
-                    }
-
-                    const change = asset.price - initialPrice;
-                    const changePercent = (change / initialPrice) * 100;
-                    asset.change24h = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
-                    
-                    newAssets[ticker] = asset;
-                }
-
-                setHistoricalData(currentHistData => {
-                    const newHistData = { ...currentHistData };
-                    for (const ticker in updatedTickers) {
-                        const newPrice = updatedTickers[ticker];
-                        const newPoint = { date: new Date().toISOString(), price: newPrice };
-                        const updatedHistory = [...(newHistData[ticker] || []), newPoint].slice(-100);
-                        newHistData[ticker] = updatedHistory;
-                    }
-                    return newHistData;
-                });
-                
-                return newAssets;
-            });
-        }, 3000);
-
-        return () => clearInterval(simulationInterval);
-    }, [loading, initialAssets]);
+        return () => clearInterval(priceUpdateInterval);
+    }, [fetchData]);
 
     const getAssetByTicker = useCallback((ticker: string): AssetFromDb | undefined => {
         return assets[ticker];
@@ -128,7 +90,7 @@ export const MarketDataProvider = ({ children }: { children: ReactNode }) => {
         getAssetByTicker,
         getHistoricalData,
         loading,
-        refreshData: initializeMarket,
+        refreshData: fetchData,
     };
     
     return (

@@ -31,28 +31,24 @@ export async function decrypt(input: string): Promise<any> {
         });
         return payload;
     } catch (e) {
-        // This can happen if the token is expired or invalid
         return null;
     }
 }
 
 export async function setSession(userId: number) {
-    // Create the session
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const session = await encrypt({ userId, expires });
-
-    // Save the session in a cookie
-    cookies().set(SESSION_COOKIE_NAME, session, { expires, httpOnly: true, path: '/' });
+    await (await cookies()).set(SESSION_COOKIE_NAME, session, { expires, httpOnly: true, path: '/' });
 }
 
 export async function getSession() {
-    const sessionCookie = cookies().get(SESSION_COOKIE_NAME)?.value;
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
     if (!sessionCookie) return null;
 
     const sessionPayload = await decrypt(sessionCookie);
     if (!sessionPayload?.userId) return null;
     
-    // Fetch user details from DB to ensure they still exist and have the latest info
     try {
         const user = await db.query.users.findFirst({
             where: eq(users.id, sessionPayload.userId),
@@ -70,7 +66,6 @@ export async function getSession() {
 }
 
 export async function deleteSession() {
-    // Delete the session cookie
-    cookies().set(SESSION_COOKIE_NAME, '', { httpOnly: true, expires: new Date(0), path: '/' });
+    (await cookies()).set(SESSION_COOKIE_NAME, '', { httpOnly: true, expires: new Date(0), path: '/' });
     redirect('/login');
 }
