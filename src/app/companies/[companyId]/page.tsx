@@ -21,6 +21,8 @@ import { ClaimBtcButton } from '@/components/claim-btc-button';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+export const dynamic = 'force-dynamic';
+
 interface CompanyDetailPageProps {
   params: {
     companyId: string;
