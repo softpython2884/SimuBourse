@@ -24,9 +24,7 @@ interface CompanyDetailPageProps {
   params: {
     companyId: string;
   };
-  searchParams: { [key: string]: string | string[] | undefined };
 }
-
 
 function getInitials(name: string) {
     if (!name) return '?';
@@ -39,7 +37,7 @@ const formatHashRate = (mhs: number) => {
     return `${mhs.toFixed(0)} MH/s`;
 };
 
-export default async function CompanyDetailPage({ params }: CompanyDetailPageProps) {
+export default async function CompanyDetailPage({ params }: { params: { companyId: string } }) {
   const companyId = parseInt(params.companyId, 10);
   if (isNaN(companyId)) {
     notFound();

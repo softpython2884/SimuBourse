@@ -9,9 +9,8 @@ import { TradeDialog } from '@/components/trade-dialog';
 import { AssetChartClient } from '@/components/asset-chart-client';
 import { Badge } from '@/components/ui/badge';
 
-export default function AssetDetailPage() {
+export default function AssetDetailPage({ params }: { params: { ticker: string } }) {
   const router = useRouter();
-  const params = useParams();
   const ticker = params.ticker as string;
   
   const { getAssetByTicker, loading } = useMarketData();
