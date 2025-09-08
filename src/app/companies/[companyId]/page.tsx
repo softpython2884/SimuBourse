@@ -1,3 +1,4 @@
+
 import { getCompanyById } from '@/lib/actions/companies';
 import { notFound } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -20,10 +21,12 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 interface CompanyDetailPageProps {
-    params: {
-        companyId: string;
-    }
+  params: {
+    companyId: string;
+  };
+  searchParams: { [key: string]: string | string[] | undefined };
 }
+
 
 function getInitials(name: string) {
     if (!name) return '?';
@@ -399,3 +402,5 @@ export default async function CompanyDetailPage({ params }: CompanyDetailPagePro
     </div>
   );
 }
+
+    
