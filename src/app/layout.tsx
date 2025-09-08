@@ -6,6 +6,7 @@ import { AppHeader } from '@/components/layout/header';
 import { AuthProvider } from '@/context/auth-context';
 import { PortfolioProvider } from '@/context/portfolio-context';
 import { MarketDataProvider } from '@/context/market-data-context';
+import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 
 export const metadata: Metadata = {
   title: 'SimuBourse',
@@ -44,6 +45,7 @@ export default function RootLayout({
                 </div>
               </div>
               <Toaster />
+              <PwaInstallPrompt />
             </PortfolioProvider>
           </MarketDataProvider>
         </AuthProvider>
