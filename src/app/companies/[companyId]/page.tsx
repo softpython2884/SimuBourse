@@ -1,4 +1,5 @@
 
+
 import { getCompanyById } from '@/lib/actions/companies';
 import { notFound } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -37,7 +38,7 @@ const formatHashRate = (mhs: number) => {
     return `${mhs.toFixed(0)} MH/s`;
 };
 
-export default async function CompanyDetailPage({ params }: { params: { companyId: string } }) {
+export default async function CompanyDetailPage({ params }: CompanyDetailPageProps) {
   const companyId = parseInt(params.companyId, 10);
   if (isNaN(companyId)) {
     notFound();
@@ -400,5 +401,3 @@ export default async function CompanyDetailPage({ params }: { params: { companyI
     </div>
   );
 }
-
-    
