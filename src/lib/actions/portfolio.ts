@@ -164,8 +164,8 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
             const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
             if (!asset) throw new Error("Actif non trouvé.");
             
-            const price = parseFloat(asset.price);
-            const tradeValue = price * quantity;
+            const currentPrice = parseFloat(asset.price);
+            const tradeValue = currentPrice * quantity;
 
             if (parseFloat(user.cash) < tradeValue) throw new Error("Fonds insuffisants.");
             
@@ -184,7 +184,7 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
                 await tx.update(holdings).set({ quantity: newTotalQuantity.toString(), avgCost: newAvgCost.toString(), updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
                 holdingId = existingHolding.id;
             } else {
-                const [newHolding] = await tx.insert(holdings).values({ userId: session.id, ticker: asset.ticker, name: asset.name, type: asset.type, quantity: quantity.toString(), avgCost: price.toString() }).returning({id: holdings.id});
+                const [newHolding] = await tx.insert(holdings).values({ userId: session.id, ticker: asset.ticker, name: asset.name, type: asset.type, quantity: quantity.toString(), avgCost: currentPrice.toString() }).returning({id: holdings.id});
                 holdingId = newHolding.id;
             }
 
@@ -194,7 +194,7 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
                 ticker: ticker,
                 name: asset.name,
                 quantity: quantity.toString(),
-                price: price.toString(),
+                price: currentPrice.toString(),
                 value: tradeValue.toString(),
             });
 
@@ -248,8 +248,8 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
             const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
             if (!asset) throw new Error("Actif non trouvé.");
             
-            const price = parseFloat(asset.price);
-            const tradeValue = price * quantity;
+            const currentPrice = parseFloat(asset.price);
+            const tradeValue = currentPrice * quantity;
 
             const existingHolding = await tx.query.holdings.findFirst({
                 where: and(eq(holdings.userId, session.id), eq(holdings.ticker, asset.ticker)),
@@ -275,7 +275,7 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
                 ticker: ticker,
                 name: asset.name,
                 quantity: quantity.toString(),
-                price: price.toString(),
+                price: currentPrice.toString(),
                 value: tradeValue.toString(),
             });
             
@@ -334,3 +334,5 @@ export async function claimMiningRewards(amountBtc: number): Promise<{ success?:
         return { error: error.message || "Une erreur est survenue lors de la réclamation des récompenses." };
     }
 }
+
+    

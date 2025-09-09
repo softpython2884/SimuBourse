@@ -435,6 +435,7 @@ export async function investInCompany(companyId: number, amount: number): Promis
             await tx.update(companies).set({ 
                 cash: newCompanyCash.toString(),
                 totalShares: newTotalShares.toString(),
+                sharePrice: sharePrice.toString(), // Update share price at time of transaction
             }).where(eq(companies.id, companyId));
             
             await tx.insert(transactions).values({
@@ -482,10 +483,10 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
             const sharePrice = currentTotalShares > 0 ? currentNav / currentTotalShares : 0;
             const proceeds = sharePrice * quantity;
 
-            // New 35/65 rule, but non-blocking
-            const companyLiability = proceeds * 0.35;
             const companyCash = parseFloat(company.cash);
-            const paymentFromCompany = Math.min(companyCash, companyLiability);
+            if (companyCash < proceeds && !company.isListed) {
+                throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter vos parts.");
+            }
 
             const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
             if (!user) throw new Error("Utilisateur non trouvé.");
@@ -499,13 +500,21 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
             } else {
                 await tx.update(companyShares).set({ quantity: newSharesHeld.toString() }).where(eq(companyShares.id, userShareHolding!.id));
             }
+            
+            let newCompanyCash = companyCash;
+            let newTotalShares = currentTotalShares;
+            
+            // If the company is private, it buys back its own shares.
+            if (!company.isListed) {
+                newCompanyCash -= proceeds;
+                newTotalShares -= quantity;
+            }
+            // If listed, the shares are sold to the market, company cash/shares are unaffected.
 
-            // Company cash decreases by what it paid, total shares decrease by amount sold
-            const newCompanyCash = companyCash - paymentFromCompany;
-            const newTotalShares = parseFloat(company.totalShares) - quantity;
             await tx.update(companies).set({ 
                 cash: newCompanyCash.toString(),
                 totalShares: newTotalShares.toString(),
+                sharePrice: sharePrice.toString(),
             }).where(eq(companies.id, companyId));
 
              await tx.insert(transactions).values({
@@ -780,8 +789,9 @@ export async function buyAssetForCompany(companyId: number, ticker: string, quan
 
             const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
             if (!asset) throw new Error("Actif à acheter non trouvé.");
-
-            const tradeValue = parseFloat(asset.price) * quantity;
+            
+            const currentPrice = parseFloat(asset.price);
+            const tradeValue = currentPrice * quantity;
             if (parseFloat(company.cash) < tradeValue) throw new Error("Trésorerie de l'entreprise insuffisante.");
 
             await tx.update(companies).set({ cash: sql`${companies.cash} - ${tradeValue}` }).where(eq(companies.id, companyId));
@@ -803,7 +813,7 @@ export async function buyAssetForCompany(companyId: number, ticker: string, quan
                     name: asset.name,
                     type: asset.type,
                     quantity: quantity.toString(),
-                    avgCost: asset.price,
+                    avgCost: currentPrice.toString(),
                 });
             }
 
@@ -813,7 +823,7 @@ export async function buyAssetForCompany(companyId: number, ticker: string, quan
                 ticker: asset.ticker,
                 name: asset.name,
                 quantity: quantity.toString(),
-                price: asset.price,
+                price: currentPrice.toString(),
                 value: tradeValue.toString(),
             });
 
@@ -847,7 +857,8 @@ export async function sellAssetForCompany(companyId: number, holdingId: number, 
             const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, holdingToSell.ticker) });
             if (!asset) throw new Error("Actif non trouvé sur le marché.");
 
-            const tradeValue = parseFloat(asset.price) * quantity;
+            const currentPrice = parseFloat(asset.price);
+            const tradeValue = currentPrice * quantity;
             
             await tx.update(companies).set({ cash: sql`${companies.cash} + ${tradeValue}` }).where(eq(companies.id, companyId));
 
@@ -864,7 +875,7 @@ export async function sellAssetForCompany(companyId: number, holdingId: number, 
                 ticker: asset.ticker,
                 name: asset.name,
                 quantity: quantity.toString(),
-                price: asset.price,
+                price: currentPrice.toString(),
                 value: tradeValue.toString(),
             });
 
@@ -939,3 +950,5 @@ export async function buyMiningRigForCompany(companyId: number, rigId: string): 
         return { error: error.message || "Une erreur est survenue lors de l'achat." };
     }
 }
+
+    
