@@ -6,7 +6,7 @@ import {
   uniqueIndex,
   index,
 } from 'drizzle-orm/sqlite-core';
-import { relations, desc } from 'drizzle-orm';
+import { relations, desc, sql } from 'drizzle-orm';
 
 export const users = sqliteTable('users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -17,8 +17,8 @@ export const users = sqliteTable('users', {
   cash: real('cash').default(100000.00).notNull(),
   initialCash: real('initial_cash').default(100000.00).notNull(),
   unclaimedBtc: real('unclaimed_btc').default(0).notNull(),
-  lastMiningUpdateAt: integer('last_mining_update_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  lastMiningUpdateAt: integer('last_mining_update_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -51,7 +51,7 @@ export const holdings = sqliteTable('holdings', {
   type: text('type').notNull(),
   quantity: real('quantity').notNull(),
   avgCost: real('avg_cost').notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 }, (table) => {
   return {
     userTickerIdx: uniqueIndex('user_ticker_idx').on(table.userId, table.ticker),
@@ -75,7 +75,7 @@ export const transactions = sqliteTable('transactions', {
   quantity: real('quantity').notNull(),
   price: real('price').notNull(),
   value: real('value').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
 export const transactionsRelations = relations(transactions, ({ one }) => ({
@@ -92,7 +92,7 @@ export const aiNews = sqliteTable('ai_news', {
   article: text('article').notNull(),
   sentiment: text('sentiment', { enum: ['positive', 'negative', 'neutral'] }).notNull(),
   impactScore: integer('impact_score').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 }, (table) => {
   return {
     tickerCreatedAtIdx: index('ticker_created_at_idx').on(table.ticker, desc(table.createdAt)),
@@ -110,7 +110,7 @@ export const predictionMarkets = sqliteTable('prediction_markets', {
   closingAt: integer('closing_at', { mode: 'timestamp_ms' }).notNull(),
   creatorId: integer('creator_id').references(() => users.id, { onDelete: 'set null' }),
   creatorDisplayName: text('creator_display_name').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
 export const predictionMarketsRelations = relations(predictionMarkets, ({ one, many }) => ({
@@ -145,7 +145,7 @@ export const marketBets = sqliteTable('market_bets', {
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   outcomeId: integer('outcome_id').notNull().references(() => marketOutcomes.id, { onDelete: 'cascade' }),
   amount: real('amount').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
 export const marketBetsRelations = relations(marketBets, ({ one }) => ({
@@ -164,7 +164,7 @@ export const userMiningRigs = sqliteTable('user_mining_rigs', {
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   rigId: text('rig_id').notNull(),
   quantity: integer('quantity').notNull().default(1),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 }, (table) => {
   return {
     userRigIdx: uniqueIndex('user_rig_idx').on(table.userId, table.rigId),
@@ -191,8 +191,8 @@ export const companies = sqliteTable('companies', {
   totalShares: real('total_shares').default(1000.00).notNull(),
   isListed: integer('is_listed', { mode: 'boolean' }).default(false).notNull(),
   unclaimedBtc: real('unclaimed_btc').default(0).notNull(),
-  lastMiningUpdateAt: integer('last_mining_update_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  lastMiningUpdateAt: integer('last_mining_update_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
 export const companiesRelations = relations(companies, ({ one, many }) => ({
@@ -261,7 +261,7 @@ export const companyHoldings = sqliteTable('company_holdings', {
   type: text('type').notNull(),
   quantity: real('quantity').notNull(),
   avgCost: real('avg_cost').notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 }, (table) => {
   return {
     companyTickerIdx: uniqueIndex('company_holdings_ticker_idx').on(table.companyId, table.ticker),
@@ -280,7 +280,7 @@ export const companyMiningRigs = sqliteTable('company_mining_rigs', {
   companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
   rigId: text('rig_id').notNull(),
   quantity: integer('quantity').notNull().default(1),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 }, (table) => {
   return {
     companyRigIdx: uniqueIndex('company_rig_idx').on(table.companyId, table.rigId),
@@ -303,7 +303,7 @@ export const companyTransactions = sqliteTable('company_transactions', {
   quantity: real('quantity').notNull(),
   price: real('price').notNull(),
   value: real('value').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
 export const companyTransactionsRelations = relations(companyTransactions, ({ one }) => ({
@@ -322,7 +322,7 @@ export const automaticOrders = sqliteTable('automatic_orders', {
   triggerPrice: real('trigger_price').notNull(),
   quantity: real('quantity').notNull(),
   status: text('status', { enum: ['active', 'triggered', 'cancelled'] }).default('active').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(new Date()).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 }, (table) => {
   return {
     userHoldingIdx: index('auto_order_user_holding_idx').on(table.userId, table.holdingId),
