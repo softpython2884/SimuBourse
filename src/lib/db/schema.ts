@@ -339,3 +339,5 @@ export const automaticOrdersRelations = relations(automaticOrders, ({ one }) => 
     references: [holdings.id],
   }),
 }));
+
+    

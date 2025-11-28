@@ -76,7 +76,7 @@ export async function getAuthenticatedUserProfile() {
             return total + (rigData?.hashRateMhs || 0) * rig.quantity;
         }, 0);
 
-        let finalUnclaimedBtc = parseFloat(userProfile.unclaimedBtc);
+        let finalUnclaimedBtc = userProfile.unclaimedBtc;
 
         if (totalHashRateMhs > 0) {
             const now = new Date();
@@ -89,7 +89,7 @@ export async function getAuthenticatedUserProfile() {
                 finalUnclaimedBtc += earnedOffline;
                 
                 await db.update(users)
-                  .set({ unclaimedBtc: finalUnclaimedBtc.toString(), lastMiningUpdateAt: now })
+                  .set({ unclaimedBtc: finalUnclaimedBtc, lastMiningUpdateAt: now })
                   .where(eq(users.id, session.id));
             }
         }
@@ -97,14 +97,11 @@ export async function getAuthenticatedUserProfile() {
         const regularHoldings = userProfile.holdings.map(h => ({
             ...h,
             isCompanyShare: false,
-            quantity: parseFloat(h.quantity),
-            avgCost: parseFloat(h.avgCost),
             updatedAt: new Date(h.updatedAt),
             company: null,
         }));
 
         const companyShareHoldings = userProfile.companyShares.map(cs => {
-            const sharePrice = parseFloat(cs.company.sharePrice);
             return {
                 id: cs.id, // Using the share ID now
                 userId: cs.userId,
@@ -112,14 +109,13 @@ export async function getAuthenticatedUserProfile() {
                 name: cs.company.name,
                 type: 'Company Share',
                 isCompanyShare: true,
-                quantity: parseFloat(cs.quantity),
-                avgCost: parseFloat(cs.avgCost),
+                quantity: cs.quantity,
+                avgCost: cs.avgCost,
                 updatedAt: new Date(cs.company.createdAt),
                 company: {
                     ...cs.company,
-                    sharePrice,
-                    cash: parseFloat(cs.company.cash),
-                    totalShares: parseFloat(cs.company.totalShares),
+                    cash: cs.company.cash,
+                    totalShares: cs.company.totalShares,
                 },
             };
         });
@@ -128,9 +124,6 @@ export async function getAuthenticatedUserProfile() {
 
         const formattedTransactions = userProfile.transactions.map(t => ({
             ...t,
-            quantity: parseFloat(t.quantity),
-            price: parseFloat(t.price),
-            value: parseFloat(t.value),
             createdAt: new Date(t.createdAt),
             asset: { name: t.name, ticker: t.ticker }
         }));
@@ -138,9 +131,6 @@ export async function getAuthenticatedUserProfile() {
         return {
             ...userProfile,
             createdAt: new Date(userProfile.createdAt),
-            cash: parseFloat(userProfile.cash),
-            initialCash: parseFloat(userProfile.initialCash),
-            unclaimedBtc: finalUnclaimedBtc,
             holdings: allHoldings,
             transactions: formattedTransactions,
             miningRigs: userProfile.miningRigs,
@@ -159,17 +149,24 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
     try {
         const result = await db.transaction(async (tx) => {
             const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
-            if (!user) throw new Error("Utilisateur non trouvé.");
+            if (!user) {
+                // This case should ideally not happen if session exists
+                return { error: "Utilisateur non trouvé." };
+            }
             
             const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
-            if (!asset) throw new Error("Actif non trouvé.");
+            if (!asset) {
+                 return { error: "Actif non trouvé." };
+            }
             
-            const currentPrice = parseFloat(asset.price);
+            const currentPrice = asset.price;
             const tradeValue = currentPrice * quantity;
 
-            if (parseFloat(user.cash) < tradeValue) throw new Error("Fonds insuffisants.");
+            if (user.cash < tradeValue) {
+                return { error: "Fonds insuffisants." };
+            }
             
-            await tx.update(users).set({ cash: (parseFloat(user.cash) - tradeValue).toString() }).where(eq(users.id, session.id));
+            await tx.update(users).set({ cash: user.cash - tradeValue }).where(eq(users.id, session.id));
 
             const existingHolding = await tx.query.holdings.findFirst({
                 where: and(eq(holdings.userId, session.id), eq(holdings.ticker, asset.ticker)),
@@ -177,14 +174,14 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
 
             let holdingId: number;
             if (existingHolding) {
-                const existingQuantity = parseFloat(existingHolding.quantity);
-                const existingAvgCost = parseFloat(existingHolding.avgCost);
+                const existingQuantity = existingHolding.quantity;
+                const existingAvgCost = existingHolding.avgCost;
                 const newTotalQuantity = existingQuantity + quantity;
                 const newAvgCost = ((existingAvgCost * existingQuantity) + tradeValue) / newTotalQuantity;
-                await tx.update(holdings).set({ quantity: newTotalQuantity.toString(), avgCost: newAvgCost.toString(), updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
+                await tx.update(holdings).set({ quantity: newTotalQuantity, avgCost: newAvgCost, updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
                 holdingId = existingHolding.id;
             } else {
-                const [newHolding] = await tx.insert(holdings).values({ userId: session.id, ticker: asset.ticker, name: asset.name, type: asset.type, quantity: quantity.toString(), avgCost: currentPrice.toString() }).returning({id: holdings.id});
+                const [newHolding] = await tx.insert(holdings).values({ userId: session.id, ticker: asset.ticker, name: asset.name, type: asset.type, quantity: quantity, avgCost: currentPrice }).returning({id: holdings.id});
                 holdingId = newHolding.id;
             }
 
@@ -193,9 +190,9 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
                 type: 'Buy',
                 ticker: ticker,
                 name: asset.name,
-                quantity: quantity.toString(),
-                price: currentPrice.toString(),
-                value: tradeValue.toString(),
+                quantity: quantity,
+                price: currentPrice,
+                value: tradeValue,
             });
 
             // Create automatic orders if specified
@@ -204,8 +201,8 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
                     userId: session.id,
                     holdingId: holdingId,
                     type: 'stop-loss',
-                    triggerPrice: stopLoss.toString(),
-                    quantity: quantity.toString(),
+                    triggerPrice: stopLoss,
+                    quantity: quantity,
                 });
             }
              if (takeProfit) {
@@ -213,8 +210,8 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
                     userId: session.id,
                     holdingId: holdingId,
                     type: 'take-profit',
-                    triggerPrice: takeProfit.toString(),
-                    quantity: quantity.toString(),
+                    triggerPrice: takeProfit,
+                    quantity: quantity,
                 });
             }
             
@@ -226,12 +223,16 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
             return { success: successMessage };
         });
 
-        revalidatePath('/portfolio');
-        revalidatePath('/profile');
-        revalidatePath('/');
+        if (result.success) {
+            revalidatePath('/portfolio');
+            revalidatePath('/profile');
+            revalidatePath('/');
+        }
+        
         return result;
 
     } catch (error: any) {
+        console.error("Buy Asset Action Error:", error);
         return { error: error.message || "Une erreur est survenue lors de l'achat." };
     }
 }
@@ -248,21 +249,21 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
             const asset = await tx.query.assets.findFirst({ where: eq(assetsSchema.ticker, ticker) });
             if (!asset) throw new Error("Actif non trouvé.");
             
-            const currentPrice = parseFloat(asset.price);
+            const currentPrice = asset.price;
             const tradeValue = currentPrice * quantity;
 
             const existingHolding = await tx.query.holdings.findFirst({
                 where: and(eq(holdings.userId, session.id), eq(holdings.ticker, asset.ticker)),
             });
             
-            const holdingQuantity = parseFloat(existingHolding?.quantity || '0');
+            const holdingQuantity = existingHolding?.quantity || 0;
             if (!existingHolding || holdingQuantity < quantity) throw new Error("Quantité d'actifs insuffisante pour la vente.");
 
-            await tx.update(users).set({ cash: (parseFloat(user.cash) + tradeValue).toString() }).where(eq(users.id, session.id));
+            await tx.update(users).set({ cash: user.cash + tradeValue }).where(eq(users.id, session.id));
 
             const newQuantity = holdingQuantity - quantity;
             if (newQuantity > 1e-9) { 
-                await tx.update(holdings).set({ quantity: newQuantity.toString(), updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
+                await tx.update(holdings).set({ quantity: newQuantity, updatedAt: new Date() }).where(eq(holdings.id, existingHolding.id));
             } else {
                 // If selling all, also cancel any associated automatic orders
                 await tx.delete(automaticOrders).where(eq(automaticOrders.holdingId, existingHolding.id));
@@ -274,9 +275,9 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
                 type: 'Sell',
                 ticker: ticker,
                 name: asset.name,
-                quantity: quantity.toString(),
-                price: currentPrice.toString(),
-                value: tradeValue.toString(),
+                quantity: quantity,
+                price: currentPrice,
+                value: tradeValue,
             });
             
             return { success: `Vente de ${quantity} ${ticker} réussie !` };
@@ -305,9 +306,9 @@ export async function claimMiningRewards(amountBtc: number): Promise<{ success?:
             });
 
             if (existingHolding) {
-                const newQuantity = parseFloat(existingHolding.quantity) + amountBtc;
+                const newQuantity = existingHolding.quantity + amountBtc;
                 await tx.update(holdings)
-                    .set({ quantity: newQuantity.toString(), updatedAt: new Date() })
+                    .set({ quantity: newQuantity, updatedAt: new Date() })
                     .where(eq(holdings.id, existingHolding.id));
             } else {
                 await tx.insert(holdings).values({
@@ -315,13 +316,13 @@ export async function claimMiningRewards(amountBtc: number): Promise<{ success?:
                     ticker: 'BTC',
                     name: 'Bitcoin',
                     type: 'Crypto',
-                    quantity: amountBtc.toString(),
-                    avgCost: '0', 
+                    quantity: amountBtc,
+                    avgCost: 0, 
                 });
             }
 
             await tx.update(users)
-                .set({ unclaimedBtc: '0', lastMiningUpdateAt: new Date() })
+                .set({ unclaimedBtc: 0, lastMiningUpdateAt: new Date() })
                 .where(eq(users.id, session.id));
 
             return { success: `Vous avez réclamé ${amountBtc.toFixed(8)} BTC.` };
@@ -334,5 +335,7 @@ export async function claimMiningRewards(amountBtc: number): Promise<{ success?:
         return { error: error.message || "Une erreur est survenue lors de la réclamation des récompenses." };
     }
 }
+
+    
 
     
