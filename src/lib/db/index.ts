@@ -1,15 +1,13 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import Database from 'better-sqlite3';
 import * as schema from './schema';
 import * as d from 'dotenv';
+import { initializeDatabase } from './init';
 d.config({ path: '.env' });
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("La variable d'environnement DATABASE_URL est manquante.");
-}
+const sqlite = new Database('sqlite.db');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+// This will run once to ensure the database schema is created.
+initializeDatabase(sqlite);
 
-export const db = drizzle(pool, { schema });
+export const db = drizzle(sqlite, { schema });

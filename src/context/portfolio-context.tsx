@@ -19,11 +19,11 @@ export interface Holding {
   updatedAt: Date;
   isCompanyShare: boolean;
   company?: {
-      id: number;
-      name: string;
-      ticker: string;
-      isListed: boolean;
-      sharePrice: number;
+    id: number;
+    name: string;
+    ticker: string;
+    isListed: boolean;
+    sharePrice: number;
   } | null;
 }
 
@@ -60,9 +60,9 @@ export interface UserProfile {
 }
 
 interface PortfolioData extends UserProfile {
-    holdings: Holding[];
-    transactions: Transaction[];
-    miningRigs: UserMiningRig[];
+  holdings: Holding[];
+  transactions: Transaction[];
+  miningRigs: UserMiningRig[];
 }
 
 interface PortfolioContextType {
@@ -75,8 +75,8 @@ interface PortfolioContextType {
   unclaimedRewards: number;
   totalHashRateMhs: number;
   loading: boolean;
-  buyAsset: (ticker: string, quantity: number, stopLoss?: number, takeProfit?: number) => Promise<void>;
-  sellAsset: (ticker: string, quantity: number) => Promise<void>;
+  buyAsset: (ticker: string, quantity: number, currentPrice: number, stopLoss?: number, takeProfit?: number) => Promise<void>;
+  sellAsset: (ticker: string, quantity: number, currentPrice: number) => Promise<void>;
   getHoldingQuantity: (ticker: string) => number;
   updateUserProfile: (data: ProfileUpdateInput) => Promise<void>;
   buyMiningRig: (rigId: string) => Promise<void>;
@@ -130,8 +130,8 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const buyAsset = async (ticker: string, quantity: number, stopLoss?: number, takeProfit?: number) => {
-    const result = await buyAssetAction(ticker, quantity, stopLoss, takeProfit);
+  const buyAsset = async (ticker: string, quantity: number, currentPrice: number, stopLoss?: number, takeProfit?: number) => {
+    const result = await buyAssetAction(ticker, quantity, currentPrice, stopLoss, takeProfit);
     if (result.error) {
       toast({ variant: 'destructive', title: "Échec de l'achat", description: result.error });
     } else {
@@ -141,8 +141,8 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
-  const sellAsset = async (ticker: string, quantity: number) => {
-    const result = await sellAssetAction(ticker, quantity);
+  const sellAsset = async (ticker: string, quantity: number, currentPrice: number) => {
+    const result = await sellAssetAction(ticker, quantity, currentPrice);
     if (result.error) {
       toast({ variant: 'destructive', title: 'Échec de la vente', description: result.error });
     } else {
@@ -165,24 +165,24 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 
   const claimRewardsNow = async () => {
     const rewardsToClaim = unclaimedRewards;
-    if (rewardsToClaim < 1e-9) { 
-        toast({
-            variant: 'destructive',
-            title: 'Erreur',
-            description: 'Aucune récompense significative à réclamer.'
-        });
-        return;
+    if (rewardsToClaim < 1e-9) {
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Aucune récompense significative à réclamer.'
+      });
+      return;
     }
 
     setUnclaimedRewards(0);
 
     const result = await claimMiningRewardsAction(rewardsToClaim);
     if (result.success) {
-        toast({ title: 'Succès', description: result.success });
-        await fetchPortfolio();
+      toast({ title: 'Succès', description: result.success });
+      await fetchPortfolio();
     } else if (result.error) {
-        setUnclaimedRewards(rewardsToClaim); // Rollback on failure
-        toast({ variant: 'destructive', title: "Erreur de Réclamation", description: result.error });
+      setUnclaimedRewards(rewardsToClaim); // Rollback on failure
+      toast({ variant: 'destructive', title: "Erreur de Réclamation", description: result.error });
     }
   };
 
@@ -190,10 +190,10 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     const holding = portfolioData?.holdings.find(h => h.ticker === ticker);
     return holding ? holding.quantity : 0;
   };
-  
+
   const totalHashRateMhs = portfolioData?.miningRigs.reduce((total, rig) => {
-      const rigData = getRigById(rig.rigId);
-      return total + (rigData?.hashRateMhs || 0) * rig.quantity;
+    const rigData = getRigById(rig.rigId);
+    return total + (rigData?.hashRateMhs || 0) * rig.quantity;
   }, 0) || 0;
 
   useEffect(() => {
@@ -202,8 +202,8 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     const BTC_PER_MHS_PER_SECOND = 7.7e-12;
 
     const miningInterval = setInterval(() => {
-        const earnedThisTick = totalHashRateMhs * BTC_PER_MHS_PER_SECOND;
-        setUnclaimedRewards(prev => prev + earnedThisTick);
+      const earnedThisTick = totalHashRateMhs * BTC_PER_MHS_PER_SECOND;
+      setUnclaimedRewards(prev => prev + earnedThisTick);
     }, 1000);
 
     return () => clearInterval(miningInterval);

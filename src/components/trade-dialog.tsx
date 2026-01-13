@@ -46,8 +46,8 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
   ).refine(
     (data) => !data.takeProfit || data.takeProfit > asset.price,
     {
-       message: `Le Take-Profit doit être supérieur au prix actuel ($${asset.price.toFixed(2)}).`,
-       path: ['takeProfit'],
+      message: `Le Take-Profit doit être supérieur au prix actuel ($${asset.price.toFixed(2)}).`,
+      path: ['takeProfit'],
     }
   );
 
@@ -65,20 +65,20 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
   const totalValue = quantity * asset.price;
   const tradeTypeFr = tradeType === 'Buy' ? 'Acheter' : 'Vendre';
   const holdingQuantity = getHoldingQuantity(asset.ticker);
-  
+
   let isTradeDisabled = false;
   if (tradeType === 'Buy' && totalValue > cash) {
-      isTradeDisabled = true;
+    isTradeDisabled = true;
   }
   if (tradeType === 'Sell' && quantity > holdingQuantity) {
-      isTradeDisabled = true;
+    isTradeDisabled = true;
   }
 
   async function onSubmit(values: z.infer<typeof formSchemaWithPriceValidation>) {
     if (tradeType === 'Buy') {
-      await buyAsset(asset.ticker, values.quantity, values.stopLoss, values.takeProfit);
+      await buyAsset(asset.ticker, values.quantity, asset.price, values.stopLoss, values.takeProfit);
     } else {
-      await sellAsset(asset.ticker, values.quantity);
+      await sellAsset(asset.ticker, values.quantity, asset.price);
     }
     form.reset();
     setOpen(false);
@@ -98,7 +98,7 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
             {tradeTypeFr} {asset.name} ({asset.ticker})
           </DialogTitle>
           <DialogDescription>
-            Prix actuel: ${asset.price.toFixed(asset.price > 10 ? 2 : 4)}. 
+            Prix actuel: ${asset.price.toFixed(asset.price > 10 ? 2 : 4)}.
             {tradeType === 'Buy' ? ` Fonds disponibles: $${cash.toFixed(2)}.` : ` Vous possédez: ${holdingQuantity.toLocaleString()}.`}
           </DialogDescription>
         </DialogHeader>
@@ -110,110 +110,110 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Quantité</FormLabel>
-                   <div className="relative">
-                      <FormControl>
-                        <Input
-                            type="number"
-                            step="any"
-                            placeholder="0"
-                            {...field}
-                            value={field.value ?? ''}
-                            onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
-                        />
-                      </FormControl>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7"
-                        onClick={() => {
-                          if (asset.price > 0) {
-                            let maxQuantity: number;
-                            if(tradeType === 'Buy') {
-                                maxQuantity = cash / asset.price;
-                                if (asset.type === 'Stock') maxQuantity = Math.floor(maxQuantity);
-                            } else {
-                                maxQuantity = holdingQuantity;
-                            }
-                            form.setValue('quantity', maxQuantity > 0 ? maxQuantity : 0, { shouldValidate: true });
+                  <div className="relative">
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="0"
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
+                      />
+                    </FormControl>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7"
+                      onClick={() => {
+                        if (asset.price > 0) {
+                          let maxQuantity: number;
+                          if (tradeType === 'Buy') {
+                            maxQuantity = cash / asset.price;
+                            if (asset.type === 'Stock') maxQuantity = Math.floor(maxQuantity);
+                          } else {
+                            maxQuantity = holdingQuantity;
                           }
-                        }}
-                      >
-                        Max
-                      </Button>
-                    </div>
+                          form.setValue('quantity', maxQuantity > 0 ? maxQuantity : 0, { shouldValidate: true });
+                        }
+                      }}
+                    >
+                      Max
+                    </Button>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
-             {tradeType === 'Buy' && (
-                <Accordion type="single" collapsible className="w-full">
+
+            {tradeType === 'Buy' && (
+              <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="item-1">
-                    <AccordionTrigger>Ordre Automatique (Avancé)</AccordionTrigger>
-                    <AccordionContent>
-                        <div className="space-y-4 pt-2">
-                            <p className="text-sm text-muted-foreground">
-                                Définissez des ordres pour vendre automatiquement vos actifs si le prix atteint les seuils définis.
-                            </p>
-                            <div className="grid grid-cols-2 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="stopLoss"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Stop-Loss</FormLabel>
-                                            <FormControl>
-                                                <Input 
-                                                    type="number" 
-                                                    step="any" 
-                                                    placeholder={`< ${asset.price.toFixed(2)}`} 
-                                                    {...field}
-                                                    value={field.value ?? ''}
-                                                    onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
+                  <AccordionTrigger>Ordre Automatique (Avancé)</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <p className="text-sm text-muted-foreground">
+                        Définissez des ordres pour vendre automatiquement vos actifs si le prix atteint les seuils définis.
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="stopLoss"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Stop-Loss</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  placeholder={`< ${asset.price.toFixed(2)}`}
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
                                 />
-                                 <FormField
-                                    control={form.control}
-                                    name="takeProfit"
-                                    render={({ field }) => (
-                                         <FormItem>
-                                            <FormLabel>Take-Profit</FormLabel>
-                                            <FormControl>
-                                                <Input 
-                                                    type="number" 
-                                                    step="any" 
-                                                    placeholder={`> ${asset.price.toFixed(2)}`} 
-                                                    {...field}
-                                                    value={field.value ?? ''}
-                                                    onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="takeProfit"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Take-Profit</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  placeholder={`> ${asset.price.toFixed(2)}`}
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
                                 />
-                            </div>
-                        </div>
-                    </AccordionContent>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </AccordionContent>
                 </AccordionItem>
-                </Accordion>
-             )}
+              </Accordion>
+            )}
 
             <div className="text-sm font-medium pt-2">
               {tradeType === 'Buy' ? 'Coût total' : 'Produit total'}: ${totalValue.toFixed(2)}
             </div>
-            
+
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
                 Annuler
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting || isTradeDisabled || !form.formState.isValid}>
-                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Confirmer {tradeTypeFr}
               </Button>
             </DialogFooter>
