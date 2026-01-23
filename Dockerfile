@@ -6,13 +6,13 @@ WORKDIR /app
 # Package dosyalarını kopyala
 COPY package*.json ./
 
-# Dependencies kur
-RUN npm ci --only=production
+# TÜM dependencies kur (dev dahil - build için lazım)
+RUN npm ci
 
 # Uygulama kodunu kopyala
 COPY . .
 
-# Build et (Next.js için)
+# Build et
 RUN npm run build
 
 # Stage 2: Production aşaması (runtime)
@@ -29,7 +29,7 @@ COPY --from=builder /app/public ./public
 # Port expose et
 EXPOSE 3000
 
-# Healthcheck ekle (opsiyonel ama iyi practice)
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
