@@ -39,10 +39,10 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
 
             <TableCell className="text-right space-x-2">
                 <Button asChild variant="outline" size="sm">
-                    <Link href={`/companies/${company.id}`}>Détails</Link>
+                    <Link href={`/companies/${company.id}`}>Details</Link>
                 </Button>
                 <InvestDialog company={company as CompanyWithDetails}>
-                    <Button size="sm">Investir</Button>
+                    <Button size="sm">Invest</Button>
                 </InvestDialog>
                  {hasShares && (
                     <SellSharesDialog
@@ -51,7 +51,7 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
                         sharePrice={company.sharePrice}
                         sharesHeld={company.sharesHeld}
                     >
-                        <Button size="sm" variant="secondary">Vendre</Button>
+                        <Button size="sm" variant="secondary">Sell</Button>
                     </SellSharesDialog>
                 )}
             </TableCell>
@@ -61,9 +61,9 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
 
 function CompanyTable({ title, description, companies, type }: { title: string, description: string, companies: any[], type: 'managed' | 'invested' | 'other' }) {
     const headers = {
-        managed: ["Entreprise", "Mon Rôle", "Mes Parts", "Valeur des Parts", ""],
-        invested: ["Entreprise", "Parts Détenues", "Valeur des Parts", ""],
-        other: ["Entreprise", "Trésorerie", "Cap. Boursière", ""],
+        managed: ["Company", "My Role", "My Shares", "Shares Value", ""],
+        invested: ["Company", "Shares Held", "Shares Value", ""],
+        other: ["Company", "Cash", "Market Cap", ""],
     };
     
     return (
@@ -87,7 +87,7 @@ function CompanyTable({ title, description, companies, type }: { title: string, 
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={headers[type].length} className="h-24 text-center text-muted-foreground">
-                                    {type === 'managed' ? "Vous ne gérez aucune entreprise." : type === 'invested' ? "Vous n'avez investi dans aucune entreprise privée." : "Aucune entreprise privée disponible."}
+                                    {type === 'managed' ? "You don't manage any companies." : type === 'invested' ? "You haven't invested in any private companies." : "No private companies available."}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -103,7 +103,7 @@ function StockExchangeCard({ company }: { company: ListedCompany }) {
     const changeIsPositive = company.change24h.startsWith('+');
     const chartConfig = {
         price: {
-            label: 'Prix',
+            label: 'Price',
             color: changeIsPositive ? 'hsl(var(--chart-1))' : 'hsl(var(--destructive))',
         },
     };
@@ -116,7 +116,7 @@ function StockExchangeCard({ company }: { company: ListedCompany }) {
                         <CardTitle className="text-base">{company.name} ({company.ticker})</CardTitle>
                         <CardDescription>{company.industry}</CardDescription>
                     </div>
-                    <Badge variant="secondary">En Bourse</Badge>
+                    <Badge variant="secondary">Listed</Badge>
                 </div>
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
@@ -157,10 +157,10 @@ function StockExchangeCard({ company }: { company: ListedCompany }) {
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
                 <Button asChild variant="outline" size="sm">
-                    <Link href={`/companies/${company.id}`}>Détails</Link>
+                    <Link href={`/companies/${company.id}`}>Details</Link>
                 </Button>
                  <InvestDialog company={company as any} isListed>
-                    <Button size="sm">Acheter</Button>
+                    <Button size="sm">Buy</Button>
                 </InvestDialog>
                 {company.sharesHeld > 0 && (
                     <SellSharesDialog
@@ -170,7 +170,7 @@ function StockExchangeCard({ company }: { company: ListedCompany }) {
                         sharesHeld={company.sharesHeld}
                         isListed
                     >
-                        <Button size="sm" variant="secondary">Vendre</Button>
+                        <Button size="sm" variant="secondary">Sell</Button>
                     </SellSharesDialog>
                 )}
             </CardFooter>
@@ -190,16 +190,16 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Espace Entreprises & Bourse</h1>
-                    <p className="text-muted-foreground">Créez, gérez et tradez des entreprises dirigées par des joueurs.</p>
+                    <h1 className="text-2xl font-bold tracking-tight">Companies & Stock Exchange</h1>
+                    <p className="text-muted-foreground">Create, manage, and trade player-owned companies.</p>
                 </div>
                 <CreateCompanyDialog />
             </div>
 
             {managedCompanies.length > 0 && (
-                <CompanyTable 
-                    title="Mes Entreprises (Dirigeant)"
-                    description="Les entreprises que vous gérez directement. Vous pouvez également y détenir des parts."
+                <CompanyTable
+                    title="My Companies (CEO)"
+                    description="Companies you manage directly. You can also hold shares in them."
                     companies={managedCompanies}
                     type="managed"
                 />
@@ -207,8 +207,8 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
 
             {investedCompanies.length > 0 && (
                 <CompanyTable
-                    title="Mes Investissements (Entreprises Privées)"
-                    description="Les entreprises privées dans lesquelles vous détenez des parts mais que vous ne gérez pas."
+                    title="My Investments (Private Companies)"
+                    description="Private companies in which you hold shares but don't manage."
                     companies={investedCompanies}
                     type="invested"
                 />
@@ -216,22 +216,22 @@ export function CompaniesClientPage({ managedCompanies, investedCompanies, other
             
             <Card>
                 <CardHeader>
-                    <CardTitle>Bourse des Entreprises</CardTitle>
-                    <CardDescription>Entreprises cotées disponibles pour le trading public.</CardDescription>
+                    <CardTitle>Stock Exchange</CardTitle>
+                    <CardDescription>Listed companies available for public trading.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {listedCompanies.length > 0 ? (
                         listedCompanies.map((company) => <StockExchangeCard key={company.id} company={company} />)
                     ) : (
-                        <p className="col-span-full py-12 text-center text-muted-foreground">Aucune entreprise n'est actuellement cotée en bourse.</p>
+                        <p className="col-span-full py-12 text-center text-muted-foreground">No companies are currently listed on the stock exchange.</p>
                     )}
                 </CardContent>
             </Card>
 
             {otherPrivateCompanies.length > 0 && (
                  <CompanyTable
-                    title="Autres Entreprises Privées"
-                    description="Entreprises non cotées dans lesquelles vous pouvez réaliser un investissement initial."
+                    title="Other Private Companies"
+                    description="Unlisted companies in which you can make an initial investment."
                     companies={otherPrivateCompanies}
                     type="other"
                 />

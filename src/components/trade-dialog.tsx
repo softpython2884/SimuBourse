@@ -28,7 +28,7 @@ interface TradeDialogProps {
 }
 
 const formSchema = z.object({
-  quantity: z.coerce.number().positive({ message: 'La quantité doit être positive.' }),
+  quantity: z.coerce.number().positive({ message: 'Quantity must be positive.' }),
   stopLoss: z.coerce.number().optional(),
   takeProfit: z.coerce.number().optional(),
 });
@@ -40,13 +40,13 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
   const formSchemaWithPriceValidation = formSchema.refine(
     (data) => !data.stopLoss || data.stopLoss < asset.price,
     {
-      message: `Le Stop-Loss doit être inférieur au prix actuel ($${asset.price.toFixed(2)}).`,
+      message: `Stop-Loss must be lower than current price ($${asset.price.toFixed(2)}).`,
       path: ['stopLoss'],
     }
   ).refine(
     (data) => !data.takeProfit || data.takeProfit > asset.price,
     {
-       message: `Le Take-Profit doit être supérieur au prix actuel ($${asset.price.toFixed(2)}).`,
+       message: `Take-Profit must be higher than current price ($${asset.price.toFixed(2)}).`,
        path: ['takeProfit'],
     }
   );
@@ -63,7 +63,7 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
 
   const quantity = form.watch('quantity') || 0;
   const totalValue = quantity * asset.price;
-  const tradeTypeFr = tradeType === 'Buy' ? 'Acheter' : 'Vendre';
+  const tradeTypeFr = tradeType === 'Buy' ? 'Buy' : 'Sell';
   const holdingQuantity = getHoldingQuantity(asset.ticker);
   
   let isTradeDisabled = false;
@@ -98,8 +98,8 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
             {tradeTypeFr} {asset.name} ({asset.ticker})
           </DialogTitle>
           <DialogDescription>
-            Prix actuel: ${asset.price.toFixed(asset.price > 10 ? 2 : 4)}. 
-            {tradeType === 'Buy' ? ` Fonds disponibles: $${cash.toFixed(2)}.` : ` Vous possédez: ${holdingQuantity.toLocaleString()}.`}
+            Current price: ${asset.price.toFixed(asset.price > 10 ? 2 : 4)}.
+            {tradeType === 'Buy' ? ` Available funds: $${cash.toFixed(2)}.` : ` You own: ${holdingQuantity.toLocaleString()}.`}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -109,7 +109,7 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
               name="quantity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Quantité</FormLabel>
+                  <FormLabel>Quantity</FormLabel>
                    <div className="relative">
                       <FormControl>
                         <Input
@@ -150,11 +150,11 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
              {tradeType === 'Buy' && (
                 <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="item-1">
-                    <AccordionTrigger>Ordre Automatique (Avancé)</AccordionTrigger>
+                    <AccordionTrigger>Automatic Orders (Advanced)</AccordionTrigger>
                     <AccordionContent>
                         <div className="space-y-4 pt-2">
                             <p className="text-sm text-muted-foreground">
-                                Définissez des ordres pour vendre automatiquement vos actifs si le prix atteint les seuils définis.
+                                Set orders to automatically sell your assets if the price reaches defined thresholds.
                             </p>
                             <div className="grid grid-cols-2 gap-4">
                                 <FormField
@@ -205,16 +205,16 @@ export function TradeDialog({ asset, tradeType, children }: TradeDialogProps) {
              )}
 
             <div className="text-sm font-medium pt-2">
-              {tradeType === 'Buy' ? 'Coût total' : 'Produit total'}: ${totalValue.toFixed(2)}
+              {tradeType === 'Buy' ? 'Total Cost' : 'Total Proceeds'}: ${totalValue.toFixed(2)}
             </div>
-            
+
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-                Annuler
+                Cancel
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting || isTradeDisabled || !form.formState.isValid}>
                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Confirmer {tradeTypeFr}
+                Confirm {tradeTypeFr}
               </Button>
             </DialogFooter>
           </form>

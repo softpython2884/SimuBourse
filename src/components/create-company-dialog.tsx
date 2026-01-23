@@ -31,9 +31,9 @@ import { usePortfolio } from '@/context/portfolio-context';
 import { useRouter } from 'next/navigation';
 
 const companyFormSchema = z.object({
-  name: z.string().min(3, "Le nom doit faire au moins 3 caractères.").max(50, "Le nom ne doit pas dépasser 50 caractères."),
-  industry: z.string().min(3, "L'industrie doit faire au moins 3 caractères.").max(50, "L'industrie ne doit pas dépasser 50 caractères."),
-  description: z.string().min(10, "La description doit faire au moins 10 caractères.").max(200, "La description ne doit pas dépasser 200 caractères."),
+  name: z.string().min(3, "Name must be at least 3 characters.").max(50, "Name must not exceed 50 characters."),
+  industry: z.string().min(3, "Industry must be at least 3 characters.").max(50, "Industry must not exceed 50 characters."),
+  description: z.string().min(10, "Description must be at least 10 characters.").max(200, "Description must not exceed 200 characters."),
 });
 
 export function CreateCompanyDialog() {
@@ -56,9 +56,9 @@ export function CreateCompanyDialog() {
     const result = await createCompany(values);
 
     if (result.error) {
-      toast({ variant: 'destructive', title: "Échec de la création", description: result.error });
+      toast({ variant: 'destructive', title: "Creation Failed", description: result.error });
     } else if (result.success) {
-      toast({ title: "Succès", description: result.success });
+      toast({ title: "Success", description: result.success });
       await refreshPortfolio();
       setOpen(false);
       form.reset();
@@ -72,14 +72,14 @@ export function CreateCompanyDialog() {
         if (!isOpen) form.reset();
     }}>
       <DialogTrigger asChild>
-        <Button>Créer une nouvelle entreprise</Button>
+        <Button>Create New Company</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
-          <DialogTitle>Lancer une Nouvelle Entreprise</DialogTitle>
+          <DialogTitle>Launch a New Company</DialogTitle>
           <DialogDescription>
-            La création d'une entreprise coûte ${creationCost.toLocaleString()}. Cette somme constituera sa trésorerie initiale.
-            Vous serez nommé PDG.
+            Creating a company costs ${creationCost.toLocaleString()}. This amount will form its initial treasury.
+            You will be appointed CEO.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -89,9 +89,9 @@ export function CreateCompanyDialog() {
                     name="name"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Nom de l'entreprise</FormLabel>
+                            <FormLabel>Company Name</FormLabel>
                             <FormControl>
-                                <Input placeholder="Ex: Innovatech Solutions" {...field} />
+                                <Input placeholder="e.g., Innovatech Solutions" {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -102,15 +102,15 @@ export function CreateCompanyDialog() {
                     name="industry"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Secteur d'Activité</FormLabel>
+                            <FormLabel>Industry Sector</FormLabel>
                             <FormControl>
-                                <Input placeholder="Ex: Technologie, Énergie, Santé" {...field} />
+                                <Input placeholder="e.g., Technology, Energy, Healthcare" {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
                 />
-                
+
                 <FormField
                     control={form.control}
                     name="description"
@@ -118,18 +118,19 @@ export function CreateCompanyDialog() {
                         <FormItem>
                             <FormLabel>Description</FormLabel>
                             <FormControl>
-                                <Textarea placeholder="Décrivez brièvement la mission de votre entreprise." {...field} />
+                                <Textarea placeholder="Briefly describe your company's mission." {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
                 />
-                
+
+
                 <DialogFooter>
-                    <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
+                    <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
                     <Button type="submit" disabled={form.formState.isSubmitting || cash < creationCost}>
                         {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Créer l'entreprise (${creationCost.toLocaleString()})
+                        Create Company (${creationCost.toLocaleString()})
                     </Button>
                 </DialogFooter>
             </form>

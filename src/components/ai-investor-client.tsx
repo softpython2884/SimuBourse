@@ -15,8 +15,8 @@ import { Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const formSchema = z.object({
-  newsArticle: z.string().min(50, { message: 'L\'article de presse doit contenir au moins 50 caractères.' }),
-  portfolio: z.string().min(3, { message: 'Veuillez décrire votre portefeuille (par ex., "AAPL, GOOG, cash").' }),
+  newsArticle: z.string().min(50, { message: 'The news article must contain at least 50 characters.' }),
+  portfolio: z.string().min(3, { message: 'Please describe your portfolio (e.g., "AAPL, GOOG, cash").' }),
   riskPreferences: z.enum(['low', 'medium', 'high']),
 });
 
@@ -43,7 +43,7 @@ export function AIInvestorClient() {
       setResult(response);
     } catch (e) {
       console.error(e);
-      setError('Une erreur est survenue lors de l\'analyse de l\'article. Veuillez réessayer.');
+      setError('An error occurred while analyzing the article. Please try again.');
     }
     setIsLoading(false);
   }
@@ -57,12 +57,12 @@ export function AIInvestorClient() {
             name="newsArticle"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Article de Presse</FormLabel>
+                <FormLabel>News Article</FormLabel>
                 <FormControl>
-                  <Textarea placeholder="Collez un article de presse financier ici..." className="min-h-[150px]" {...field} />
+                  <Textarea placeholder="Paste a financial news article here..." className="min-h-[150px]" {...field} />
                 </FormControl>
                 <FormDescription>
-                  L'IA analysera le sentiment et les points clés de l'article.
+                  The AI will analyze the sentiment and key points of the article.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -74,12 +74,12 @@ export function AIInvestorClient() {
               name="portfolio"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Votre Portefeuille</FormLabel>
+                  <FormLabel>Your Portfolio</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="ex: 50% TSLA, 30% BTC, 20% cash" {...field} />
+                    <Textarea placeholder="e.g., 50% TSLA, 30% BTC, 20% cash" {...field} />
                   </FormControl>
                    <FormDescription>
-                    Fournissez un bref aperçu de vos avoirs actuels.
+                    Provide a brief overview of your current holdings.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -90,21 +90,21 @@ export function AIInvestorClient() {
               name="riskPreferences"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Préférence de Risque</FormLabel>
+                  <FormLabel>Risk Preference</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Sélectionnez votre tolérance au risque" />
+                        <SelectValue placeholder="Select your risk tolerance" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="low">Risque Faible</SelectItem>
-                      <SelectItem value="medium">Risque Moyen</SelectItem>
-                      <SelectItem value="high">Risque Élevé</SelectItem>
+                      <SelectItem value="low">Low Risk</SelectItem>
+                      <SelectItem value="medium">Medium Risk</SelectItem>
+                      <SelectItem value="high">High Risk</SelectItem>
                     </SelectContent>
                   </Select>
                    <FormDescription>
-                    Cela adaptera les suggestions d'investissement.
+                    This will tailor investment suggestions.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -113,14 +113,14 @@ export function AIInvestorClient() {
           </div>
           <Button type="submit" disabled={isLoading} size="lg">
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Analyser & Recommander
+            Analyze & Recommend
           </Button>
         </form>
       </Form>
 
       {error && (
         <Alert variant="destructive">
-          <AlertTitle>Erreur</AlertTitle>
+          <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -128,7 +128,7 @@ export function AIInvestorClient() {
       {result && (
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle>Analyse & Recommandations de l'IA</CardTitle>
+            <CardTitle>AI Analysis & Recommendations</CardTitle>
             <CardDescription>{result.summary}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -137,7 +137,7 @@ export function AIInvestorClient() {
                 <TableRow>
                   <TableHead>Ticker</TableHead>
                   <TableHead>Raisonnement</TableHead>
-                  <TableHead className="text-right">Score de Risque (1-10)</TableHead>
+                  <TableHead className="text-right">Risk Score (1-10)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

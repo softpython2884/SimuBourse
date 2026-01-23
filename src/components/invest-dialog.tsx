@@ -23,7 +23,7 @@ interface InvestDialogProps {
 }
 
 const formSchema = z.object({
-  amount: z.coerce.number().positive({ message: 'Le montant doit être supérieur à zéro.' }),
+  amount: z.coerce.number().positive({ message: 'Amount must be greater than zero.' }),
 });
 
 export function InvestDialog({ company, children, isListed = false }: InvestDialogProps) {
@@ -40,16 +40,16 @@ export function InvestDialog({ company, children, isListed = false }: InvestDial
 
   const amount = form.watch('amount') || 0;
   const sharesToReceive = amount > 0 && company.sharePrice > 0 ? (amount / company.sharePrice) : 0;
-  
-  const title = isListed ? `Acheter des actions ${company.name}` : `Investir dans ${company.name}`;
-  const buttonText = isListed ? `Acheter pour` : `Investir`;
+
+  const title = isListed ? `Buy Shares of ${company.name}` : `Invest in ${company.name}`;
+  const buttonText = isListed ? `Buy for` : `Invest`;
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const result = await investInCompany(company.id, values.amount);
     if (result.error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+      toast({ variant: 'destructive', title: 'Error', description: result.error });
     } else if (result.success) {
-      toast({ title: 'Succès', description: result.success });
+      toast({ title: 'Success', description: result.success });
       await refreshPortfolio();
       router.refresh();
       setOpen(false);
@@ -67,7 +67,7 @@ export function InvestDialog({ company, children, isListed = false }: InvestDial
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Prix de l'action : ${company.sharePrice.toFixed(4)}. Fonds disponibles : ${cash.toFixed(2)}
+            Share price: ${company.sharePrice.toFixed(4)}. Available funds: ${cash.toFixed(2)}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -77,14 +77,14 @@ export function InvestDialog({ company, children, isListed = false }: InvestDial
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Montant</FormLabel>
+                  <FormLabel>Amount</FormLabel>
                   <div className="relative">
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="0.00" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
                         value={field.value ?? ''}
                         onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
                     </FormControl>
@@ -96,13 +96,13 @@ export function InvestDialog({ company, children, isListed = false }: InvestDial
                 </FormItem>
               )}
             />
-            
+
             <div className="text-sm text-muted-foreground">
-                {amount > 0 ? `Vous recevrez ≈ ${sharesToReceive.toFixed(4)} parts de l'entreprise.` : 'Entrez un montant pour voir le nombre de parts.'}
+                {amount > 0 ? `You will receive ≈ ${sharesToReceive.toFixed(4)} company shares.` : 'Enter an amount to see number of shares.'}
             </div>
 
             <DialogFooter>
-               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
+               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
                <Button type="submit" disabled={form.formState.isSubmitting || amount > cash || !form.formState.isValid}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {buttonText} ${amount > 0 ? amount.toFixed(2) : '0.00'}

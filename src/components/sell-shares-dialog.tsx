@@ -24,7 +24,7 @@ interface SellSharesDialogProps {
 }
 
 const formSchema = z.object({
-  quantity: z.coerce.number().positive({ message: 'La quantité doit être supérieure à zéro.' }),
+  quantity: z.coerce.number().positive({ message: 'Quantity must be greater than zero.' }),
 });
 
 export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHeld, children, isListed = false }: SellSharesDialogProps) {
@@ -42,22 +42,22 @@ export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHel
 
   const quantity = form.watch('quantity') || 0;
   const proceeds = quantity * sharePrice;
-  const title = isListed ? `Vendre des actions de ${companyName}` : `Vendre des parts de ${companyName}`;
-  const description = isListed 
-    ? `Prix de vente par action : $${sharePrice.toFixed(4)}. Parts détenues : ${sharesHeld.toLocaleString(undefined, {maximumFractionDigits: 4})}`
-    : `Prix de rachat par part : $${sharePrice.toFixed(4)}. Parts détenues : ${sharesHeld.toLocaleString(undefined, {maximumFractionDigits: 4})}`;
+  const title = isListed ? `Sell Shares of ${companyName}` : `Sell Stakes in ${companyName}`;
+  const description = isListed
+    ? `Selling price per share: $${sharePrice.toFixed(4)}. Shares held: ${sharesHeld.toLocaleString(undefined, {maximumFractionDigits: 4})}`
+    : `Buyback price per share: $${sharePrice.toFixed(4)}. Shares held: ${sharesHeld.toLocaleString(undefined, {maximumFractionDigits: 4})}`;
 
   
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (values.quantity > sharesHeld) {
-        form.setError('quantity', { message: `Vous ne pouvez pas vendre plus que vos ${sharesHeld.toFixed(4)} parts.` });
+        form.setError('quantity', { message: `You cannot sell more than your ${sharesHeld.toFixed(4)} shares.` });
         return;
     }
     const result = await sellShares(companyId, values.quantity);
     if (result.error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+      toast({ variant: 'destructive', title: 'Error', description: result.error });
     } else if (result.success) {
-      toast({ title: 'Succès', description: result.success });
+      toast({ title: 'Success', description: result.success });
       await refreshPortfolio();
       router.refresh();
       setOpen(false);
@@ -85,14 +85,14 @@ export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHel
               name="quantity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Quantité à vendre</FormLabel>
+                  <FormLabel>Quantity to Sell</FormLabel>
                   <div className="relative">
                     <FormControl>
-                      <Input 
-                        type="number" 
+                      <Input
+                        type="number"
                         step="any"
-                        placeholder="0.0000" 
-                        {...field} 
+                        placeholder="0.0000"
+                        {...field}
                         value={field.value ?? ''}
                         onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
                     </FormControl>
@@ -106,14 +106,14 @@ export function SellSharesDialog({ companyId, companyName, sharePrice, sharesHel
             />
             
             <div className="text-sm text-muted-foreground">
-                {quantity > 0 ? `Vous recevrez ≈ ${proceeds.toFixed(2)}$ de la trésorerie de l'entreprise.` : 'Entrez une quantité à vendre.'}
+                {quantity > 0 ? `You will receive ≈ $${proceeds.toFixed(2)} from the company treasury.` : 'Enter a quantity to sell.'}
             </div>
 
             <DialogFooter>
-               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
+               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
                <Button type="submit" disabled={form.formState.isSubmitting || quantity > sharesHeld || !form.formState.isValid}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Vendre pour ${proceeds > 0 ? proceeds.toFixed(2) : '0.00'}
+                Sell for ${proceeds > 0 ? proceeds.toFixed(2) : '0.00'}
               </Button>
             </DialogFooter>
           </form>

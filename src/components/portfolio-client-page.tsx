@@ -61,20 +61,20 @@ export default function PortfolioClientPage() {
         <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Synthèse du Portefeuille</CardTitle>
-                    <CardDescription>Un aperçu de la performance de vos investissements.</CardDescription>
+                    <CardTitle>Portfolio Summary</CardTitle>
+                    <CardDescription>An overview of your investment performance.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-3">
                     <div className="flex flex-col space-y-1.5 rounded-lg border p-4">
-                        <span className="text-sm text-muted-foreground">Valeur Totale</span>
+                        <span className="text-sm text-muted-foreground">Total Value</span>
                         <span className="text-2xl font-bold">${portfolioValue.toFixed(2)}</span>
                     </div>
                     <div className="flex flex-col space-y-1.5 rounded-lg border p-4">
-                        <span className="text-sm text-muted-foreground">Fonds Disponibles</span>
+                        <span className="text-sm text-muted-foreground">Available Funds</span>
                         <span className="text-2xl font-bold">${cash.toFixed(2)}</span>
                     </div>
                     <div className="flex flex-col space-y-1.5 rounded-lg border p-4">
-                        <span className="text-sm text-muted-foreground">Gains/Pertes Totaux</span>
+                        <span className="text-sm text-muted-foreground">Total Gains/Losses</span>
                          <span className={`text-2xl font-bold ${totalPortfolioPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {totalPortfolioPnL >= 0 ? '+' : '-'}${Math.abs(totalPortfolioPnL).toFixed(2)} ({totalPortfolioPnLPercent.toFixed(2)}%)
                         </span>
@@ -84,18 +84,18 @@ export default function PortfolioClientPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Mes Actifs</CardTitle>
-                    <CardDescription>Liste détaillée de tous les actifs que vous possédez.</CardDescription>
+                    <CardTitle>My Assets</CardTitle>
+                    <CardDescription>Detailed list of all assets you own.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Actif</TableHead>
-                                <TableHead>Quantité</TableHead>
-                                <TableHead>Prix Actuel</TableHead>
-                                <TableHead>Valeur Actuelle</TableHead>
-                                <TableHead>Gains/Pertes</TableHead>
+                                <TableHead>Asset</TableHead>
+                                <TableHead>Quantity</TableHead>
+                                <TableHead>Current Price</TableHead>
+                                <TableHead>Current Value</TableHead>
+                                <TableHead>Gains/Losses</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -118,7 +118,7 @@ export default function PortfolioClientPage() {
                                             {holding.isCompanyShare ? (
                                                 <>
                                                     <Button asChild variant="outline" size="sm">
-                                                        <Link href={`/companies/${holding.id}`}>Détails</Link>
+                                                        <Link href={`/companies/${holding.id}`}>Details</Link>
                                                     </Button>
                                                     <SellSharesDialog
                                                         companyId={holding.id}
@@ -127,20 +127,20 @@ export default function PortfolioClientPage() {
                                                         sharesHeld={holding.quantity}
                                                         isListed={holding.company?.isListed}
                                                     >
-                                                        <Button variant="secondary" size="sm">Vendre</Button>
+                                                        <Button variant="secondary" size="sm">Sell</Button>
                                                     </SellSharesDialog>
                                                 </>
                                             ) : (
                                                 <>
                                                     <Button asChild variant="outline" size="sm">
-                                                        <Link href={`/trading/${holding.asset!.ticker}`}>Détails</Link>
+                                                        <Link href={`/trading/${holding.asset!.ticker}`}>Details</Link>
                                                     </Button>
                                                     {holding.asset ? (
                                                         <TradeDialog asset={holding.asset as AssetFromDb} tradeType="Sell">
-                                                            <Button variant="secondary" size="sm">Vendre</Button>
+                                                            <Button variant="secondary" size="sm">Sell</Button>
                                                         </TradeDialog>
                                                     ) : (
-                                                        <Button variant="secondary" size="sm" disabled>Vendre</Button>
+                                                        <Button variant="secondary" size="sm" disabled>Sell</Button>
                                                     )}
                                                 </>
                                             )}
@@ -150,7 +150,7 @@ export default function PortfolioClientPage() {
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                                        Vous ne possédez aucun actif pour le moment.
+                                        You don't own any assets at the moment.
                                     </TableCell>
                                 </TableRow>
                             )}

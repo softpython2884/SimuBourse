@@ -69,15 +69,15 @@ export default function TradingPage() {
       <CardHeader>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-                <CardTitle>Salle des Marchés</CardTitle>
-                <CardDescription>Achetez et vendez des actions et des cryptos. Les entreprises de joueurs sont dans la section "Entreprises".</CardDescription>
+                <CardTitle>Trading Floor</CardTitle>
+                <CardDescription>Buy and sell stocks and crypto. Player-owned companies are in the Companies section.</CardDescription>
             </div>
             <div className="flex items-center gap-2">
                 <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         type="search"
-                        placeholder="Rechercher (ex: AAPL)..."
+                        placeholder="Search (e.g., AAPL)..."
                         className="w-full sm:w-[200px] lg:w-[250px] pl-8"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -85,17 +85,17 @@ export default function TradingPage() {
                 </div>
                 <Select value={sortOption} onValueChange={setSortOption}>
                     <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Trier par" />
+                        <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="marketCap_desc">Cap. Boursière (Décroissant)</SelectItem>
-                        <SelectItem value="marketCap_asc">Cap. Boursière (Croissant)</SelectItem>
-                        <SelectItem value="name_asc">Nom (A-Z)</SelectItem>
-                        <SelectItem value="name_desc">Nom (Z-A)</SelectItem>
-                        <SelectItem value="price_desc">Prix (Décroissant)</SelectItem>
-                        <SelectItem value="price_asc">Prix (Croissant)</SelectItem>
-                        <SelectItem value="change_desc">Variation (Décroissant)</SelectItem>
-                        <SelectItem value="change_asc">Variation (Croissant)</SelectItem>
+                        <SelectItem value="marketCap_desc">Market Cap (Descending)</SelectItem>
+                        <SelectItem value="marketCap_asc">Market Cap (Ascending)</SelectItem>
+                        <SelectItem value="name_asc">Name (A-Z)</SelectItem>
+                        <SelectItem value="name_desc">Name (Z-A)</SelectItem>
+                        <SelectItem value="price_desc">Price (Descending)</SelectItem>
+                        <SelectItem value="price_asc">Price (Ascending)</SelectItem>
+                        <SelectItem value="change_desc">Change (Descending)</SelectItem>
+                        <SelectItem value="change_asc">Change (Ascending)</SelectItem>
                     </SelectContent>
                 </Select>
                  <div className="flex items-center gap-1 rounded-md bg-muted p-1">
@@ -114,11 +114,11 @@ export default function TradingPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Actif</TableHead>
+                  <TableHead>Asset</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Prix</TableHead>
-                  <TableHead>Variation (24h)</TableHead>
-                  <TableHead>Cap. Boursière</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Change (24h)</TableHead>
+                  <TableHead>Market Cap</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -141,13 +141,13 @@ export default function TradingPage() {
                     <TableCell>{asset.marketCap}</TableCell>
                     <TableCell className="text-right space-x-2">
                        <Button asChild variant="outline" size="sm">
-                        <Link href={`/trading/${asset.ticker}`}>Détails</Link>
+                        <Link href={`/trading/${asset.ticker}`}>Details</Link>
                        </Button>
                        <TradeDialog asset={asset} tradeType="Buy">
-                        <Button variant="outline" size="sm">Acheter</Button>
+                        <Button variant="outline" size="sm">Buy</Button>
                       </TradeDialog>
                       <TradeDialog asset={asset} tradeType="Sell">
-                        <Button variant="secondary" size="sm">Vendre</Button>
+                        <Button variant="secondary" size="sm">Sell</Button>
                       </TradeDialog>
                     </TableCell>
                   </TableRow>

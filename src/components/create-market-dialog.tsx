@@ -34,10 +34,10 @@ import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Loader2, PlusCircle, XCircle } from 'lucide-react';
 
 const marketFormSchema = z.object({
-  title: z.string().min(10, "Le titre doit faire au moins 10 caractères.").max(100, "Le titre ne doit pas dépasser 100 caractères."),
-  category: z.string().min(3, "La catégorie doit faire au moins 3 caractères."),
-  outcomes: z.array(z.object({ name: z.string().min(1, "Le nom de l'issue ne peut pas être vide.") })).min(2, "Il doit y avoir au moins 2 issues.").max(5, "Il ne peut y avoir plus de 5 issues."),
-  closingDate: z.date({ required_error: "Une date de clôture est requise."}),
+  title: z.string().min(10, "Title must be at least 10 characters.").max(100, "Title must not exceed 100 characters."),
+  category: z.string().min(3, "Category must be at least 3 characters."),
+  outcomes: z.array(z.object({ name: z.string().min(1, "Outcome name cannot be empty.") })).min(2, "There must be at least 2 outcomes.").max(5, "There cannot be more than 5 outcomes."),
+  closingDate: z.date({ required_error: "A closing date is required."}),
 });
 
 export function CreateMarketDialog() {
@@ -63,18 +63,18 @@ export function CreateMarketDialog() {
 
   async function onSubmit(values: z.infer<typeof marketFormSchema>) {
     if (!user) {
-      toast({ variant: 'destructive', title: 'Erreur', description: 'Vous devez être connecté pour créer un marché.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to create a market.' });
       return;
     }
-    
+
     setIsLoading(true);
     const result = await createUserMarket(values);
     setIsLoading(false);
 
     if (result.error) {
-      toast({ variant: 'destructive', title: "Échec de la création", description: result.error });
+      toast({ variant: 'destructive', title: "Creation Failed", description: result.error });
     } else if (result.success) {
-      toast({ title: "Succès", description: result.success });
+      toast({ title: "Success", description: result.success });
       setOpen(false);
       form.reset();
     }
@@ -86,13 +86,13 @@ export function CreateMarketDialog() {
         if (!isOpen) form.reset();
     }}>
       <DialogTrigger asChild>
-        <Button>Créer un Marché</Button>
+        <Button>Create Market</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[625px]">
         <DialogHeader>
-          <DialogTitle>Créer un Nouveau Marché de Prédiction</DialogTitle>
+          <DialogTitle>Create a New Prediction Market</DialogTitle>
           <DialogDescription>
-            Définissez un événement et ses issues possibles. Les autres utilisateurs pourront parier dessus.
+            Define an event and its possible outcomes. Other users will be able to bet on it.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -102,9 +102,9 @@ export function CreateMarketDialog() {
                     name="title"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Titre du marché</FormLabel>
+                            <FormLabel>Market Title</FormLabel>
                             <FormControl>
-                                <Input placeholder="Ex: Qui gagnera la prochaine élection ?" {...field} />
+                                <Input placeholder="e.g., Who will win the next election?" {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -115,17 +115,18 @@ export function CreateMarketDialog() {
                     name="category"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Catégorie</FormLabel>
+                            <FormLabel>Category</FormLabel>
                             <FormControl>
-                                <Input placeholder="Ex: Politique, Sport, Technologie" {...field} />
+                                <Input placeholder="e.g., Politics, Sports, Technology" {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
                 />
-                
+
+
                 <div className="space-y-4">
-                    <FormLabel>Issues Possibles</FormLabel>
+                    <FormLabel>Possible Outcomes</FormLabel>
                     {fields.map((field, index) => (
                         <FormField
                             key={field.id}
@@ -135,7 +136,7 @@ export function CreateMarketDialog() {
                                 <FormItem>
                                     <div className="flex items-center gap-2">
                                         <FormControl>
-                                            <Input placeholder={`Issue ${index + 1}`} {...field} />
+                                            <Input placeholder={`Outcome ${index + 1}`} {...field} />
                                         </FormControl>
                                         {fields.length > 2 && (
                                             <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
@@ -150,7 +151,7 @@ export function CreateMarketDialog() {
                     ))}
                     {fields.length < 5 && (
                         <Button type="button" variant="outline" size="sm" onClick={() => append({ name: '' })}>
-                            <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une issue
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add Outcome
                         </Button>
                     )}
                 </div>
@@ -160,7 +161,7 @@ export function CreateMarketDialog() {
                     name="closingDate"
                     render={({ field }) => (
                         <FormItem className="flex flex-col">
-                        <FormLabel>Date de clôture des paris</FormLabel>
+                        <FormLabel>Bet Closing Date</FormLabel>
                         <Popover>
                             <PopoverTrigger asChild>
                             <FormControl>
@@ -174,7 +175,7 @@ export function CreateMarketDialog() {
                                 {field.value ? (
                                     format(field.value, "PPP")
                                 ) : (
-                                    <span>Choisissez une date</span>
+                                    <span>Choose a date</span>
                                 )}
                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                 </Button>
@@ -196,12 +197,13 @@ export function CreateMarketDialog() {
                         </FormItem>
                     )}
                 />
-                
+
+
                 <DialogFooter>
-                    <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
+                    <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
                     <Button type="submit" disabled={isLoading}>
                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Créer le marché
+                        Create Market
                     </Button>
                 </DialogFooter>
             </form>

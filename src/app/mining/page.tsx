@@ -65,21 +65,21 @@ export default function MiningPage() {
   return (
     <div className="space-y-6">
         <div className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight">Minage de Crypto</h1>
-            <p className="text-muted-foreground">Achetez du matériel et gagnez des récompenses en crypto en fonction de votre puissance de minage totale.</p>
+            <h1 className="text-2xl font-bold tracking-tight">Crypto Mining</h1>
+            <p className="text-muted-foreground">Buy hardware and earn crypto rewards based on your total mining power.</p>
         </div>
         
         <Card>
             <CardHeader>
-                <CardTitle>Votre Opération de Minage</CardTitle>
+                <CardTitle>Your Mining Operation</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
                  <div className="flex flex-col space-y-1.5 rounded-lg border p-4">
-                    <span className="text-sm text-muted-foreground flex items-center gap-2"><Network className="h-4 w-4" /> Puissance de Hachage Totale</span>
+                    <span className="text-sm text-muted-foreground flex items-center gap-2"><Network className="h-4 w-4" /> Total Hash Rate</span>
                     <span className="text-2xl font-bold">{formatHashRate(totalHashRateMhs)}</span>
                 </div>
                  <div className="flex flex-col space-y-1.5 rounded-lg border p-4">
-                    <span className="text-sm text-muted-foreground flex items-center gap-2"><Coins className="h-4 w-4" /> Revenu Estimé (24h)</span>
+                    <span className="text-sm text-muted-foreground flex items-center gap-2"><Coins className="h-4 w-4" /> Estimated Revenue (24h)</span>
                     <span className="text-2xl font-bold">{estimatedDailyBtc.toFixed(6)} BTC</span>
                      <p className="text-xs text-muted-foreground">
                       ≈ ${(estimatedDailyBtc * btcPrice).toFixed(2)}
@@ -88,16 +88,16 @@ export default function MiningPage() {
                  <div className="flex flex-col space-y-1.5 rounded-lg border p-4">
                      <div className="flex items-start justify-between gap-4">
                         <div>
-                            <span className="text-sm text-muted-foreground flex items-center gap-2"><Gem className="h-4 w-4" /> Récompenses non réclamées</span>
+                            <span className="text-sm text-muted-foreground flex items-center gap-2"><Gem className="h-4 w-4" /> Unclaimed Rewards</span>
                             <span className="text-2xl font-bold text-primary">{unclaimedRewards.toFixed(8)} BTC</span>
                         </div>
                         <Button onClick={handleClaimRewards} disabled={isClaiming || unclaimedRewards < 1e-9} size="sm">
                            {isClaiming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                           Réclamer
+                           Claim
                         </Button>
                     </div>
                      <p className="text-xs text-muted-foreground pt-2">
-                      Cliquez pour ajouter les récompenses minées à votre portefeuille.
+                      Click to add mined rewards to your portfolio.
                     </p>
                 </div>
             </CardContent>
@@ -105,14 +105,14 @@ export default function MiningPage() {
         
         {ownedRigs && ownedRigs.length > 0 && (
             <Card>
-                <CardHeader><CardTitle>Mon Matériel</CardTitle></CardHeader>
+                <CardHeader><CardTitle>My Hardware</CardTitle></CardHeader>
                 <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {ownedRigs.map((rig, index) => (
                          <Alert key={`${rig.id}-${index}`}>
                             <Server className="h-4 w-4" />
                             <AlertTitle>{rig.name}</AlertTitle>
                             <AlertDescription>
-                                Quantité: {rig.quantity} • Puissance: {formatHashRate(rig.hashRateMhs! * rig.quantity)}
+                                Quantity: {rig.quantity} • Power: {formatHashRate(rig.hashRateMhs! * rig.quantity)}
                             </AlertDescription>
                         </Alert>
                     ))}
@@ -121,7 +121,7 @@ export default function MiningPage() {
         )}
 
       <div>
-        <h2 className="text-xl font-bold tracking-tight mb-4">Acheter du Matériel</h2>
+        <h2 className="text-xl font-bold tracking-tight mb-4">Buy Hardware</h2>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {MINING_RIGS.map((item) => (
             <Card key={item.id} className="flex flex-col">
@@ -130,22 +130,22 @@ export default function MiningPage() {
                 </CardHeader>
                 <CardContent className="space-y-4 flex-grow">
                 <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-sm text-muted-foreground"><Cpu className="h-4 w-4" /> Taux de Hashage</span>
+                    <span className="flex items-center gap-2 text-sm text-muted-foreground"><Cpu className="h-4 w-4" /> Hash Rate</span>
                     <span className="font-semibold">{formatHashRate(item.hashRateMhs)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-sm text-muted-foreground"><Zap className="h-4 w-4" /> Puissance</span>
+                    <span className="flex items-center gap-2 text-sm text-muted-foreground"><Zap className="h-4 w-4" /> Power</span>
                     <span className="font-semibold">{item.power}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-sm text-muted-foreground"><Gem className="h-4 w-4" /> Prix</span>
+                    <span className="flex items-center gap-2 text-sm text-muted-foreground"><Gem className="h-4 w-4" /> Price</span>
                     <span className="font-semibold text-primary">${item.price.toLocaleString()}</span>
                 </div>
                 </CardContent>
                 <CardFooter>
                 <Button className="w-full" onClick={() => handleBuyRig(item.id)} disabled={isBuying !== null}>
                     {isBuying === item.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Acheter le Matériel
+                    Buy Hardware
                 </Button>
                 </CardFooter>
             </Card>

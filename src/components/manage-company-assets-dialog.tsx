@@ -25,13 +25,13 @@ interface ManageCompanyAssetsDialogProps {
 }
 
 const buyFormSchema = z.object({
-  ticker: z.string().min(1, { message: "Veuillez sélectionner un actif." }),
-  quantity: z.coerce.number().positive({ message: 'La quantité doit être positive.' }),
+  ticker: z.string().min(1, { message: "Please select an asset." }),
+  quantity: z.coerce.number().positive({ message: 'Quantity must be positive.' }),
 });
 
 const sellFormSchema = z.object({
-  holdingId: z.coerce.number().positive({ message: "Veuillez sélectionner un actif à vendre." }),
-  quantity: z.coerce.number().positive({ message: 'La quantité doit être positive.' }),
+  holdingId: z.coerce.number().positive({ message: "Please select an asset to sell." }),
+  quantity: z.coerce.number().positive({ message: 'Quantity must be positive.' }),
 });
 
 const formatHashRate = (mhs: number) => {
@@ -75,14 +75,14 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
 
   async function onBuySubmit(values: z.infer<typeof buyFormSchema>) {
     if (!selectedBuyAsset) {
-        toast({ variant: 'destructive', title: 'Erreur', description: 'Actif non valide.' });
+        toast({ variant: 'destructive', title: 'Error', description: 'Invalid asset.' });
         return;
     }
     const result = await buyAssetForCompany(company.id, values.ticker, values.quantity);
     if (result.error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+      toast({ variant: 'destructive', title: 'Error', description: result.error });
     } else if (result.success) {
-      toast({ title: 'Succès', description: result.success });
+      toast({ title: 'Success', description: result.success });
       router.refresh();
       setOpen(false);
     }
@@ -90,18 +90,18 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
 
   async function onSellSubmit(values: z.infer<typeof sellFormSchema>) {
     if (!selectedSellAsset || !selectedHolding) {
-      toast({ variant: 'destructive', title: 'Erreur', description: 'Actif à vendre non valide.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Invalid asset to sell.' });
       return;
     }
     if (values.quantity > selectedHolding.quantity) {
-        sellForm.setError('quantity', { message: "Quantité insuffisante."});
+        sellForm.setError('quantity', { message: "Insufficient quantity."});
         return;
     }
     const result = await sellAssetForCompany(company.id, values.holdingId, values.quantity);
     if (result.error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+      toast({ variant: 'destructive', title: 'Error', description: result.error });
     } else if (result.success) {
-      toast({ title: 'Succès', description: result.success });
+      toast({ title: 'Success', description: result.success });
       router.refresh();
       setOpen(false);
     }
@@ -111,9 +111,9 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
     setIsBuyingMiner(rigId);
     const result = await buyMiningRigForCompany(company.id, rigId);
     if (result.error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+      toast({ variant: 'destructive', title: 'Error', description: result.error });
     } else if (result.success) {
-      toast({ title: 'Succès', description: result.success });
+      toast({ title: 'Success', description: result.success });
       router.refresh();
       setOpen(false);
     }
@@ -134,17 +134,17 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Gérer le Portefeuille de {company.name}</DialogTitle>
+          <DialogTitle>Manage Portfolio of {company.name}</DialogTitle>
           <DialogDescription>
-            Trésorerie disponible : ${company.cash.toFixed(2)}
+            Available Treasury: ${company.cash.toFixed(2)}
           </DialogDescription>
         </DialogHeader>
-        
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="buy">Acheter Actifs</TabsTrigger>
-                <TabsTrigger value="sell">Vendre Actifs</TabsTrigger>
-                <TabsTrigger value="miners">Acheter Matériel</TabsTrigger>
+                <TabsTrigger value="buy">Buy Assets</TabsTrigger>
+                <TabsTrigger value="sell">Sell Assets</TabsTrigger>
+                <TabsTrigger value="miners">Buy Hardware</TabsTrigger>
             </TabsList>
             <TabsContent value="buy">
                 <Form {...buyForm}>
@@ -154,11 +154,11 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                         name="ticker"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Actif</FormLabel>
+                            <FormLabel>Asset</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Sélectionnez un actif à acheter" />
+                                    <SelectValue placeholder="Select an asset to buy" />
                                 </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
@@ -178,12 +178,12 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                         name="quantity"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Quantité</FormLabel>
+                            <FormLabel>Quantity</FormLabel>
                             <FormControl>
-                                <Input 
-                                type="number" 
-                                step="any" 
-                                placeholder="0" 
+                                <Input
+                                type="number"
+                                step="any"
+                                placeholder="0"
                                 {...field}
                                 value={field.value ?? ''}
                                 onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
@@ -195,13 +195,13 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                         />
                         {selectedBuyAsset && (
                             <div className="text-sm text-muted-foreground">
-                                Coût total de la transaction : ${totalCost.toFixed(2)}
+                                Total transaction cost: ${totalCost.toFixed(2)}
                             </div>
                         )}
                         <DialogFooter>
                             <Button type="submit" className="w-full" disabled={buyForm.formState.isSubmitting || totalCost > company.cash || !buyForm.formState.isValid}>
                                 {buyForm.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Confirmer l'Achat
+                                Confirm Purchase
                             </Button>
                         </DialogFooter>
                     </form>
@@ -215,11 +215,11 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                             name="holdingId"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Actif à Vendre</FormLabel>
+                                    <FormLabel>Asset to Sell</FormLabel>
                                     <Select onValueChange={(value) => field.onChange(parseInt(value))} defaultValue={field.value?.toString()}>
                                         <FormControl>
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Sélectionnez un actif à vendre" />
+                                                <SelectValue placeholder="Select an asset to sell" />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
@@ -227,7 +227,7 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                                                 <SelectItem key={holding.id} value={String(holding.id)}>
                                                     {holding.name} ({holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })})
                                                 </SelectItem>
-                                            )) : <SelectItem value="none" disabled>Aucun actif à vendre</SelectItem>}
+                                            )) : <SelectItem value="none" disabled>No assets to sell</SelectItem>}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />
@@ -236,7 +236,7 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                         />
                         {selectedHolding && (
                             <FormDescription>
-                                Vous possédez : {selectedHolding.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })} unités.
+                                You own: {selectedHolding.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })} units.
                             </FormDescription>
                         )}
                         <FormField
@@ -244,12 +244,12 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                             name="quantity"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Quantité</FormLabel>
+                                    <FormLabel>Quantity</FormLabel>
                                     <FormControl>
-                                         <Input 
-                                            type="number" 
-                                            step="any" 
-                                            placeholder="0" 
+                                         <Input
+                                            type="number"
+                                            step="any"
+                                            placeholder="0"
                                             {...field}
                                             value={field.value ?? ''}
                                             onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
@@ -261,13 +261,13 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                         />
                          {selectedSellAsset && (
                             <div className="space-y-1 text-sm text-muted-foreground">
-                                <div>Produit de la vente : ${totalProceeds.toFixed(2)}</div>
+                                <div>Sale proceeds: ${totalProceeds.toFixed(2)}</div>
                                 {sellQuantity > 0 && selectedHolding && (
                                     <div className={cn(
                                         'font-medium',
                                         sellProfitLoss >= 0 ? 'text-green-500' : 'text-red-500'
                                     )}>
-                                        Gain/Perte potentiel : {sellProfitLoss >= 0 ? '+' : '-'}${Math.abs(sellProfitLoss).toFixed(2)}
+                                        Potential Gain/Loss: {sellProfitLoss >= 0 ? '+' : '-'}${Math.abs(sellProfitLoss).toFixed(2)}
                                     </div>
                                 )}
                             </div>
@@ -275,7 +275,7 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                         <DialogFooter>
                             <Button type="submit" className="w-full" disabled={!company.holdings.length || sellForm.formState.isSubmitting || !sellForm.formState.isValid || (selectedHolding && sellQuantity > selectedHolding.quantity)}>
                                 {sellForm.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Confirmer la Vente
+                                Confirm Sale
                             </Button>
                         </DialogFooter>
                     </form>
@@ -288,16 +288,16 @@ export function ManageCompanyAssetsDialog({ company, children }: ManageCompanyAs
                             <div>
                                 <p className="font-semibold">{rig.name}</p>
                                 <p className="text-sm text-muted-foreground">
-                                    Coût: ${rig.price.toLocaleString()} • Puissance: {formatHashRate(rig.hashRateMhs)}
+                                    Cost: ${rig.price.toLocaleString()} • Power: {formatHashRate(rig.hashRateMhs)}
                                 </p>
                             </div>
-                            <Button 
-                                size="sm" 
+                            <Button
+                                size="sm"
                                 onClick={() => onBuyMiner(rig.id)}
                                 disabled={isBuyingMiner !== null || company.cash < rig.price}
                             >
                                 {isBuyingMiner === rig.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Acheter
+                                Buy
                             </Button>
                         </div>
                     ))}

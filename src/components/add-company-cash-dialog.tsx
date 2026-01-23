@@ -20,7 +20,7 @@ interface AddCompanyCashDialogProps {
 }
 
 const formSchema = z.object({
-  amount: z.coerce.number().positive({ message: 'Le montant doit être supérieur à zéro.' }),
+  amount: z.coerce.number().positive({ message: 'Amount must be greater than zero.' }),
 });
 
 export function AddCompanyCashDialog({ companyId, children }: AddCompanyCashDialogProps) {
@@ -40,9 +40,9 @@ export function AddCompanyCashDialog({ companyId, children }: AddCompanyCashDial
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const result = await addCashToCompany(companyId, values.amount);
     if (result.error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+      toast({ variant: 'destructive', title: 'Error', description: result.error });
     } else if (result.success) {
-      toast({ title: 'Succès', description: result.success });
+      toast({ title: 'Success', description: result.success });
       await refreshPortfolio();
       router.refresh();
       setOpen(false);
@@ -58,10 +58,10 @@ export function AddCompanyCashDialog({ companyId, children }: AddCompanyCashDial
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Ajouter des fonds à la Trésorerie</DialogTitle>
+          <DialogTitle>Add Funds to Treasury</DialogTitle>
           <DialogDescription>
-            Transférez des fonds de votre solde personnel vers la trésorerie de l'entreprise.
-            Fonds disponibles : ${cash.toFixed(2)}
+            Transfer funds from your personal balance to the company treasury.
+            Available funds: ${cash.toFixed(2)}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -71,14 +71,14 @@ export function AddCompanyCashDialog({ companyId, children }: AddCompanyCashDial
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Montant à ajouter</FormLabel>
+                  <FormLabel>Amount to Add</FormLabel>
                   <div className="relative">
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="0.00" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
                         value={field.value ?? ''}
                         onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
                     </FormControl>
@@ -90,12 +90,12 @@ export function AddCompanyCashDialog({ companyId, children }: AddCompanyCashDial
                 </FormItem>
               )}
             />
-            
+
             <DialogFooter>
-               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
+               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
                <Button type="submit" disabled={form.formState.isSubmitting || amount > cash || !form.formState.isValid}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Ajouter ${amount > 0 ? amount.toFixed(2) : '0.00'}
+                Add ${amount > 0 ? amount.toFixed(2) : '0.00'}
               </Button>
             </DialogFooter>
           </form>

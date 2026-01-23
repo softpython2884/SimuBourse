@@ -28,8 +28,8 @@ export function MarketsClientPage({ initialMarkets }: MarketsClientPageProps) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Marché des Paris</h1>
-          <p className="text-muted-foreground">Pariez sur le résultat d'événements futurs.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Betting Market</h1>
+          <p className="text-muted-foreground">Bet on the outcome of future events.</p>
         </div>
         <CreateMarketDialog />
       </div>
@@ -40,7 +40,7 @@ export function MarketsClientPage({ initialMarkets }: MarketsClientPageProps) {
         </div>
       ) : markets.length === 0 ? (
         <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30">
-            <p className="text-muted-foreground">Aucun marché ouvert pour le moment. L'IA en prépare de nouveaux...</p>
+            <p className="text-muted-foreground">No open markets at the moment. AI is preparing new ones...</p>
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -49,7 +49,7 @@ export function MarketsClientPage({ initialMarkets }: MarketsClientPageProps) {
               <CardHeader>
                 <CardTitle>{market.title}</CardTitle>
                 <CardDescription>
-                  Par {market.creatorDisplayName} • Ferme dans {formatDistanceToNow(new Date(market.closingAt), { locale: fr })}
+                  By {market.creatorDisplayName} • Closes in {formatDistanceToNow(new Date(market.closingAt))}
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-grow space-y-4">
@@ -67,9 +67,9 @@ export function MarketsClientPage({ initialMarkets }: MarketsClientPageProps) {
                 })}
               </CardContent>
               <CardFooter className="flex-col items-stretch gap-2 pt-4">
-                 <div className="text-xs text-muted-foreground text-center">Pot Total : ${market.totalPool.toFixed(2)}</div>
+                 <div className="text-xs text-muted-foreground text-center">Total Pool: ${market.totalPool.toFixed(2)}</div>
                  <PlaceBetDialog market={market}>
-                    <Button className="w-full">Placer un Pari</Button>
+                    <Button className="w-full">Place Bet</Button>
                  </PlaceBetDialog>
               </CardFooter>
             </Card>

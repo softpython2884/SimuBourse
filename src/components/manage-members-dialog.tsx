@@ -45,7 +45,7 @@ export function ManageMembersDialog({ company, children }: ManageMembersDialogPr
 
   const handleSearch = async () => {
     if (searchQuery.length < 2) {
-      toast({ variant: 'destructive', title: 'Recherche invalide', description: 'Veuillez entrer au moins 2 caractères.' });
+      toast({ variant: 'destructive', title: 'Invalid Search', description: 'Please enter at least 2 characters.' });
       return;
     }
     setIsSearching(true);
@@ -58,9 +58,9 @@ export function ManageMembersDialog({ company, children }: ManageMembersDialogPr
     startTransition(async () => {
       const result = await addMemberToCompany(company.id, userId, role);
       if (result.error) {
-        toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+        toast({ variant: 'destructive', title: 'Error', description: result.error });
       } else {
-        toast({ title: 'Succès', description: result.success });
+        toast({ title: 'Success', description: result.success });
         setSearchQuery('');
         setSearchResults([]);
         setOpen(false); // Close dialog on success
@@ -72,9 +72,9 @@ export function ManageMembersDialog({ company, children }: ManageMembersDialogPr
     startTransition(async () => {
       const result = await removeMemberFromCompany(company.id, memberId);
       if (result.error) {
-        toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+        toast({ variant: 'destructive', title: 'Error', description: result.error });
       } else {
-        toast({ title: 'Succès', description: result.success });
+        toast({ title: 'Success', description: result.success });
         setOpen(false); // Close dialog on success
       }
     });
@@ -85,12 +85,12 @@ export function ManageMembersDialog({ company, children }: ManageMembersDialogPr
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Gérer les Membres de {company.name}</DialogTitle>
-          <DialogDescription>Ajoutez ou supprimez des membres de votre entreprise.</DialogDescription>
+          <DialogTitle>Manage Members of {company.name}</DialogTitle>
+          <DialogDescription>Add or remove members from your company.</DialogDescription>
         </DialogHeader>
 
         <div className="mt-4">
-          <h3 className="mb-4 text-lg font-medium">Membres Actuels</h3>
+          <h3 className="mb-4 text-lg font-medium">Current Members</h3>
           <div className="space-y-3 max-h-60 overflow-y-auto pr-4">
             {company.members.map(member => (
               <div key={member.id} className="flex items-center justify-between rounded-md border p-3">
@@ -109,7 +109,7 @@ export function ManageMembersDialog({ company, children }: ManageMembersDialogPr
                     size="icon"
                     onClick={() => handleRemoveMember(member.id)}
                     disabled={isPending}
-                    aria-label="Supprimer le membre"
+                    aria-label="Remove member"
                   >
                     {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
                   </Button>
@@ -120,10 +120,10 @@ export function ManageMembersDialog({ company, children }: ManageMembersDialogPr
         </div>
 
         <div className="mt-6 border-t pt-6">
-            <h3 className="mb-4 text-lg font-medium">Ajouter un Nouveau Membre</h3>
+            <h3 className="mb-4 text-lg font-medium">Add New Member</h3>
             <div className="flex items-center gap-2">
-                <Input 
-                    placeholder="Rechercher par nom ou e-mail..."
+                <Input
+                    placeholder="Search by name or email..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -141,9 +141,9 @@ export function ManageMembersDialog({ company, children }: ManageMembersDialogPr
                  </div>
             )}
         </div>
-        
+
         <DialogFooter>
-          <Button variant="secondary" onClick={() => setOpen(false)}>Fermer</Button>
+          <Button variant="secondary" onClick={() => setOpen(false)}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -170,7 +170,7 @@ function AddMemberRow({ user, onAdd, isPending }: { user: SearchResultUser, onAd
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="member">Membre</SelectItem>
+                        <SelectItem value="member">Member</SelectItem>
                         <SelectItem value="manager">Manager</SelectItem>
                     </SelectContent>
                 </Select>

@@ -21,7 +21,7 @@ interface WithdrawCompanyCashDialogProps {
 }
 
 const formSchema = z.object({
-  amount: z.coerce.number().positive({ message: 'Le montant doit être supérieur à zéro.' }),
+  amount: z.coerce.number().positive({ message: 'Amount must be greater than zero.' }),
 });
 
 export function WithdrawCompanyCashDialog({ companyId, companyCash, children }: WithdrawCompanyCashDialogProps) {
@@ -41,9 +41,9 @@ export function WithdrawCompanyCashDialog({ companyId, companyCash, children }: 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const result = await withdrawFromCompanyTreasury(companyId, values.amount);
     if (result.error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+      toast({ variant: 'destructive', title: 'Error', description: result.error });
     } else if (result.success) {
-      toast({ title: 'Succès', description: result.success });
+      toast({ title: 'Success', description: result.success });
       await refreshPortfolio();
       router.refresh();
       setOpen(false);
@@ -59,10 +59,10 @@ export function WithdrawCompanyCashDialog({ companyId, companyCash, children }: 
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Retirer des fonds de la Trésorerie</DialogTitle>
+          <DialogTitle>Withdraw Funds from Treasury</DialogTitle>
           <DialogDescription>
-            Transférez des fonds de la trésorerie de l'entreprise vers votre solde personnel.
-            Trésorerie disponible : ${companyCash.toFixed(2)}
+            Transfer funds from company treasury to your personal balance.
+            Available Treasury: ${companyCash.toFixed(2)}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -72,14 +72,14 @@ export function WithdrawCompanyCashDialog({ companyId, companyCash, children }: 
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Montant à retirer</FormLabel>
+                  <FormLabel>Amount to Withdraw</FormLabel>
                   <div className="relative">
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="0.00" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
                         value={field.value ?? ''}
                         onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
                     </FormControl>
@@ -93,10 +93,10 @@ export function WithdrawCompanyCashDialog({ companyId, companyCash, children }: 
             />
             
             <DialogFooter>
-               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
+               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
                <Button type="submit" disabled={form.formState.isSubmitting || amount > companyCash || !form.formState.isValid}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Retirer ${amount > 0 ? amount.toFixed(2) : '0.00'}
+                Withdraw ${amount > 0 ? amount.toFixed(2) : '0.00'}
               </Button>
             </DialogFooter>
           </form>

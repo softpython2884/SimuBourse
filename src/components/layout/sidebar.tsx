@@ -8,14 +8,14 @@ import { Logo } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 export const NAV_LINKS = [
-  { href: '/', icon: Home, label: 'Tableau de Bord' },
-  { href: '/portfolio', icon: Wallet, label: 'Portefeuille' },
+  { href: '/', icon: Home, label: 'Dashboard' },
+  { href: '/portfolio', icon: Wallet, label: 'Portfolio' },
   { href: '/trading', icon: LineChart, label: 'Trading' },
-  { href: '/markets', icon: BarChart, label: 'Marché des Paris' },
-  { href: '/mining', icon: Cpu, label: 'Minage de Crypto' },
-  { href: '/companies', icon: Landmark, label: 'Entreprises' },
-  { href: '/ai-investor', icon: BrainCircuit, label: 'Investisseur IA' },
-  { href: '/profile', icon: Users, label: 'Profil' },
+  { href: '/markets', icon: BarChart, label: 'Betting Market' },
+  { href: '/mining', icon: Cpu, label: 'Crypto Mining' },
+  { href: '/companies', icon: Landmark, label: 'Companies' },
+  { href: '/ai-investor', icon: BrainCircuit, label: 'AI Investor' },
+  { href: '/profile', icon: Users, label: 'Profile' },
   { href: '/admin', icon: Shield, label: 'Admin' },
 ];
 

@@ -18,7 +18,7 @@ import { fr } from 'date-fns/locale';
 import { useMarketData } from "@/context/market-data-context";
 
 const profileFormSchema = z.object({
-  displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
+  displayName: z.string().min(3, { message: "Username must be at least 3 characters." }),
   phoneNumber: z.string().optional(),
 });
 
@@ -75,7 +75,7 @@ export default function ProfileClientPage() {
     if (!userProfile) {
         return (
             <div className="text-center">
-                <p>Impossible de charger les données du profil.</p>
+                <p>Unable to load profile data.</p>
             </div>
         )
     }
@@ -83,8 +83,8 @@ export default function ProfileClientPage() {
   return (
     <Tabs defaultValue="overview">
       <TabsList className="grid w-full grid-cols-2 mb-6">
-        <TabsTrigger value="overview">Aperçu</TabsTrigger>
-        <TabsTrigger value="settings">Paramètres & Sécurité</TabsTrigger>
+        <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="settings">Settings & Security</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview">
@@ -93,7 +93,7 @@ export default function ProfileClientPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
-                      Profil
+                      Profile
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center text-center">
@@ -108,21 +108,21 @@ export default function ProfileClientPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Statistiques</CardTitle>
+                  <CardTitle>Statistics</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Valeur Totale du Portefeuille</span>
+                    <span className="text-muted-foreground">Total Portfolio Value</span>
                     <span className="font-bold">${portfolioValue.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Gains Totaux</span>
+                    <span className="text-muted-foreground">Total Gains</span>
                     <span className={`font-bold ${totalGains >= 0 ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                       {totalGains >= 0 ? '+' : '-'}${Math.abs(totalGains).toFixed(2)} ({totalGainsPercentage.toFixed(2)}%)
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Taux de Victoire (Paris)</span>
+                    <span className="text-muted-foreground">Win Rate (Betting)</span>
                     <span className="font-bold">N/A</span>
                   </div>
                 </CardContent>
@@ -132,18 +132,18 @@ export default function ProfileClientPage() {
             <div className="md:col-span-2 space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Historique des Transactions</CardTitle>
-                  <CardDescription>Un journal de toutes vos activités de trading récentes.</CardDescription>
+                  <CardTitle>Transaction History</CardTitle>
+                  <CardDescription>A record of all your recent trading activity.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Type</TableHead>
-                        <TableHead>Actif/Détails</TableHead>
-                        <TableHead>Quantité</TableHead>
-                        <TableHead>Prix</TableHead>
-                        <TableHead>Valeur</TableHead>
+                        <TableHead>Asset/Details</TableHead>
+                        <TableHead>Quantity</TableHead>
+                        <TableHead>Price</TableHead>
+                        <TableHead>Value</TableHead>
                         <TableHead>Date</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -151,7 +151,7 @@ export default function ProfileClientPage() {
                         {transactions.length > 0 ? (
                             transactions.map(tx => (
                                 <TableRow key={tx.id}>
-                                    <TableCell className={tx.type === 'Buy' ? 'text-red-500' : 'text-green-500'}>{tx.type === 'Buy' ? 'Achat' : 'Vente'}</TableCell>
+                                    <TableCell className={tx.type === 'Buy' ? 'text-red-500' : 'text-green-500'}>{tx.type === 'Buy' ? 'Buy' : 'Sell'}</TableCell>
                                     <TableCell>
                                         <div className="font-medium">{tx.name}</div>
                                         <div className="text-sm text-muted-foreground">{tx.ticker}</div>
@@ -167,7 +167,7 @@ export default function ProfileClientPage() {
                         ) : (
                             <TableRow>
                             <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
-                                Aucune transaction pour le moment.
+                                No transactions yet.
                             </TableCell>
                             </TableRow>
                         )}
@@ -182,7 +182,7 @@ export default function ProfileClientPage() {
       <TabsContent value="settings">
           <Card>
               <CardHeader>
-                  <CardTitle>Modifier le Profil</CardTitle>
+                  <CardTitle>Edit Profile</CardTitle>
               </CardHeader>
               <CardContent>
                   <Form {...form}>
@@ -192,9 +192,9 @@ export default function ProfileClientPage() {
                               name="displayName"
                               render={({ field }) => (
                                   <FormItem>
-                                      <FormLabel>Nom d'utilisateur</FormLabel>
+                                      <FormLabel>Username</FormLabel>
                                       <FormControl>
-                                          <Input placeholder="Votre nom" {...field} />
+                                          <Input placeholder="Your name" {...field} />
                                       </FormControl>
                                       <FormMessage />
                                   </FormItem>
@@ -205,9 +205,9 @@ export default function ProfileClientPage() {
                               name="phoneNumber"
                               render={({ field }) => (
                                   <FormItem>
-                                      <FormLabel>Numéro de téléphone</FormLabel>
+                                      <FormLabel>Phone number</FormLabel>
                                       <FormControl>
-                                          <Input placeholder="+33 6 12 34 56 78" {...field} value={field.value ?? ''} />
+                                          <Input placeholder="+1 555 123 4567" {...field} value={field.value ?? ''} />
                                       </FormControl>
                                       <FormMessage />
                                   </FormItem>
@@ -215,7 +215,7 @@ export default function ProfileClientPage() {
                           />
                           <Button type="submit" disabled={form.formState.isSubmitting}>
                               {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                              Enregistrer les modifications
+                              Save changes
                           </Button>
                       </form>
                   </Form>

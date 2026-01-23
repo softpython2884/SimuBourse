@@ -15,9 +15,9 @@ import { Loader2 } from 'lucide-react';
 import { signup, SignupInput } from '@/lib/actions/user';
 
 const formSchema = z.object({
-  displayName: z.string().min(3, { message: "Le nom d'utilisateur doit comporter au moins 3 caractères." }),
-  email: z.string().email({ message: 'Adresse e-mail invalide.' }),
-  password: z.string().min(6, { message: 'Le mot de passe doit comporter au moins 6 caractères.' }),
+  displayName: z.string().min(3, { message: "Username must be at least 3 characters." }),
+  email: z.string().email({ message: 'Invalid email address.' }),
+  password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
 });
 
 export default function SignupPage() {
@@ -42,14 +42,14 @@ export default function SignupPage() {
     if (result.error) {
       toast({
         variant: 'destructive',
-        title: 'Échec de l\'inscription',
+        title: 'Signup failed',
         description: result.error,
       });
     }
 
     if (result.success) {
       toast({
-        title: 'Succès !',
+        title: 'Success!',
         description: result.success,
       });
       router.push('/login');
@@ -60,8 +60,8 @@ export default function SignupPage() {
     <div className="flex min-h-full items-center justify-center">
       <Card className="mx-auto max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">Inscription</CardTitle>
-          <CardDescription>Créez un nouveau compte pour commencer votre aventure financière</CardDescription>
+          <CardTitle className="text-2xl">Sign up</CardTitle>
+          <CardDescription>Create a new account to start your financial journey</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -71,9 +71,9 @@ export default function SignupPage() {
                 name="displayName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nom d'utilisateur</FormLabel>
+                    <FormLabel>Username</FormLabel>
                     <FormControl>
-                      <Input placeholder="VotrePseudo" {...field} />
+                      <Input placeholder="YourUsername" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -86,7 +86,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="nom@exemple.com" {...field} />
+                      <Input placeholder="name@example.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -97,7 +97,7 @@ export default function SignupPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Mot de passe</FormLabel>
+                    <FormLabel>Password</FormLabel>
                     <FormControl>
                       <Input type="password" {...field} />
                     </FormControl>
@@ -107,14 +107,14 @@ export default function SignupPage() {
               />
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Créer un compte
+                Create account
               </Button>
             </form>
           </Form>
           <div className="mt-4 text-center text-sm">
-            Vous avez déjà un compte ?{' '}
+            Already have an account?{' '}
             <Link href="/login" className="underline">
-              Se connecter
+              Sign in
             </Link>
           </div>
         </CardContent>

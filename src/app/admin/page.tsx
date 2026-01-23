@@ -25,9 +25,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 
 const addCryptoSchema = z.object({
-  email: z.string().email({ message: 'Adresse e-mail invalide.' }),
-  ticker: z.string().min(1, 'Ticker requis.').transform(v => v.toUpperCase()),
-  quantity: z.coerce.number().positive('La quantité doit être positive.'),
+  email: z.string().email({ message: 'Invalid email address.' }),
+  ticker: z.string().min(1, 'Ticker required.').transform(v => v.toUpperCase()),
+  quantity: z.coerce.number().positive('Quantity must be positive.'),
 });
 
 
@@ -48,12 +48,12 @@ export default function AdminPage() {
         if (result.error) {
             toast({
                 variant: 'destructive',
-                title: 'Erreur',
+                title: 'Error',
                 description: result.error,
             });
         } else {
             toast({
-                title: 'Succès',
+                title: 'Success',
                 description: result.success,
             });
             if (actionName === 'users') {
@@ -67,9 +67,9 @@ export default function AdminPage() {
         setLoadingAction('grantCrypto');
         const result = await addCryptoToUserByEmail(values);
         if (result.error) {
-            toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
         } else {
-            toast({ title: 'Succès', description: result.success });
+            toast({ title: 'Success', description: result.success });
             cryptoForm.reset();
         }
         setLoadingAction(null);
@@ -79,8 +79,8 @@ export default function AdminPage() {
         <div className="space-y-6">
              <Card>
                 <CardHeader>
-                    <CardTitle>Accorder des Cryptos</CardTitle>
-                    <CardDescription>Ajouter directement des actifs crypto au portefeuille d'un utilisateur.</CardDescription>
+                    <CardTitle>Grant Crypto</CardTitle>
+                    <CardDescription>Directly add crypto assets to a user's portfolio.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Form {...cryptoForm}>
@@ -91,8 +91,8 @@ export default function AdminPage() {
                                     name="email"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Email de l'utilisateur</FormLabel>
-                                            <FormControl><Input placeholder="utilisateur@exemple.com" {...field} /></FormControl>
+                                            <FormLabel>User Email</FormLabel>
+                                            <FormControl><Input placeholder="user@example.com" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -102,7 +102,7 @@ export default function AdminPage() {
                                     name="ticker"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Ticker Crypto</FormLabel>
+                                            <FormLabel>Crypto Ticker</FormLabel>
                                             <FormControl><Input placeholder="BTC, ETH, etc." {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -113,7 +113,7 @@ export default function AdminPage() {
                                     name="quantity"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Quantité</FormLabel>
+                                            <FormLabel>Quantity</FormLabel>
                                             <FormControl><Input type="number" step="any" placeholder="0.5" {...field} value={field.value ?? ''} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -122,7 +122,7 @@ export default function AdminPage() {
                             </div>
                             <Button type="submit" disabled={loadingAction !== null}>
                                 {loadingAction === 'grantCrypto' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Coins className="mr-2 h-4 w-4" />}
-                                Accorder la Crypto
+                                Grant Crypto
                             </Button>
                         </form>
                     </Form>
@@ -131,38 +131,38 @@ export default function AdminPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Panneau d'Administration</CardTitle>
+                    <CardTitle>Administration Panel</CardTitle>
                     <CardDescription>
-                        Actions dangereuses qui affectent l'ensemble de la simulation.
+                        Dangerous actions that affect the entire simulation.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="flex items-center justify-between rounded-lg border border-destructive p-4">
                         <div>
-                            <h3 className="font-semibold">Réinitialiser les Actualités de l'IA</h3>
+                            <h3 className="font-semibold">Reset AI News</h3>
                             <p className="text-sm text-muted-foreground">
-                                Supprime toutes les actualités générées par l'IA.
+                                Deletes all AI-generated news articles.
                             </p>
                         </div>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                              <Button variant="destructive" disabled={loadingAction !== null}>
                                 {loadingAction === 'news' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                                Réinitialiser les Actualités
+                                Reset News
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Cette action est irréversible. Toutes les actualités générées par l'IA seront définitivement supprimées.
+                                This action is irreversible. All AI-generated news will be permanently deleted.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction onClick={() => handleAction(resetAiNews, 'news')} disabled={loadingAction !== null} className="bg-destructive hover:bg-destructive/90">
                                 {loadingAction === 'news' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Confirmer la suppression
+                                Confirm Deletion
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -171,30 +171,30 @@ export default function AdminPage() {
 
                     <div className="flex items-center justify-between rounded-lg border border-destructive p-4">
                         <div>
-                            <h3 className="font-semibold">Réinitialiser les Entreprises</h3>
+                            <h3 className="font-semibold">Reset Companies</h3>
                             <p className="text-sm text-muted-foreground">
-                                Supprime toutes les entreprises, leurs membres, leurs actifs et leurs actions.
+                                Deletes all companies, their members, assets, and shares.
                             </p>
                         </div>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                              <Button variant="destructive" disabled={loadingAction !== null}>
                                 {loadingAction === 'companies' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                                Réinitialiser les Entreprises
+                                Reset Companies
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Cette action est irréversible. Toutes les entreprises et les investissements associés seront définitivement supprimés.
+                                This action is irreversible. All companies and associated investments will be permanently deleted.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction onClick={() => handleAction(resetAllCompanies, 'companies')} disabled={loadingAction !== null} className="bg-destructive hover:bg-destructive/90">
                                 {loadingAction === 'companies' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Confirmer la suppression
+                                Confirm Deletion
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -203,30 +203,30 @@ export default function AdminPage() {
                     
                     <div className="flex items-center justify-between rounded-lg border border-destructive p-4">
                         <div>
-                            <h3 className="font-semibold">Réinitialiser les Utilisateurs</h3>
+                            <h3 className="font-semibold">Reset Users</h3>
                             <p className="text-sm text-muted-foreground">
-                                Supprime tous les utilisateurs, portefeuilles et données associées. Nécessite une nouvelle inscription.
+                                Deletes all users, portfolios, and associated data. Requires new signup.
                             </p>
                         </div>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                              <Button variant="destructive" disabled={loadingAction !== null}>
                                 {loadingAction === 'users' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                                Réinitialiser les Utilisateurs
+                                Reset Users
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Êtes-vous absolument sûr ?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                ACTION EXTRÊMEMENT DANGEREUSE. Ceci supprimera TOUS les utilisateurs, TOUTES les entreprises, et TOUTES les données de jeu. L'application sera réinitialisée à son état initial.
+                                EXTREMELY DANGEROUS ACTION. This will delete ALL users, ALL companies, and ALL game data. The application will be reset to its initial state.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction onClick={() => handleAction(resetAllUsers, 'users')} disabled={loadingAction !== null} className="bg-destructive hover:bg-destructive/90">
                                 {loadingAction === 'users' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                TOUT SUPPRIMER
+                                DELETE EVERYTHING
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>

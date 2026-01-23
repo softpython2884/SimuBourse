@@ -23,8 +23,8 @@ interface PlaceBetDialogProps {
 }
 
 const formSchema = z.object({
-  outcomeId: z.coerce.number({invalid_type_error: "Veuillez choisir une issue."}).positive(),
-  amount: z.coerce.number().positive({ message: 'Le montant doit être positif.' }),
+  outcomeId: z.coerce.number({invalid_type_error: "Please choose an outcome."}).positive(),
+  amount: z.coerce.number().positive({ message: 'Amount must be positive.' }),
 });
 
 export function PlaceBetDialog({ market, children }: PlaceBetDialogProps) {
@@ -45,9 +45,9 @@ export function PlaceBetDialog({ market, children }: PlaceBetDialogProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const result = await placeBet(values.outcomeId, market.id, values.amount);
     if (result.error) {
-      toast({ variant: 'destructive', title: 'Erreur', description: result.error });
+      toast({ variant: 'destructive', title: 'Error', description: result.error });
     } else if (result.success) {
-      toast({ title: 'Succès', description: result.success });
+      toast({ title: 'Success', description: result.success });
       await refreshPortfolio();
       router.refresh();
       setOpen(false);
@@ -65,7 +65,7 @@ export function PlaceBetDialog({ market, children }: PlaceBetDialogProps) {
         <DialogHeader>
           <DialogTitle>{market.title}</DialogTitle>
           <DialogDescription>
-            Placez votre pari sur une des issues. Fonds disponibles: ${cash.toFixed(2)}
+            Place your bet on one of the outcomes. Available funds: ${cash.toFixed(2)}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -75,7 +75,7 @@ export function PlaceBetDialog({ market, children }: PlaceBetDialogProps) {
               name="outcomeId"
               render={({ field }) => (
                 <FormItem className="space-y-3">
-                  <FormLabel>Choisissez une issue</FormLabel>
+                  <FormLabel>Choose an Outcome</FormLabel>
                   <FormControl>
                     <RadioGroup
                       onValueChange={(value) => field.onChange(parseInt(value))}
@@ -100,14 +100,14 @@ export function PlaceBetDialog({ market, children }: PlaceBetDialogProps) {
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Montant à parier</FormLabel>
+                  <FormLabel>Amount to Bet</FormLabel>
                   <div className="relative">
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="0.00" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
                         value={field.value ?? ''}
                         onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
                     </FormControl>
@@ -120,10 +120,10 @@ export function PlaceBetDialog({ market, children }: PlaceBetDialogProps) {
               )}
             />
             <DialogFooter>
-               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
+               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
                <Button type="submit" disabled={form.formState.isSubmitting || amount > cash || !form.formState.isValid}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Parier ${amount > 0 ? amount.toFixed(2) : '0.00'}
+                Bet ${amount > 0 ? amount.toFixed(2) : '0.00'}
               </Button>
             </DialogFooter>
           </form>
