@@ -1,13 +1,9 @@
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Production builds enforce type + lint correctness.
+  // (The previous `ignoreBuildErrors: true` was masking real bugs.)
+  reactStrictMode: true,
 };
 
 export default nextConfig;

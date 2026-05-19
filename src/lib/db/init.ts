@@ -1,5 +1,7 @@
 import type { Database } from 'better-sqlite3';
 
+// All defaults use (unixepoch() * 1000) so timestamp_ms columns receive a real
+// unix millisecond integer (not the SQLite CURRENT_TIMESTAMP text format).
 const tables = [
 `CREATE TABLE IF NOT EXISTS "users" (
 	"id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -7,11 +9,12 @@ const tables = [
 	"email" text NOT NULL,
 	"password_hash" text NOT NULL,
 	"phone_number" text,
+	"role" text DEFAULT 'user' NOT NULL,
 	"cash" real DEFAULT 100000 NOT NULL,
 	"initial_cash" real DEFAULT 100000 NOT NULL,
 	"unclaimed_btc" real DEFAULT 0 NOT NULL,
-	"last_mining_update_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"last_mining_update_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	CONSTRAINT "users_email_unique" UNIQUE("email")
 );`,
 `CREATE TABLE IF NOT EXISTS "assets" (
@@ -31,10 +34,11 @@ const tables = [
 	"type" text NOT NULL,
 	"quantity" real NOT NULL,
 	"avg_cost" real NOT NULL,
-	"updated_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"updated_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY ("user_id") REFERENCES "users"("id") ON UPDATE no action ON DELETE cascade
 );`,
 `CREATE UNIQUE INDEX IF NOT EXISTS "user_ticker_idx" ON "holdings" ("user_id","ticker");`,
+`CREATE INDEX IF NOT EXISTS "idx_holdings_user_id" ON "holdings" ("user_id");`,
 `CREATE TABLE IF NOT EXISTS "transactions" (
 	"id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	"user_id" integer NOT NULL,
@@ -44,9 +48,11 @@ const tables = [
 	"quantity" real NOT NULL,
 	"price" real NOT NULL,
 	"value" real NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY ("user_id") REFERENCES "users"("id") ON UPDATE no action ON DELETE cascade
 );`,
+`CREATE INDEX IF NOT EXISTS "idx_transactions_user_id" ON "transactions" ("user_id");`,
+`CREATE INDEX IF NOT EXISTS "idx_transactions_user_created" ON "transactions" ("user_id", "created_at" DESC);`,
 `CREATE TABLE IF NOT EXISTS "ai_news" (
 	"id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	"ticker" text NOT NULL,
@@ -54,7 +60,7 @@ const tables = [
 	"article" text NOT NULL,
 	"sentiment" text NOT NULL,
 	"impact_score" integer NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL
 );`,
 `CREATE INDEX IF NOT EXISTS "ticker_created_at_idx" ON "ai_news" ("ticker", "created_at" DESC);`,
 `CREATE TABLE IF NOT EXISTS "prediction_markets" (
@@ -64,11 +70,14 @@ const tables = [
 	"status" text DEFAULT 'open' NOT NULL,
 	"total_pool" real DEFAULT 0 NOT NULL,
 	"closing_at" integer NOT NULL,
+	"winning_outcome_id" integer,
 	"creator_id" integer,
 	"creator_display_name" text NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY ("creator_id") REFERENCES "users"("id") ON UPDATE no action ON DELETE set null
 );`,
+`CREATE INDEX IF NOT EXISTS "idx_markets_status" ON "prediction_markets" ("status");`,
+`CREATE INDEX IF NOT EXISTS "idx_markets_closing_at" ON "prediction_markets" ("closing_at");`,
 `CREATE TABLE IF NOT EXISTS "market_outcomes" (
 	"id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	"market_id" integer NOT NULL,
@@ -82,16 +91,20 @@ const tables = [
 	"user_id" integer NOT NULL,
 	"outcome_id" integer NOT NULL,
 	"amount" real NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"payout" real DEFAULT 0 NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY ("user_id") REFERENCES "users"("id") ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY ("outcome_id") REFERENCES "market_outcomes"("id") ON UPDATE no action ON DELETE cascade
 );`,
+`CREATE INDEX IF NOT EXISTS "idx_market_bets_user_id" ON "market_bets" ("user_id");`,
+`CREATE INDEX IF NOT EXISTS "idx_market_bets_outcome_id" ON "market_bets" ("outcome_id");`,
 `CREATE TABLE IF NOT EXISTS "user_mining_rigs" (
 	"id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	"user_id" integer NOT NULL,
 	"rig_id" text NOT NULL,
 	"quantity" integer DEFAULT 1 NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY ("user_id") REFERENCES "users"("id") ON UPDATE no action ON DELETE cascade
 );`,
 `CREATE UNIQUE INDEX IF NOT EXISTS "user_rig_idx" ON "user_mining_rigs" ("user_id","rig_id");`,
@@ -105,10 +118,10 @@ const tables = [
 	"creator_id" integer NOT NULL,
 	"share_price" real DEFAULT 1 NOT NULL,
 	"total_shares" real DEFAULT 1000 NOT NULL,
-	"is_listed" integer DEFAULT false NOT NULL,
+	"is_listed" integer DEFAULT 0 NOT NULL,
 	"unclaimed_btc" real DEFAULT 0 NOT NULL,
-	"last_mining_update_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"last_mining_update_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	CONSTRAINT "companies_name_unique" UNIQUE("name"),
 	CONSTRAINT "companies_ticker_unique" UNIQUE("ticker"),
 	FOREIGN KEY ("creator_id") REFERENCES "users"("id") ON UPDATE no action ON DELETE cascade
@@ -132,6 +145,7 @@ const tables = [
 	FOREIGN KEY ("user_id") REFERENCES "users"("id") ON UPDATE no action ON DELETE cascade
 );`,
 `CREATE UNIQUE INDEX IF NOT EXISTS "company_user_shares_idx" ON "company_shares" ("company_id","user_id");`,
+`CREATE INDEX IF NOT EXISTS "idx_company_shares_user_id" ON "company_shares" ("user_id");`,
 `CREATE TABLE IF NOT EXISTS "company_holdings" (
 	"id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	"company_id" integer NOT NULL,
@@ -140,7 +154,7 @@ const tables = [
 	"type" text NOT NULL,
 	"quantity" real NOT NULL,
 	"avg_cost" real NOT NULL,
-	"updated_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"updated_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON UPDATE no action ON DELETE cascade
 );`,
 `CREATE UNIQUE INDEX IF NOT EXISTS "company_holdings_ticker_idx" ON "company_holdings" ("company_id","ticker");`,
@@ -149,7 +163,7 @@ const tables = [
 	"company_id" integer NOT NULL,
 	"rig_id" text NOT NULL,
 	"quantity" integer DEFAULT 1 NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON UPDATE no action ON DELETE cascade
 );`,
 `CREATE UNIQUE INDEX IF NOT EXISTS "company_rig_idx" ON "company_mining_rigs" ("company_id","rig_id");`,
@@ -162,9 +176,10 @@ const tables = [
 	"quantity" real NOT NULL,
 	"price" real NOT NULL,
 	"value" real NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON UPDATE no action ON DELETE cascade
 );`,
+`CREATE INDEX IF NOT EXISTS "idx_company_transactions_company_id" ON "company_transactions" ("company_id");`,
 `CREATE TABLE IF NOT EXISTS "automatic_orders" (
 	"id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	"user_id" integer NOT NULL,
@@ -173,15 +188,23 @@ const tables = [
 	"trigger_price" real NOT NULL,
 	"quantity" real NOT NULL,
 	"status" text DEFAULT 'active' NOT NULL,
-	"created_at" integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	"created_at" integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY ("user_id") REFERENCES "users"("id") ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY ("holding_id") REFERENCES "holdings"("id") ON UPDATE no action ON DELETE cascade
 );`,
 `CREATE INDEX IF NOT EXISTS "auto_order_user_holding_idx" ON "automatic_orders" ("user_id","holding_id");`
 ];
 
+// Idempotent column adds for older databases. These are wrapped in try/catch
+// because ALTER TABLE ADD COLUMN throws if the column already exists in SQLite.
+const migrations = [
+    `ALTER TABLE "users" ADD COLUMN "role" text DEFAULT 'user' NOT NULL;`,
+    `ALTER TABLE "prediction_markets" ADD COLUMN "winning_outcome_id" integer;`,
+    `ALTER TABLE "market_bets" ADD COLUMN "payout" real DEFAULT 0 NOT NULL;`,
+    `ALTER TABLE "market_bets" ADD COLUMN "status" text DEFAULT 'active' NOT NULL;`,
+];
+
 export function initializeDatabase(db: Database) {
-    // Use a transaction to ensure all tables are created successfully.
     const createAllTables = db.transaction(() => {
         for (const table of tables) {
             db.prepare(table).run();
@@ -190,8 +213,22 @@ export function initializeDatabase(db: Database) {
 
     try {
         createAllTables();
-        console.log("Database initialized successfully.");
+        console.log("Database schema ensured.");
     } catch (error) {
         console.error("Failed to initialize database:", error);
+        return;
+    }
+
+    // Run additive migrations for already-existing databases. Each is allowed
+    // to fail silently if the column already exists (duplicate column error).
+    for (const stmt of migrations) {
+        try {
+            db.prepare(stmt).run();
+        } catch (err: any) {
+            const msg = String(err?.message || '');
+            if (!/duplicate column|already exists/i.test(msg)) {
+                console.warn(`Migration skipped: ${stmt.substring(0, 60)}... -> ${msg}`);
+            }
+        }
     }
 }

@@ -66,7 +66,7 @@ interface PortfolioData extends UserProfile {
 }
 
 interface PortfolioContextType {
-  userProfile: UserProfile | null;
+  userProfile: PortfolioData | null;
   cash: number;
   initialCash: number;
   holdings: Holding[];

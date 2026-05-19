@@ -1,6 +1,8 @@
-import type { Asset } from '@/context/portfolio-context';
-
-export interface DetailedAsset extends Asset {
+export interface DetailedAsset {
+    ticker: string;
+    name: string;
+    type: 'Stock' | 'Crypto' | 'Forex' | 'Commodity';
+    price: number;
     description: string;
     marketCap: string;
     change24h: string;

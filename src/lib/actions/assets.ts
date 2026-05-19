@@ -3,23 +3,24 @@
 import { db } from '@/lib/db';
 import { assets as assetsSchema } from '@/lib/db/schema';
 import { assets as initialAssets } from '@/lib/assets';
+import { startPriceSimulator } from '@/lib/price-simulator';
 
-// This function now gets assets from the DB and seeds it on the first run.
+// Returns the canonical asset list from the DB. Kicks off the server-side
+// price simulator on first call so prices start moving without waiting on
+// an SSE client to connect.
 export async function getAssets() {
     try {
+        // Side-effect: ensure the simulator is running.
+        // We don't await here to avoid blocking the response.
+        void startPriceSimulator();
+
         const assetsInDb = await db.query.assets.findMany();
         if (assetsInDb.length === 0) {
             console.log("Seeding database with initial assets...");
-            const assetsToInsert = initialAssets.map(asset => ({
-                ...asset,
-                price: asset.price.toString(),
-            }));
-            await db.insert(assetsSchema).values(assetsToInsert);
-            return (await db.query.assets.findMany()).map(a => ({...a, price: parseFloat(a.price)}));
+            await db.insert(assetsSchema).values(initialAssets);
+            return await db.query.assets.findMany();
         }
-
-        return assetsInDb.map(a => ({...a, price: parseFloat(a.price)}));
-
+        return assetsInDb;
     } catch (error) {
         console.error("Error getting assets:", error);
         return [];

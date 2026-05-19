@@ -40,8 +40,8 @@ export async function getPublicUserProfile(userId: string) {
         
         const formattedTransactions = userProfile.transactions.map(tx => ({
             ...tx,
-            value: parseFloat(tx.value),
-            createdAt: new Date(tx.createdAt)
+            value: tx.value,
+            createdAt: new Date(tx.createdAt),
         }));
 
         return {

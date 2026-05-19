@@ -1,46 +1,38 @@
 'use server';
 
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import { users, userMiningRigs } from '@/lib/db/schema';
 import { getSession } from '@/lib/session';
 import { getRigById } from '@/lib/mining';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+
+const rigIdSchema = z.string().min(1).max(64);
 
 export async function buyMiningRig(rigId: string): Promise<{ success?: string; error?: string }> {
     const session = await getSession();
-    if (!session?.id) {
-        return { error: 'Non autorisé.' };
-    }
+    if (!session?.id) return { error: 'Non autorisé.' };
 
-    const rigToBuy = getRigById(rigId);
-    if (!rigToBuy) {
-        return { error: 'Matériel de minage non valide.' };
-    }
+    const parsed = rigIdSchema.safeParse(rigId);
+    if (!parsed.success) return { error: 'Identifiant de matériel invalide.' };
+
+    const rigToBuy = getRigById(parsed.data);
+    if (!rigToBuy) return { error: 'Matériel de minage non valide.' };
 
     try {
         const result = await db.transaction(async (tx) => {
             const user = await tx.query.users.findFirst({
                 where: eq(users.id, session.id),
-                columns: { cash: true }
+                columns: { cash: true },
             });
+            if (!user) throw new Error("Utilisateur non trouvé.");
+            if (user.cash < rigToBuy.price) throw new Error("Fonds insuffisants.");
 
-            if (!user) {
-                throw new Error("Utilisateur non trouvé.");
-            }
+            await tx.update(users).set({ cash: sql`cash - ${rigToBuy.price}` }).where(eq(users.id, session.id));
 
-            const userCash = parseFloat(user.cash);
-            if (userCash < rigToBuy.price) {
-                throw new Error("Fonds insuffisants.");
-            }
-
-            // Deduct cost
-            const newCash = userCash - rigToBuy.price;
-            await tx.update(users).set({ cash: newCash.toFixed(2) }).where(eq(users.id, session.id));
-
-            // Add or update rig
             const existingRig = await tx.query.userMiningRigs.findFirst({
-                where: and(eq(userMiningRigs.userId, session.id), eq(userMiningRigs.rigId, rigId)),
+                where: and(eq(userMiningRigs.userId, session.id), eq(userMiningRigs.rigId, parsed.data)),
             });
 
             if (existingRig) {
@@ -50,7 +42,7 @@ export async function buyMiningRig(rigId: string): Promise<{ success?: string; e
             } else {
                 await tx.insert(userMiningRigs).values({
                     userId: session.id,
-                    rigId: rigId,
+                    rigId: parsed.data,
                     quantity: 1,
                 });
             }
@@ -59,9 +51,8 @@ export async function buyMiningRig(rigId: string): Promise<{ success?: string; e
         });
 
         revalidatePath('/mining');
-        revalidatePath('/portfolio'); // to update cash
+        revalidatePath('/portfolio');
         return result;
-
     } catch (error: any) {
         return { error: error.message || "Une erreur est survenue lors de l'achat." };
     }
