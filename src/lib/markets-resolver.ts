@@ -1,5 +1,6 @@
 import 'server-only';
 import { db } from './db';
+import { runTransaction } from './db/tx';
 import { predictionMarkets, marketOutcomes, marketBets, users } from './db/schema';
 import { eq, and, lt, sql } from 'drizzle-orm';
 
@@ -58,7 +59,7 @@ async function settleMarketsWithWinners() {
 
     // Parimutuel payout: each winner gets a proportional share of the total pool.
     // payout = (bet.amount / winningOutcome.pool) * totalPool
-    await db.transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const allBets = await tx.query.marketBets.findMany({
         where: eq(marketBets.outcomeId, market.winningOutcomeId!),
       });

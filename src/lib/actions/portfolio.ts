@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { runTransaction } from '@/lib/db/tx';
 import { users, holdings, transactions, assets as assetsSchema, automaticOrders, userMiningRigs } from '@/lib/db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { getSession } from '@/lib/session';
@@ -162,7 +163,7 @@ export async function buyAssetAction(ticker: string, quantity: number, stopLoss?
     const qty = parsed.data.quantity;
 
     try {
-        await db.transaction(async (tx) => {
+        await runTransaction(async (tx) => {
             const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
             if (!user) throw new Error("Utilisateur non trouvé.");
 
@@ -257,7 +258,7 @@ export async function sellAssetAction(ticker: string, quantity: number): Promise
     const qty = parsed.data.quantity;
 
     try {
-        await db.transaction(async (tx) => {
+        await runTransaction(async (tx) => {
             const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
             if (!user) throw new Error("Utilisateur non trouvé.");
 
@@ -313,7 +314,7 @@ export async function claimMiningRewards(_unused?: number): Promise<{ success?: 
     if (!session?.id) return { error: 'Non autorisé.' };
 
     try {
-        const result = await db.transaction(async (tx) => {
+        const result = await runTransaction(async (tx) => {
             const user = await tx.query.users.findFirst({
                 where: eq(users.id, session.id),
                 columns: { unclaimedBtc: true, lastMiningUpdateAt: true },

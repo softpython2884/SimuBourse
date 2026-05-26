@@ -1,6 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
+import { runTransaction } from '@/lib/db/tx';
 import { predictionMarkets, marketOutcomes, users, marketBets } from '@/lib/db/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { createPredictionMarket } from '@/ai/flows/create-prediction-market';
@@ -98,7 +99,7 @@ export async function createUserMarket(values: z.infer<typeof marketFormSchema>)
     }
 
     try {
-        await db.transaction(async (tx) => {
+        await runTransaction(async (tx) => {
             const [newMarket] = await tx.insert(predictionMarkets).values({
                 title,
                 category,
@@ -137,7 +138,7 @@ export async function placeBet(outcomeId: number, marketId: number, amount: numb
     if (!parsed.success) return { error: "Données invalides." };
 
     try {
-        const result = await db.transaction(async (tx) => {
+        const result = await runTransaction(async (tx) => {
             const user = await tx.query.users.findFirst({
                 where: eq(users.id, session.id),
                 columns: { cash: true },
@@ -197,7 +198,7 @@ export async function setMarketWinner(marketId: number, winningOutcomeId: number
         const parsed = resolveSchema.safeParse({ marketId, winningOutcomeId });
         if (!parsed.success) return { error: "Données invalides." };
 
-        await db.transaction(async (tx) => {
+        await runTransaction(async (tx) => {
             const outcome = await tx.query.marketOutcomes.findFirst({
                 where: and(eq(marketOutcomes.id, parsed.data.winningOutcomeId), eq(marketOutcomes.marketId, parsed.data.marketId)),
             });

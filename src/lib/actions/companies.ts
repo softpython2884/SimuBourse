@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { runTransaction } from '@/lib/db/tx';
 import {
   companies, companyMembers, users, companyShares, companyHoldings,
   assets as assetsSchema, transactions, companyMiningRigs, companyTransactions,
@@ -52,7 +53,7 @@ export async function createCompany(values: z.infer<typeof createCompanySchema>)
   if (!isUnique) return { error: "Impossible de générer un ticker unique. Veuillez essayer un autre nom." };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
       if (!user) throw new Error("Utilisateur non trouvé.");
 
@@ -143,7 +144,7 @@ export async function getCompaniesForUserDashboard() {
   }
 
   if (updates.length > 0) {
-    await db.transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       for (const u of updates) {
         await tx.update(companies).set({ sharePrice: u.newPrice }).where(eq(companies.id, u.id));
       }
@@ -377,7 +378,7 @@ export async function investInCompany(companyId: number, amount: number): Promis
   if (!parsed.success) return { error: "Montant invalide." };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const user = await tx.query.users.findFirst({ where: eq(users.id, session.id), columns: { cash: true } });
       if (!user) throw new Error("Utilisateur non trouvé.");
       if (user.cash < amount) throw new Error("Fonds insuffisants.");
@@ -450,7 +451,7 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
   if (!parsed.success) return { error: "Quantité invalide." };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const company = await tx.query.companies.findFirst({ where: eq(companies.id, companyId) });
       if (!company) throw new Error("Entreprise non trouvée.");
 
@@ -519,7 +520,7 @@ export async function addCashToCompany(companyId: number, amount: number): Promi
   if (!parsed.success) return { error: "Montant invalide." };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const member = await tx.query.companyMembers.findFirst({
         where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
       });
@@ -552,7 +553,7 @@ export async function withdrawFromCompanyTreasury(companyId: number, amount: num
   if (!parsed.success) return { error: "Montant invalide." };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const member = await tx.query.companyMembers.findFirst({
         where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
       });
@@ -608,7 +609,7 @@ export async function addMemberToCompany(companyId: number, userId: number, role
   if (!session?.id) return { error: "Non autorisé." };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const requesterMember = await tx.query.companyMembers.findFirst({
         where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
       });
@@ -638,7 +639,7 @@ export async function removeMemberFromCompany(companyId: number, memberIdToRemov
   if (!session?.id) return { error: "Non autorisé." };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const requesterMember = await tx.query.companyMembers.findFirst({
         where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
       });
@@ -667,7 +668,7 @@ export async function listCompanyOnMarket(companyId: number): Promise<{ success?
   if (!session?.id) return { error: 'Non autorisé.' };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const member = await tx.query.companyMembers.findFirst({
         where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
       });
@@ -694,7 +695,7 @@ export async function claimCompanyBtc(companyId: number): Promise<{ success?: st
   if (!session?.id) return { error: "Non autorisé." };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const member = await tx.query.companyMembers.findFirst({
         where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
       });
@@ -759,7 +760,7 @@ export async function buyAssetForCompany(companyId: number, ticker: string, quan
   const tickerUp = t.data.toUpperCase();
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const member = await tx.query.companyMembers.findFirst({
         where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
       });
@@ -825,7 +826,7 @@ export async function sellAssetForCompany(companyId: number, holdingId: number, 
   if (!q.success) return { error: "Quantité invalide." };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const member = await tx.query.companyMembers.findFirst({
         where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
       });
@@ -881,7 +882,7 @@ export async function buyMiningRigForCompany(companyId: number, rigId: string): 
   if (!rigToBuy) return { error: 'Matériel de minage non valide.' };
 
   try {
-    const result = await db.transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const member = await tx.query.companyMembers.findFirst({
         where: and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, session.id)),
       });

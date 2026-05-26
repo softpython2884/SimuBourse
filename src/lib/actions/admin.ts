@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { runTransaction } from '@/lib/db/tx';
 import { aiNews, companies, users, holdings as holdingsSchema, assets as assetsSchema } from '@/lib/db/schema';
 import { revalidatePath } from 'next/cache';
 import { eq, and } from 'drizzle-orm';
@@ -65,7 +66,7 @@ export async function addCryptoToUserByEmail(data: { email: string, ticker: stri
         const ticker = parsed.data.ticker.toUpperCase();
         const { quantity } = parsed.data;
 
-        const result = await db.transaction(async (tx) => {
+        const result = await runTransaction(async (tx) => {
             const user = await tx.query.users.findFirst({
                 where: eq(users.email, email),
             });

@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { runTransaction } from '@/lib/db/tx';
 import { users, userMiningRigs } from '@/lib/db/schema';
 import { getSession } from '@/lib/session';
 import { getRigById } from '@/lib/mining';
@@ -21,7 +22,7 @@ export async function buyMiningRig(rigId: string): Promise<{ success?: string; e
     if (!rigToBuy) return { error: 'Matériel de minage non valide.' };
 
     try {
-        const result = await db.transaction(async (tx) => {
+        const result = await runTransaction(async (tx) => {
             const user = await tx.query.users.findFirst({
                 where: eq(users.id, session.id),
                 columns: { cash: true },
