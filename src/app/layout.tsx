@@ -12,6 +12,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { AppSidebar } from '@/components/layout/sidebar';
 import { AppHeader } from '@/components/layout/header';
 import { MobileNav } from '@/components/layout/mobile-nav';
+import { AppFooter } from '@/components/layout/footer';
 import { AuthProvider } from '@/context/auth-context';
 import { PortfolioProvider } from '@/context/portfolio-context';
 import { MarketDataProvider } from '@/context/market-data-context';
@@ -40,11 +41,12 @@ export default function RootLayout({
             <PortfolioProvider>
               <div className="flex min-h-screen w-full flex-col bg-muted/40">
                 <AppSidebar />
-                <div className="flex flex-col sm:pl-14">
+                <div className="flex min-h-screen flex-col sm:pl-14">
                   <AppHeader />
-                  <main className="flex-1 p-4 pb-20 sm:px-6 sm:py-6 sm:pb-6">
+                  <main className="flex-1 p-4 sm:px-6 sm:py-6">
                     {children}
                   </main>
+                  <AppFooter />
                 </div>
               </div>
               <MobileNav />

@@ -109,6 +109,11 @@ export default function SignupPage() {
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Créer un compte
               </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                En créant un compte, vous acceptez nos{' '}
+                <Link href="/conditions" className="underline">conditions d'utilisation</Link>{' '}et notre{' '}
+                <Link href="/confidentialite" className="underline">politique de confidentialité</Link>.
+              </p>
             </form>
           </Form>
           <div className="mt-4 text-center text-sm">
