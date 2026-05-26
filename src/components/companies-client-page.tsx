@@ -59,6 +59,56 @@ function CompanyTableRow({ company, type }: { company: any, type: 'managed' | 'i
     );
 }
 
+function CompanyMobileCard({ company, type }: { company: any, type: 'managed' | 'invested' | 'other' }) {
+    const hasShares = company.sharesHeld > 0;
+
+    return (
+        <div className="rounded-lg border p-4">
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <div className="truncate font-medium">{company.name} ({company.ticker})</div>
+                    <div className="text-sm text-muted-foreground">{company.industry}</div>
+                </div>
+                {type === 'managed' && <Badge variant="secondary">{company.role.toUpperCase()}</Badge>}
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                {type === 'managed' && <>
+                    <div><div className="text-xs text-muted-foreground">Mes Parts</div><div className="font-mono">{hasShares ? company.sharesHeld.toFixed(4) : '-'}</div></div>
+                    <div><div className="text-xs text-muted-foreground">Valeur des Parts</div><div className="font-mono">{hasShares ? `$${company.sharesValue.toFixed(2)}` : '-'}</div></div>
+                </>}
+                {type === 'invested' && <>
+                    <div><div className="text-xs text-muted-foreground">Parts Détenues</div><div className="font-mono">{company.sharesHeld.toFixed(4)}</div></div>
+                    <div><div className="text-xs text-muted-foreground">Valeur des Parts</div><div className="font-mono">${company.sharesValue.toFixed(2)}</div></div>
+                </>}
+                {type === 'other' && <>
+                    <div><div className="text-xs text-muted-foreground">Trésorerie</div><div className="font-mono">${company.cash.toFixed(2)}</div></div>
+                    <div><div className="text-xs text-muted-foreground">Cap. Boursière</div><div className="font-mono">${company.marketCap.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div></div>
+                </>}
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+                <Button asChild variant="outline" size="sm" className="flex-1">
+                    <Link href={`/companies/${company.id}`}>Détails</Link>
+                </Button>
+                <InvestDialog company={company as CompanyWithDetails}>
+                    <Button size="sm" className="flex-1">Investir</Button>
+                </InvestDialog>
+                {hasShares && (
+                    <SellSharesDialog
+                        companyId={company.id}
+                        companyName={company.name}
+                        sharePrice={company.sharePrice}
+                        sharesHeld={company.sharesHeld}
+                    >
+                        <Button size="sm" variant="secondary" className="flex-1">Vendre</Button>
+                    </SellSharesDialog>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function CompanyTable({ title, description, companies, type }: { title: string, description: string, companies: any[], type: 'managed' | 'invested' | 'other' }) {
     const headers = {
         managed: ["Entreprise", "Mon Rôle", "Mes Parts", "Valeur des Parts", ""],
@@ -73,6 +123,8 @@ function CompanyTable({ title, description, companies, type }: { title: string, 
                 <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent>
+                {/* Desktop: table */}
+                <div className="hidden md:block">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -93,6 +145,18 @@ function CompanyTable({ title, description, companies, type }: { title: string, 
                         )}
                     </TableBody>
                 </Table>
+                </div>
+
+                {/* Mobile: stacked cards */}
+                <div className="space-y-3 md:hidden">
+                    {companies.length > 0 ? (
+                        companies.map((company) => <CompanyMobileCard key={company.id} company={company} type={type} />)
+                    ) : (
+                        <div className="flex h-24 items-center justify-center text-center text-muted-foreground">
+                            {type === 'managed' ? "Vous ne gérez aucune entreprise." : type === 'invested' ? "Vous n'avez investi dans aucune entreprise privée." : "Aucune entreprise privée disponible."}
+                        </div>
+                    )}
+                </div>
             </CardContent>
         </Card>
     );
@@ -188,7 +252,7 @@ interface CompaniesClientPageProps {
 export function CompaniesClientPage({ managedCompanies, investedCompanies, otherPrivateCompanies, listedCompanies }: CompaniesClientPageProps) {
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Espace Entreprises & Bourse</h1>
                     <p className="text-muted-foreground">Créez, gérez et tradez des entreprises dirigées par des joueurs.</p>

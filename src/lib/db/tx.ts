@@ -17,14 +17,28 @@ import { db, rawSqlite } from './index';
  * the transaction will straddle event-loop yields, and a concurrent request
  * could try to BEGIN and fail. Don't put bcrypt / fetch / fs inside.
  */
+// Serialize all transactions through a single promise chain. Because the
+// connection is shared and `fn` straddles event-loop yields, two concurrent
+// callers could otherwise both run BEGIN and trip "cannot start a transaction
+// within a transaction". This mutex guarantees one transaction at a time.
+let chain: Promise<unknown> = Promise.resolve();
+
 export async function runTransaction<T>(fn: (tx: typeof db) => Promise<T>): Promise<T> {
-  rawSqlite.prepare('BEGIN').run();
-  try {
-    const result = await fn(db);
-    rawSqlite.prepare('COMMIT').run();
-    return result;
-  } catch (err) {
-    try { rawSqlite.prepare('ROLLBACK').run(); } catch {}
-    throw err;
-  }
+  const run = async (): Promise<T> => {
+    rawSqlite.prepare('BEGIN').run();
+    try {
+      const result = await fn(db);
+      rawSqlite.prepare('COMMIT').run();
+      return result;
+    } catch (err) {
+      try { rawSqlite.prepare('ROLLBACK').run(); } catch {}
+      throw err;
+    }
+  };
+
+  // Queue behind any in-flight transaction; don't let one caller's failure
+  // break the chain for the next caller.
+  const result = chain.then(run, run);
+  chain = result.then(() => undefined, () => undefined);
+  return result;
 }

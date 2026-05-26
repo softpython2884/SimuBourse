@@ -136,6 +136,8 @@ export default function ProfileClientPage() {
                   <CardDescription>Un journal de toutes vos activités de trading récentes.</CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {/* Desktop: table */}
+                  <div className="hidden md:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -173,6 +175,39 @@ export default function ProfileClientPage() {
                         )}
                     </TableBody>
                   </Table>
+                  </div>
+
+                  {/* Mobile: stacked cards */}
+                  <div className="space-y-3 md:hidden">
+                    {transactions.length > 0 ? (
+                        transactions.map(tx => (
+                            <div key={`m-${tx.id}`} className="rounded-lg border p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <div className="truncate font-medium">{tx.name}</div>
+                                        <div className="text-sm text-muted-foreground">{tx.ticker}</div>
+                                    </div>
+                                    <span className={`shrink-0 text-sm font-semibold ${tx.type === 'Buy' ? 'text-red-500' : 'text-green-500'}`}>
+                                        {tx.type === 'Buy' ? 'Achat' : 'Vente'}
+                                    </span>
+                                </div>
+                                <div className="mt-2 flex items-end justify-between">
+                                    <div className="text-xs text-muted-foreground">
+                                        {tx.quantity.toLocaleString(undefined, {maximumFractionDigits: 8})} × ${tx.price.toFixed(2)}
+                                        <div>{format(new Date(tx.createdAt), 'd MMM yyyy, HH:mm', { locale: fr })}</div>
+                                    </div>
+                                    <span className={`font-semibold ${tx.type === 'Buy' ? 'text-red-500' : 'text-green-500'}`}>
+                                        {tx.type === 'Buy' ? '-' : '+'}${tx.value.toFixed(2)}
+                                    </span>
+                                </div>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="flex h-24 items-center justify-center text-center text-muted-foreground">
+                            Aucune transaction pour le moment.
+                        </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </div>

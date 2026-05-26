@@ -72,8 +72,8 @@ export default function TradingPage() {
                 <CardTitle>Salle des Marchés</CardTitle>
                 <CardDescription>Achetez et vendez des actions et des cryptos. Les entreprises de joueurs sont dans la section "Entreprises".</CardDescription>
             </div>
-            <div className="flex items-center gap-2">
-                <div className="relative">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="relative flex-1 sm:flex-initial">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         type="search"
@@ -83,34 +83,39 @@ export default function TradingPage() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <Select value={sortOption} onValueChange={setSortOption}>
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Trier par" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="marketCap_desc">Cap. Boursière (Décroissant)</SelectItem>
-                        <SelectItem value="marketCap_asc">Cap. Boursière (Croissant)</SelectItem>
-                        <SelectItem value="name_asc">Nom (A-Z)</SelectItem>
-                        <SelectItem value="name_desc">Nom (Z-A)</SelectItem>
-                        <SelectItem value="price_desc">Prix (Décroissant)</SelectItem>
-                        <SelectItem value="price_asc">Prix (Croissant)</SelectItem>
-                        <SelectItem value="change_desc">Variation (Décroissant)</SelectItem>
-                        <SelectItem value="change_asc">Variation (Croissant)</SelectItem>
-                    </SelectContent>
-                </Select>
-                 <div className="flex items-center gap-1 rounded-md bg-muted p-1">
-                    <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('list')}>
-                        <List className="h-4 w-4" />
-                    </Button>
-                    <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('grid')}>
-                        <LayoutGrid className="h-4 w-4" />
-                    </Button>
+                <div className="flex items-center gap-2">
+                    <Select value={sortOption} onValueChange={setSortOption}>
+                        <SelectTrigger className="w-full flex-1 sm:w-[180px] sm:flex-initial">
+                            <SelectValue placeholder="Trier par" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="marketCap_desc">Cap. Boursière (Décroissant)</SelectItem>
+                            <SelectItem value="marketCap_asc">Cap. Boursière (Croissant)</SelectItem>
+                            <SelectItem value="name_asc">Nom (A-Z)</SelectItem>
+                            <SelectItem value="name_desc">Nom (Z-A)</SelectItem>
+                            <SelectItem value="price_desc">Prix (Décroissant)</SelectItem>
+                            <SelectItem value="price_asc">Prix (Croissant)</SelectItem>
+                            <SelectItem value="change_desc">Variation (Décroissant)</SelectItem>
+                            <SelectItem value="change_asc">Variation (Croissant)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <div className="hidden items-center gap-1 rounded-md bg-muted p-1 sm:flex">
+                        <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('list')}>
+                            <List className="h-4 w-4" />
+                        </Button>
+                        <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('grid')}>
+                            <LayoutGrid className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
       </CardHeader>
       <CardContent>
         {viewMode === 'list' ? (
+          <>
+            {/* Desktop: table */}
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -154,6 +159,43 @@ export default function TradingPage() {
                 )})}
               </TableBody>
             </Table>
+            </div>
+
+            {/* Mobile: stacked cards */}
+            <div className="space-y-3 md:hidden">
+                {filteredAndSortedAssets.map((asset) => {
+                  const changeIsPositive = asset.change24h.startsWith('+');
+                  return (
+                    <div key={`m-${asset.ticker}`} className="rounded-lg border p-4">
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                                <div className="truncate font-medium">{asset.name}</div>
+                                <div className="text-sm text-muted-foreground">{asset.ticker}</div>
+                            </div>
+                            <Badge variant="outline">{asset.type}</Badge>
+                        </div>
+                        <div className="mt-3 flex items-baseline justify-between">
+                            <span className="font-mono text-lg">${asset.price.toFixed(2)}</span>
+                            <span className={changeIsPositive ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}>
+                                {asset.change24h}
+                            </span>
+                        </div>
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                            <Button asChild variant="outline" size="sm">
+                                <Link href={`/trading/${asset.ticker}`}>Détails</Link>
+                            </Button>
+                            <TradeDialog asset={asset} tradeType="Buy">
+                                <Button variant="outline" size="sm">Acheter</Button>
+                            </TradeDialog>
+                            <TradeDialog asset={asset} tradeType="Sell">
+                                <Button variant="secondary" size="sm">Vendre</Button>
+                            </TradeDialog>
+                        </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </>
         ) : (
              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {filteredAndSortedAssets.map((asset) => (

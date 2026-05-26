@@ -44,3 +44,5 @@ next-env.d.ts
 firebase-debug.log
 firestore-debug.log
 sqlite.db
+sqlite.db-shm
+sqlite.db-wal

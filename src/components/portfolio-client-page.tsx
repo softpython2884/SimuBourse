@@ -88,6 +88,8 @@ export default function PortfolioClientPage() {
                     <CardDescription>Liste détaillée de tous les actifs que vous possédez.</CardDescription>
                 </CardHeader>
                 <CardContent>
+                    {/* Desktop: full table */}
+                    <div className="hidden md:block">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -156,6 +158,76 @@ export default function PortfolioClientPage() {
                             )}
                         </TableBody>
                     </Table>
+                    </div>
+
+                    {/* Mobile: stacked cards */}
+                    <div className="space-y-3 md:hidden">
+                        {holdingsWithMarketData.length > 0 ? (
+                            holdingsWithMarketData.map(holding => (
+                                <div key={`m-${holding.ticker}-${holding.isCompanyShare}`} className="rounded-lg border p-4">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <div className="truncate font-medium">{holding.name}</div>
+                                            <div className="text-sm text-muted-foreground">{holding.ticker}</div>
+                                        </div>
+                                        <div className={`text-right text-sm font-semibold ${holding.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                            <div>{holding.pnl >= 0 ? '+' : '-'}${Math.abs(holding.pnl).toFixed(2)}</div>
+                                            <div className="text-xs font-normal">({holding.pnlPercent.toFixed(2)}%)</div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Quantité</div>
+                                            <div>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Prix</div>
+                                            <div>${holding.currentPrice.toFixed(holding.currentPrice > 10 ? 2 : 4)}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Valeur</div>
+                                            <div>${holding.currentValue.toFixed(2)}</div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 flex gap-2">
+                                        {holding.isCompanyShare ? (
+                                            <>
+                                                <Button asChild variant="outline" size="sm" className="flex-1">
+                                                    <Link href={`/companies/${holding.id}`}>Détails</Link>
+                                                </Button>
+                                                <SellSharesDialog
+                                                    companyId={holding.id}
+                                                    companyName={holding.name}
+                                                    sharePrice={holding.currentPrice}
+                                                    sharesHeld={holding.quantity}
+                                                    isListed={holding.company?.isListed}
+                                                >
+                                                    <Button variant="secondary" size="sm" className="flex-1">Vendre</Button>
+                                                </SellSharesDialog>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Button asChild variant="outline" size="sm" className="flex-1">
+                                                    <Link href={`/trading/${holding.asset!.ticker}`}>Détails</Link>
+                                                </Button>
+                                                {holding.asset ? (
+                                                    <TradeDialog asset={holding.asset as AssetFromDb} tradeType="Sell">
+                                                        <Button variant="secondary" size="sm" className="flex-1">Vendre</Button>
+                                                    </TradeDialog>
+                                                ) : (
+                                                    <Button variant="secondary" size="sm" className="flex-1" disabled>Vendre</Button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex h-24 items-center justify-center text-center text-muted-foreground">
+                                Vous ne possédez aucun actif pour le moment.
+                            </div>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
         </div>

@@ -54,24 +54,26 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
   
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button asChild variant="outline" size="icon">
-          <Link href="/companies">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div className="flex-1">
-            <div className="flex items-center gap-3">
-                 <h1 className="text-2xl font-bold tracking-tight">{company.name} ({company.ticker})</h1>
-                 {company.isListed ? (
-                    <Badge variant="secondary">En Bourse</Badge>
-                ) : (
-                    <Badge variant="outline">Non Cotée</Badge>
-                )}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-1 items-center gap-4">
+            <Button asChild variant="outline" size="icon" className="shrink-0">
+              <Link href="/companies">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                     <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{company.name} ({company.ticker})</h1>
+                     {company.isListed ? (
+                        <Badge variant="secondary">En Bourse</Badge>
+                    ) : (
+                        <Badge variant="outline">Non Cotée</Badge>
+                    )}
+                </div>
+              <p className="text-muted-foreground">{company.description}</p>
             </div>
-          <p className="text-muted-foreground">{company.description}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             {isCEO && (
                 <>
                     <AddCompanyCashDialog companyId={company.id}>

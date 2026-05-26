@@ -67,7 +67,7 @@ export async function getAuthenticatedUserProfile() {
             const now = Date.now();
             const rate = totalHashRateMhs * BTC_PER_MHS_PER_SECOND;
             await db.update(users).set({
-                unclaimedBtc: sql`unclaimed_btc + ((${now} - last_mining_update_at) / 1000.0) * ${rate}`,
+                unclaimedBtc: sql`unclaimed_btc + MAX(0, ((${now} - last_mining_update_at) / 1000.0) * ${rate})`,
                 lastMiningUpdateAt: new Date(now),
             }).where(eq(users.id, session.id));
         }

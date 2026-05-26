@@ -73,7 +73,65 @@ WantedBy=multi-user.target
 sudo systemctl enable --now simubourse
 ```
 
-Mettre nginx en reverse-proxy devant si vous voulez SSL + un nom de domaine.
+## nginx + HTTPS (bourse.forgenet.fr)
+
+Mettez nginx en reverse-proxy devant l'app Node (qui écoute sur `127.0.0.1:3000`).
+Le point clé : **désactiver le buffering sur les routes SSE** (`/api/prices/stream`
+et `/api/markets/stream`), sinon les prix temps réel n'arrivent jamais au client.
+
+Créez `/etc/nginx/sites-available/bourse.forgenet.fr` :
+
+```nginx
+server {
+    listen 80;
+    server_name bourse.forgenet.fr;
+
+    # Reverse-proxy vers l'app Next.js
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        "upgrade";
+    }
+
+    # Flux SSE temps réel : pas de buffering, connexion longue durée
+    location ~ ^/api/(prices|markets)/stream$ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        chunked_transfer_encoding on;
+    }
+}
+```
+
+Activez le site, testez la conf et obtenez le certificat TLS via certbot
+(qui réécrira ce server block pour ajouter le listen 443 + redirection HTTPS) :
+
+```bash
+sudo ln -s /etc/nginx/sites-available/bourse.forgenet.fr /etc/nginx/sites-enabled/
+sudo nginx -t                      # vérifier la syntaxe
+sudo systemctl reload nginx
+
+# Certificat Let's Encrypt (le plugin nginx configure le HTTPS automatiquement)
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d bourse.forgenet.fr
+
+# Le renouvellement automatique est géré par le timer systemd de certbot :
+sudo systemctl status certbot.timer
+sudo certbot renew --dry-run        # tester le renouvellement
+```
+
+Prérequis : l'enregistrement DNS `A`/`AAAA` de `bourse.forgenet.fr` doit pointer
+vers l'IP du serveur, et les ports 80/443 doivent être ouverts.
 
 ### Note importante
 

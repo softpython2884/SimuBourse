@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { users } from '@/lib/db/schema';
 import { db } from '@/lib/db';
+import { runTransaction } from '@/lib/db/tx';
 import bcrypt from 'bcrypt';
 import { eq, sql } from 'drizzle-orm';
 import { setSession } from '@/lib/session';
@@ -26,32 +27,36 @@ export async function signup(values: SignupInput): Promise<{ success?: string; e
   const email = validatedFields.data.email.toLowerCase();
 
   try {
-    const existingUser = await db.query.users.findFirst({
-      where: eq(users.email, email),
-    });
-
-    if (existingUser) {
-      return { error: 'Un compte avec cet e-mail existe déjà.' };
-    }
-
+    // Hash outside the transaction (bcrypt is genuinely async/CPU-bound).
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // First user created becomes admin automatically.
-    const userCountRow = await db.select({ c: sql<number>`cast(count(*) as int)` }).from(users);
-    const isFirstUser = (userCountRow[0]?.c ?? 0) === 0;
+    // Uniqueness check, "first user = admin" count, and insert all run inside one
+    // serialized transaction so two concurrent signups can't both become admin
+    // (or both insert the same email).
+    const newUser = await runTransaction(async (tx) => {
+      const existingUser = await tx.query.users.findFirst({ where: eq(users.email, email) });
+      if (existingUser) throw new Error('EMAIL_TAKEN');
 
-    const [newUser] = await db.insert(users).values({
-      displayName,
-      email,
-      passwordHash,
-      role: isFirstUser ? 'admin' : 'user',
-    }).returning({ id: users.id });
+      const userCountRow = await tx.select({ c: sql<number>`cast(count(*) as int)` }).from(users);
+      const isFirstUser = (userCountRow[0]?.c ?? 0) === 0;
+
+      const [created] = await tx.insert(users).values({
+        displayName,
+        email,
+        passwordHash,
+        role: isFirstUser ? 'admin' : 'user',
+      }).returning({ id: users.id });
+      return created;
+    });
 
     // Auto-login after signup so the user lands on a real session.
     await setSession(newUser.id);
 
     return { success: 'Compte créé avec succès ! Redirection...' };
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === 'EMAIL_TAKEN' || /UNIQUE constraint/i.test(error?.message ?? '')) {
+      return { error: 'Un compte avec cet e-mail existe déjà.' };
+    }
     console.error('Signup error:', error);
     return { error: 'Une erreur est survenue lors de la création du compte.' };
   }

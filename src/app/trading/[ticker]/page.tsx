@@ -65,6 +65,16 @@ export default function AssetDetailPage() {
           </TradeDialog>
         </div>
       </div>
+
+      {/* Mobile: trade actions (hidden on desktop where they sit in the header) */}
+      <div className="grid grid-cols-2 gap-2 md:hidden">
+        <TradeDialog asset={asset} tradeType="Buy">
+          <Button className="w-full">Acheter</Button>
+        </TradeDialog>
+        <TradeDialog asset={asset} tradeType="Sell">
+          <Button variant="secondary" className="w-full">Vendre</Button>
+        </TradeDialog>
+      </div>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

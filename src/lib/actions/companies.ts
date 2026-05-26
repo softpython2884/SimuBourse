@@ -264,7 +264,7 @@ export async function getCompanyById(companyId: number) {
         const now = Date.now();
         const rate = hash * BTC_PER_MHS_PER_SECOND;
         await db.update(companies).set({
-          unclaimedBtc: sql`unclaimed_btc + ((${now} - last_mining_update_at) / 1000.0) * ${rate}`,
+          unclaimedBtc: sql`unclaimed_btc + MAX(0, ((${now} - last_mining_update_at) / 1000.0) * ${rate})`,
           lastMiningUpdateAt: new Date(now),
         }).where(eq(companies.id, companyId));
       }
@@ -466,7 +466,7 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
       const sharePrice = currentTotalShares > 0 ? currentNav / currentTotalShares : 0;
       const proceeds = sharePrice * quantity;
 
-      if (company.cash < proceeds && !company.isListed) {
+      if (company.cash < proceeds) {
         throw new Error("La trésorerie de l'entreprise est insuffisante pour racheter vos parts.");
       }
 
@@ -479,16 +479,14 @@ export async function sellShares(companyId: number, quantity: number): Promise<{
         await tx.update(companyShares).set({ quantity: newSharesHeld }).where(eq(companyShares.id, userShareHolding!.id));
       }
 
-      // Private company buys back its own shares; listed company is unaffected.
-      if (!company.isListed) {
-        await tx.update(companies).set({
-          cash: sql`cash - ${proceeds}`,
-          totalShares: sql`total_shares - ${quantity}`,
-          sharePrice,
-        }).where(eq(companies.id, companyId));
-      } else {
-        await tx.update(companies).set({ sharePrice }).where(eq(companies.id, companyId));
-      }
+      // The company buys back its own shares from its treasury (listed or not),
+      // so cash leaves the treasury and the shares are retired. This keeps the
+      // total money supply conserved — no cash is minted out of thin air.
+      await tx.update(companies).set({
+        cash: sql`cash - ${proceeds}`,
+        totalShares: sql`total_shares - ${quantity}`,
+        sharePrice,
+      }).where(eq(companies.id, companyId));
 
       await tx.insert(transactions).values({
         userId: session.id,
@@ -646,7 +644,7 @@ export async function removeMemberFromCompany(companyId: number, memberIdToRemov
       if (!requesterMember || requesterMember.role !== 'ceo') throw new Error("Seul le PDG peut supprimer des membres.");
 
       const memberToRemove = await tx.query.companyMembers.findFirst({
-        where: eq(companyMembers.id, memberIdToRemove),
+        where: and(eq(companyMembers.id, memberIdToRemove), eq(companyMembers.companyId, companyId)),
         with: { user: { columns: { displayName: true } } },
       });
       if (!memberToRemove) throw new Error("Membre non trouvé.");

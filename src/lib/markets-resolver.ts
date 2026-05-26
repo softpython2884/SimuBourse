@@ -2,7 +2,7 @@ import 'server-only';
 import { db } from './db';
 import { runTransaction } from './db/tx';
 import { predictionMarkets, marketOutcomes, marketBets, users } from './db/schema';
-import { eq, and, lt, sql } from 'drizzle-orm';
+import { eq, and, lt, sql, isNotNull } from 'drizzle-orm';
 
 type MarketEvent =
   | { type: 'closed'; marketId: number }
@@ -47,7 +47,7 @@ async function closeExpiredMarkets() {
 async function settleMarketsWithWinners() {
   // Markets that have a winning outcome set AND are still in 'closed' status.
   const markets = await db.query.predictionMarkets.findMany({
-    where: and(eq(predictionMarkets.status, 'closed')),
+    where: and(eq(predictionMarkets.status, 'closed'), isNotNull(predictionMarkets.winningOutcomeId)),
     with: { outcomes: true },
   });
 
@@ -59,9 +59,10 @@ async function settleMarketsWithWinners() {
 
     // Parimutuel payout: each winner gets a proportional share of the total pool.
     // payout = (bet.amount / winningOutcome.pool) * totalPool
+    // Only pay still-active bets so a re-run can never double-pay a winner.
     await runTransaction(async (tx) => {
       const allBets = await tx.query.marketBets.findMany({
-        where: eq(marketBets.outcomeId, market.winningOutcomeId!),
+        where: and(eq(marketBets.outcomeId, market.winningOutcomeId!), eq(marketBets.status, 'active')),
       });
 
       for (const bet of allBets) {

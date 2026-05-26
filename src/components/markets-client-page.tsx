@@ -26,7 +26,7 @@ export function MarketsClientPage({ initialMarkets }: MarketsClientPageProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Marché des Paris</h1>
           <p className="text-muted-foreground">Pariez sur le résultat d'événements futurs.</p>
