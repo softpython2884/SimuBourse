@@ -27,15 +27,19 @@ const FAMILY_BY_CLASS: Record<string, Family> = {
   Bond: 'macro',
 };
 
-/** How a whole asset class is named in a market-wide headline. */
+/**
+ * How a whole asset class is named in a market-wide headline. Every label is a
+ * singular collective noun so the templates, which are written for one subject,
+ * stay grammatical when the subject is a whole compartment.
+ */
 const CLASS_LABEL: Record<string, string> = {
-  Stock: 'les actions',
-  Company: 'les sociétés cotées',
-  Index: 'les indices',
-  ETF: 'les ETF',
-  Crypto: 'les cryptoactifs',
+  Stock: 'le marché actions',
+  Company: 'le compartiment des sociétés cotées',
+  Index: 'le segment indiciel',
+  ETF: 'le compartiment des ETF',
+  Crypto: 'le marché des cryptoactifs',
   Forex: 'le marché des changes',
-  Commodity: 'les matières premières',
+  Commodity: 'le marché des matières premières',
   Bond: 'le marché obligataire',
 };
 
@@ -215,7 +219,7 @@ const TEMPLATES: Record<Sentiment, Record<Family, readonly Template[]>> = {
       },
       {
         headline: 'Risque de récession : les places financières décrochent',
-        body: '{actor} avertit d’un ralentissement plus marqué qu’anticipé. La rotation vers les actifs défensifs coûte {pct} % à {asset}.',
+        body: '{actor} avertit d’un ralentissement plus marqué qu’anticipé. {asset} abandonne {pct} % dans une rotation générale vers les actifs défensifs.',
       },
       {
         headline: 'Tensions géopolitiques : aversion au risque généralisée',
@@ -435,31 +439,41 @@ export class EventGenerator implements EngineModule {
     const magnitude = weighted(this.random, MAGNITUDE_WEIGHTS);
     const impactBps = this.signedImpact(sentiment, magnitude);
 
-    const marketWide = this.random.chance(MARKET_WIDE_CHANCE);
-    const subject = marketWide ? this.pickClass(candidates) : this.random.pick(candidates);
+    let family: Family;
+    let assetLabel: string;
+    let tickerLabel: string;
+    let scope: Scope;
+    let ticker: string | null;
 
-    const family = marketWide
-      ? 'macro'
-      : (FAMILY_BY_CLASS[(subject as AssetState).assetClass] ?? 'equity');
+    if (this.random.chance(MARKET_WIDE_CHANCE)) {
+      const assetClass = this.pickClass(candidates);
+      family = 'macro';
+      assetLabel = CLASS_LABEL[assetClass] ?? 'le marché';
+      tickerLabel = assetClass;
+      scope = { kind: 'class', assetClass };
+      ticker = null;
+    } else {
+      const state = this.random.pick(candidates);
+      family = FAMILY_BY_CLASS[state.assetClass] ?? 'equity';
+      assetLabel = state.name;
+      tickerLabel = state.ticker;
+      scope = { kind: 'asset', ticker: state.ticker };
+      ticker = state.ticker;
+    }
 
-    const assetLabel = marketWide
-      ? (CLASS_LABEL[subject as string] ?? 'le marché')
-      : (subject as AssetState).name;
-    const tickerLabel = marketWide ? (subject as string) : (subject as AssetState).ticker;
-
+    const values = {
+      asset: assetLabel,
+      ticker: tickerLabel,
+      actor: this.random.pick(ACTORS[family]),
+      pct: formatPercent(impactBps),
+    };
     const template = this.random.pick(TEMPLATES[sentiment][family]);
-    const actor = this.random.pick(ACTORS[family]);
-    const pct = formatPercent(impactBps);
-
-    const scope: Scope = marketWide
-      ? { kind: 'class', assetClass: subject as string }
-      : { kind: 'asset', ticker: (subject as AssetState).ticker };
 
     await publish(this.ctx.db, this.engine, {
       scope,
-      ticker: marketWide ? null : (subject as AssetState).ticker,
-      headline: fill(template.headline, { asset: assetLabel, ticker: tickerLabel, actor, pct }),
-      body: fill(template.body, { asset: assetLabel, ticker: tickerLabel, actor, pct }),
+      ticker,
+      headline: fill(template.headline, values),
+      body: fill(template.body, values),
       sentiment,
       magnitude,
       impactBps,
@@ -608,7 +622,14 @@ export async function createManualEvent(
 // ---------------------------------------------------------------------------
 
 function fill(template: string, values: Record<'asset' | 'ticker' | 'actor' | 'pct', string>): string {
-  return template.replace(/\{(asset|ticker|actor|pct)\}/g, (_, key: keyof typeof values) => values[key]);
+  const filled = template
+    .replace(/\{(asset|ticker|actor|pct)\}/g, (_, key: keyof typeof values) => values[key])
+    // Substitution can leave "de Airbus"; elide it. Restricted to vowels because
+    // an aspirated h ("de Honda") must not be elided.
+    .replace(/\bde (?=[AEIOUYÀÂÉÈÊÎÔÛaeiouyàâéèêîôû])/g, 'd’');
+  // Placeholders carry their natural lower case ("un analyste de..."), so a
+  // sentence that opens on one would otherwise start with a lower-case letter.
+  return filled.replace(/(^|[.!?]\s+)(\p{Ll})/gu, (_, prefix: string, letter: string) => prefix + letter.toUpperCase());
 }
 
 /** French copy uses a decimal comma; "1.5 %" in a headline reads as a typo. */
