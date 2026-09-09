@@ -6,8 +6,13 @@
   "author": "Night <nightfury@nationquest.fr>",
   "license": "GPL-3.0-or-later",
   "type": "module",
-  "engines": { "node": ">=20.11" },
-  "workspaces": ["packages/*", "apps/*"],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "build": "npm run build -w @alvora/shared && npm run build -w @alvora/db && npm run build -w @alvora/api && npm run build -w @alvora/web",
     "build:packages": "npm run build -w @alvora/shared && npm run build -w @alvora/db",
@@ -21,6 +26,7 @@
     "db:seed": "npm run seed -w @alvora/db",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "smoke": "node scripts/smoke.mjs"
   }
 }
