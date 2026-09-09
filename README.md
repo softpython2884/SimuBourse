@@ -1,127 +1,121 @@
-# SimuBourse - Simulation Financière Immersive
+# SimuBourse
 
-SimuBourse est une plateforme de simulation financière avancée conçue pour offrir une expérience de trading et d'investissement riche et dynamique. Construite avec Next.js, Genkit pour l'IA, et Drizzle ORM, elle permet aux joueurs de trader des actions, de créer et gérer leurs propres entreprises, de parier sur des événements, et bien plus encore.
+Plateforme de simulation financière (actions, crypto, forex, commodities, marchés de prédiction, minage, entreprises virtuelles et conseiller IA).
 
-Ce guide vous accompagnera pas à pas pour installer et lancer l'application sur votre machine.
+Construit avec Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui, Drizzle ORM, better-sqlite3 et Genkit (Google AI).
 
-**Lien du projet :** [https://github.com/softpython2884/SimuBourse.git](https://github.com/softpython2884/SimuBourse.git)
+## Architecture
 
-## Table des Matières
+- **Base de données** : SQLite local (`sqlite.db`), créée et migrée automatiquement au démarrage. Pas de Docker ni de base externe.
+- **Auth** : cookie HMAC-signé (`SESSION_SECRET`), httpOnly, sameSite=lax. Le premier utilisateur inscrit devient admin automatiquement.
+- **Prix des actifs** : simulés côté serveur (tick toutes les 3s) et poussés aux clients via SSE (`/api/prices/stream`). Tous les utilisateurs voient — et tradent — au même prix.
+- **Marchés de prédiction** : un cron interne (60s) ferme les marchés expirés ; quand un admin définit l'issue gagnante, les payouts (parimutuel) sont calculés et crédités automatiquement.
+- **Minage** : accrual côté serveur, formule SQL atomique. Le client ne peut plus spécifier le montant à réclamer.
 
-- [Fonctionnalités Clés](#fonctionnalités-clés)
-- [Stack Technique](#stack-technique)
-- [Démarrage Rapide](#démarrage-rapide)
-  - [1. Prérequis](#1-prérequis)
-  - [2. Installation du Projet](#2-installation-du-projet)
-  - [3. Configuration de l'Environnement (.env)](#3-configuration-de-lenvironnement-env)
-  - [4. Initialisation de la Base de Données](#4-initialisation-de-la-base-de-données)
-  - [5. Lancer l'Application](#5-lancer-lapplication)
+## Prérequis
 
-## Fonctionnalités Clés
+- Node.js 20+ et npm.
+- Sur la VM, il vous faut un compilateur C/C++ pour better-sqlite3 (Ubuntu : `sudo apt-get install build-essential python3`).
 
-- **Marché Dynamique :** Simulation en temps réel des prix pour les actions, les cryptomonnaies, et les matières premières.
-- **Gestion d'Entreprises :** Créez votre propre entreprise, gérez sa trésorerie, ses actifs, et décidez de la mettre en bourse (IPO) pour la rendre publique.
-- **Fonctionnalités IA avec Genkit :**
-  - **Actualités Générées par l'IA :** Des événements de marché plausibles créés dynamiquement pour chaque actif.
-  - **Conseiller en Investissement IA :** Analysez des articles pour recevoir des recommandations d'investissement personnalisées.
-  - **Bot de Trading Automatique :** Laissez une IA gérer votre portefeuille et exécuter des transactions stratégiques pour vous.
-- **Marché des Paris :** Pariez sur l'issue d'événements futurs, qu'ils soient créés par des joueurs ou par l'IA.
-- **Minage de Cryptomonnaies :** Achetez du matériel de minage virtuel et générez des récompenses passives en Bitcoin.
-- **Progressive Web App (PWA) :** Installez l'application sur votre bureau ou votre téléphone pour une expérience plus rapide et immersive.
-
-## Stack Technique
-
-- **Framework :** [Next.js](https://nextjs.org/) (avec App Router)
-- **Intelligence Artificielle :** [Genkit](https://firebase.google.com/docs/genkit)
-- **Base de Données & ORM :** [PostgreSQL](https://www.postgresql.org/) avec [Drizzle ORM](https://orm.drizzle.team/)
-- **UI :** [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/)
-- **Composants :** [ShadCN/UI](https://ui.shadcn.com/)
-
-## Démarrage Rapide
-
-Suivez ces étapes pour lancer l'application sur votre machine locale.
-
-### 1. Prérequis
-
-Avant de commencer, assurez-vous d'avoir les éléments suivants installés sur votre ordinateur :
-
-- **Node.js :** Version 18 ou supérieure. Vous pouvez le télécharger sur [nodejs.org](https://nodejs.org/).
-- **npm** (ou yarn) : Inclus avec Node.js.
-- **Git :** Pour cloner le projet. [Télécharger Git](https://git-scm.com/downloads).
-- **Une base de données PostgreSQL :** L'application a besoin d'une base de données PostgreSQL pour fonctionner. Vous avez deux options principales :
-  - **Docker (Recommandé) :** Si vous avez [Docker Desktop](https://www.docker.com/products/docker-desktop/), c'est la méthode la plus simple pour lancer une base de données localement.
-  - **Service Hébergé :** Vous pouvez utiliser un service de base de données en ligne comme [Supabase](https://supabase.com/), [Neon](https://neon.tech/), ou [Vercel Postgres](https://vercel.com/storage/postgres).
-
-### 2. Installation du Projet
-
-Ouvrez votre terminal et suivez ces commandes :
+## Démarrage local
 
 ```bash
-# 1. Clonez le projet depuis GitHub
-git clone https://github.com/softpython2884/SimuBourse.git
-
-# 2. Accédez au dossier du projet
+git clone <repo>
 cd SimuBourse
-
-# 3. Installez toutes les dépendances nécessaires
 npm install
+cp .env.example .env
+
+# Générer un SESSION_SECRET
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+# Coller la valeur dans .env
+
+npm run dev   # http://localhost:9002
 ```
 
-### 3. Configuration de l'Environnement (.env)
+À la première ouverture, le schéma SQLite est créé et les ~40 actifs initiaux sont seedés.
 
-Ce fichier contiendra vos clés secrètes. Il n'est pas partagé sur GitHub pour des raisons de sécurité.
+Créez le premier utilisateur via `/signup` : il sera promu **admin** automatiquement et aura accès à `/admin`.
 
-**a. Créez le fichier :**
-À la racine du projet `SimuBourse`, créez un nouveau fichier nommé `.env`.
-
-**b. Remplissez le fichier :**
-Copiez et collez le modèle suivant dans votre fichier `.env`, puis remplacez les valeurs par vos propres informations.
-
-```env
-# URL de connexion à votre base de données PostgreSQL
-# Remplacez les valeurs par les vôtres.
-# Format : postgres://UTILISATEUR:MOT_DE_PASSE@HOTE:PORT/NOM_DE_LA_BASE
-DATABASE_URL="postgres://pterodactyl:Pl3453Ch4n63M3!@pods.forgenet.fr:5432/pterodactyl"
-
-# Clé API pour Google AI (utilisée par Genkit)
-# Obtenez-en une gratuitement sur https://makersuite.google.com/
-GOOGLE_API_KEY="VOTRE_CLE_API_GOOGLE_AI"
-
-# Clé secrète pour la session (utilisez une chaîne de caractères longue et aléatoire)
-# Vous pouvez en générer une ici : https://generate-secret.vercel.app/32
-JWT_SECRET_KEY="VOTRE_CLE_SECRETE_POUR_JWT"
-```
-
-### 4. Initialisation de la Base de Données
-
-Maintenant que votre application sait comment se connecter à votre base de données (grâce au fichier `.env`), nous devons y créer les tables (`users`, `assets`, etc.).
-
-**Lancez la commande suivante dans votre terminal :**
+## Déploiement sur une VM (sans Docker)
 
 ```bash
-npm run db:push
+# Sur la VM (Ubuntu/Debian)
+sudo apt update && sudo apt install -y build-essential python3 nodejs npm
+node -v  # >= 20
+git clone <repo> /opt/simubourse && cd /opt/simubourse
+npm ci
+cp .env.example .env && nano .env   # renseigner SESSION_SECRET et GOOGLE_GENAI_API_KEY
+npm run build
+NODE_ENV=production npm start       # port 3000 par défaut
 ```
 
-Cette commande lit le schéma défini dans `src/lib/db/schema.ts` et crée automatiquement toute la structure nécessaire dans votre base de données PostgreSQL. **Vous ne devez exécuter cette commande qu'une seule fois lors de la première installation.**
+Pour persister l'app, utilisez **pm2** ou un service systemd. Exemple systemd :
 
-### 5. Lancer l'Application
+```ini
+# /etc/systemd/system/simubourse.service
+[Unit]
+Description=SimuBourse
+After=network.target
 
-Vous y êtes presque ! Vous pouvez maintenant lancer l'application.
+[Service]
+Type=simple
+WorkingDirectory=/opt/simubourse
+EnvironmentFile=/opt/simubourse/.env
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+User=www-data
 
-#### Mode Développement
-Idéal pour développer. Le site se rechargera automatiquement à chaque modification du code.
+[Install]
+WantedBy=multi-user.target
+```
 
 ```bash
-npm run dev
+sudo systemctl enable --now simubourse
 ```
-L'application sera disponible sur `http://localhost:9002`.
 
-#### Mode Production
-Compile l'application pour des performances optimales. C'est le mode à utiliser pour un déploiement public.
+Mettre nginx en reverse-proxy devant si vous voulez SSL + un nom de domaine.
+
+### Note importante
+
+SQLite + WAL est mono-process : **ne lancez qu'une instance** de l'app (scale vertical uniquement). Le simulateur de prix et le resolver de marchés sont des singletons in-process — plusieurs instances créeraient des doublons.
+
+## Scripts npm
+
+| Script | Description |
+|---|---|
+| `npm run dev` | Dev server (Turbopack, port 9002, hot reload). |
+| `npm run build` | Build production. |
+| `npm start` | Lance le serveur production. |
+| `npm run typecheck` | Vérification TypeScript sans build. |
+| `npm run lint` | ESLint. |
+| `npm run db:init` | Force l'init du schéma (utile si vous avez supprimé `sqlite.db`). |
+| `npm run genkit:dev` | Lance le studio Genkit en local (debug des flows IA). |
+
+## Authentification & rôles
+
+- **Inscription** : `/signup` — crée un compte et pose le cookie de session.
+- **Connexion** : `/login` — vérifie le hash bcrypt et pose le cookie.
+- **Premier inscrit = admin**. Les suivants sont des `user` standard.
+- **Routes protégées** par le middleware (`src/middleware.ts`) : `/`, `/portfolio`, `/profile`, `/trading`, `/markets`, `/mining`, `/companies`, `/ai-investor`, `/admin`.
+- **/admin** vérifie le rôle côté serveur via le layout `app/admin/layout.tsx` et chaque action via `requireAdmin()`.
+
+## Réinitialiser la base
+
+Stop l'app, supprimez `sqlite.db` (et éventuellement `sqlite.db-shm`, `sqlite.db-wal`), redémarrez : le schéma est recréé et les actifs reseedés. Tous les comptes sont perdus, le premier nouveau compte devient admin.
+
+## Backups VM
 
 ```bash
-npm run prod
+sqlite3 sqlite.db ".backup '/var/backups/simubourse-$(date +%F).db'"
 ```
-Cette commande exécute `next build` puis `next start`. L'application sera également disponible sur `http://localhost:9002` (par défaut).
 
-### ** Attentions, je crois qu'il faut une config postgres spécifique, sinon les info tel que les prix ne sont pas save ! **
+À mettre dans un cron quotidien si le projet contient des données importantes.
+
+## Variables d'environnement
+
+| Nom | Requis | Description |
+|---|---|---|
+| `SESSION_SECRET` | Oui en prod | Clé HMAC pour signer les cookies de session. ≥ 32 octets recommandés. |
+| `GOOGLE_GENAI_API_KEY` | Pour les fonctionnalités IA | Clé Google AI Studio. Sans elle, l'AI investor et la génération d'actualités tomberont en erreur (le reste de l'app fonctionne). |
+| `NODE_ENV` | Auto | `production` active le cookie `secure`. |
+| `PORT` | Optionnel | Port d'écoute (3000 par défaut en prod, 9002 en dev). |

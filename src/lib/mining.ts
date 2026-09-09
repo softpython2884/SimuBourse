@@ -4,7 +4,7 @@ export interface MiningRig {
     hashRateMhs: number; // Hash rate in MH/s
     power: string;
     price: number;
-    icon: any; // Lucide icon component
+    icon?: any; // Optional Lucide icon component
 }
 
 export const MINING_RIGS: MiningRig[] = [

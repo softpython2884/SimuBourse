@@ -1,28 +1,30 @@
 import {
-  pgTable,
-  serial,
-  varchar,
-  timestamp,
-  text,
-  numeric,
+  sqliteTable,
   integer,
+  text,
+  real,
   uniqueIndex,
   index,
-  boolean,
-} from 'drizzle-orm/pg-core';
-import { relations, desc } from 'drizzle-orm';
+} from 'drizzle-orm/sqlite-core';
+import { relations, desc, sql } from 'drizzle-orm';
 
-export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
-  displayName: varchar('display_name', { length: 256 }).notNull(),
-  email: varchar('email', { length: 256 }).notNull().unique(),
+// SQLite's CURRENT_TIMESTAMP returns a string like '2024-01-01 12:00:00', which is
+// incompatible with timestamp_ms mode. We use unixepoch() * 1000 to get a real
+// millisecond unix timestamp that Drizzle can parse back into a Date.
+const tsDefault = sql`(unixepoch() * 1000)`;
+
+export const users = sqliteTable('users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  displayName: text('display_name').notNull(),
+  email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
-  phoneNumber: varchar('phone_number', { length: 50 }),
-  cash: numeric('cash', { precision: 15, scale: 2 }).default('100000.00').notNull(),
-  initialCash: numeric('initial_cash', { precision: 15, scale: 2 }).default('100000.00').notNull(),
-  unclaimedBtc: numeric('unclaimed_btc', { precision: 18, scale: 8 }).default('0').notNull(),
-  lastMiningUpdateAt: timestamp('last_mining_update_at', { withTimezone: true }).defaultNow().notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  phoneNumber: text('phone_number'),
+  role: text('role', { enum: ['user', 'admin'] }).default('user').notNull(),
+  cash: real('cash').default(100000.00).notNull(),
+  initialCash: real('initial_cash').default(100000.00).notNull(),
+  unclaimedBtc: real('unclaimed_btc').default(0).notNull(),
+  lastMiningUpdateAt: integer('last_mining_update_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -37,28 +39,29 @@ export const usersRelations = relations(users, ({ many }) => ({
   automaticOrders: many(automaticOrders),
 }));
 
-export const assets = pgTable('assets', {
-  ticker: varchar('ticker', { length: 10 }).primaryKey(),
-  name: varchar('name', { length: 256 }).notNull(),
+export const assets = sqliteTable('assets', {
+  ticker: text('ticker').primaryKey(),
+  name: text('name').notNull(),
   description: text('description').notNull(),
-  type: varchar('type', { length: 50 }).notNull(),
-  price: numeric('price', { precision: 18, scale: 8 }).notNull(),
-  change24h: varchar('change_24h', { length: 20 }).notNull(),
-  marketCap: varchar('market_cap', { length: 50 }).notNull(),
+  type: text('type').notNull(),
+  price: real('price').notNull(),
+  change24h: text('change_24h').notNull(),
+  marketCap: text('market_cap').notNull(),
 });
 
-export const holdings = pgTable('holdings', {
-  id: serial('id').primaryKey(),
+export const holdings = sqliteTable('holdings', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  ticker: varchar('ticker', { length: 10 }).notNull(),
-  name: varchar('name', { length: 256 }).notNull(),
-  type: varchar('type', { length: 50 }).notNull(),
-  quantity: numeric('quantity', { precision: 18, scale: 8 }).notNull(),
-  avgCost: numeric('avg_cost', { precision: 18, scale: 8 }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  ticker: text('ticker').notNull(),
+  name: text('name').notNull(),
+  type: text('type').notNull(),
+  quantity: real('quantity').notNull(),
+  avgCost: real('avg_cost').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
 }, (table) => {
   return {
     userTickerIdx: uniqueIndex('user_ticker_idx').on(table.userId, table.ticker),
+    holdingsUserIdx: index('idx_holdings_user_id').on(table.userId),
   }
 });
 
@@ -70,16 +73,21 @@ export const holdingsRelations = relations(holdings, ({ one, many }) => ({
   automaticOrders: many(automaticOrders),
 }));
 
-export const transactions = pgTable('transactions', {
-  id: serial('id').primaryKey(),
+export const transactions = sqliteTable('transactions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  type: varchar('type', { length: 4 }).notNull(), // 'Buy' or 'Sell'
-  ticker: varchar('ticker', { length: 10 }).notNull(),
-  name: varchar('name', { length: 256 }).notNull(),
-  quantity: numeric('quantity', { precision: 18, scale: 8 }).notNull(),
-  price: numeric('price', { precision: 18, scale: 8 }).notNull(),
-  value: numeric('value', { precision: 18, scale: 2 }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  type: text('type', { enum: ['Buy', 'Sell'] }).notNull(),
+  ticker: text('ticker').notNull(),
+  name: text('name').notNull(),
+  quantity: real('quantity').notNull(),
+  price: real('price').notNull(),
+  value: real('value').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
+}, (table) => {
+  return {
+    transactionsUserIdx: index('idx_transactions_user_id').on(table.userId),
+    transactionsUserCreatedIdx: index('idx_transactions_user_created').on(table.userId, desc(table.createdAt)),
+  }
 });
 
 export const transactionsRelations = relations(transactions, ({ one }) => ({
@@ -89,14 +97,14 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
   }),
 }));
 
-export const aiNews = pgTable('ai_news', {
-  id: serial('id').primaryKey(),
-  ticker: varchar('ticker', { length: 10 }).notNull(),
+export const aiNews = sqliteTable('ai_news', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticker: text('ticker').notNull(),
   headline: text('headline').notNull(),
   article: text('article').notNull(),
-  sentiment: varchar('sentiment', { length: 10, enum: ['positive', 'negative', 'neutral'] }).notNull(),
+  sentiment: text('sentiment', { enum: ['positive', 'negative', 'neutral'] }).notNull(),
   impactScore: integer('impact_score').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
 }, (table) => {
   return {
     tickerCreatedAtIdx: index('ticker_created_at_idx').on(table.ticker, desc(table.createdAt)),
@@ -105,16 +113,22 @@ export const aiNews = pgTable('ai_news', {
 
 
 // Prediction Markets
-export const predictionMarkets = pgTable('prediction_markets', {
-  id: serial('id').primaryKey(),
+export const predictionMarkets = sqliteTable('prediction_markets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   title: text('title').notNull(),
-  category: varchar('category', { length: 256 }).notNull(),
-  status: varchar('status', { length: 10, enum: ['open', 'closed', 'settled'] }).default('open').notNull(),
-  totalPool: numeric('total_pool', { precision: 15, scale: 2 }).default('0.00').notNull(),
-  closingAt: timestamp('closing_at', { withTimezone: true }).notNull(),
+  category: text('category').notNull(),
+  status: text('status', { enum: ['open', 'closed', 'settled'] }).default('open').notNull(),
+  totalPool: real('total_pool').default(0.00).notNull(),
+  closingAt: integer('closing_at', { mode: 'timestamp_ms' }).notNull(),
+  winningOutcomeId: integer('winning_outcome_id'),
   creatorId: integer('creator_id').references(() => users.id, { onDelete: 'set null' }),
-  creatorDisplayName: varchar('creator_display_name', { length: 256 }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  creatorDisplayName: text('creator_display_name').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
+}, (table) => {
+  return {
+    marketsStatusIdx: index('idx_markets_status').on(table.status),
+    marketsClosingIdx: index('idx_markets_closing_at').on(table.closingAt),
+  }
 });
 
 export const predictionMarketsRelations = relations(predictionMarkets, ({ one, many }) => ({
@@ -125,11 +139,11 @@ export const predictionMarketsRelations = relations(predictionMarkets, ({ one, m
   outcomes: many(marketOutcomes),
 }));
 
-export const marketOutcomes = pgTable('market_outcomes', {
-  id: serial('id').primaryKey(),
+export const marketOutcomes = sqliteTable('market_outcomes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   marketId: integer('market_id').notNull().references(() => predictionMarkets.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
-  pool: numeric('pool', { precision: 15, scale: 2 }).default('0.00').notNull(),
+  pool: real('pool').default(0.00).notNull(),
 }, (table) => {
   return {
     marketIdIdx: index('market_id_idx').on(table.marketId),
@@ -144,12 +158,19 @@ export const marketOutcomesRelations = relations(marketOutcomes, ({ one, many })
   bets: many(marketBets),
 }));
 
-export const marketBets = pgTable('market_bets', {
-  id: serial('id').primaryKey(),
+export const marketBets = sqliteTable('market_bets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   outcomeId: integer('outcome_id').notNull().references(() => marketOutcomes.id, { onDelete: 'cascade' }),
-  amount: numeric('amount', { precision: 15, scale: 2 }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  amount: real('amount').notNull(),
+  payout: real('payout').default(0).notNull(),
+  status: text('status', { enum: ['active', 'won', 'lost', 'refunded'] }).default('active').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
+}, (table) => {
+  return {
+    betsUserIdx: index('idx_market_bets_user_id').on(table.userId),
+    betsOutcomeIdx: index('idx_market_bets_outcome_id').on(table.outcomeId),
+  }
 });
 
 export const marketBetsRelations = relations(marketBets, ({ one }) => ({
@@ -163,12 +184,12 @@ export const marketBetsRelations = relations(marketBets, ({ one }) => ({
   }),
 }));
 
-export const userMiningRigs = pgTable('user_mining_rigs', {
-  id: serial('id').primaryKey(),
+export const userMiningRigs = sqliteTable('user_mining_rigs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  rigId: varchar('rig_id', { length: 50 }).notNull(),
+  rigId: text('rig_id').notNull(),
   quantity: integer('quantity').notNull().default(1),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
 }, (table) => {
   return {
     userRigIdx: uniqueIndex('user_rig_idx').on(table.userId, table.rigId),
@@ -183,20 +204,20 @@ export const userMiningRigsRelations = relations(userMiningRigs, ({ one }) => ({
 }));
 
 // Companies
-export const companies = pgTable('companies', {
-  id: serial('id').primaryKey(),
-  name: varchar('name', { length: 256 }).notNull().unique(),
-  ticker: varchar('ticker', { length: 10 }).notNull().unique(),
-  industry: varchar('industry', { length: 100 }).notNull(),
+export const companies = sqliteTable('companies', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  ticker: text('ticker').notNull().unique(),
+  industry: text('industry').notNull(),
   description: text('description').notNull(),
-  cash: numeric('cash', { precision: 15, scale: 2 }).default('0.00').notNull(),
+  cash: real('cash').default(0.00).notNull(),
   creatorId: integer('creator_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  sharePrice: numeric('share_price', { precision: 20, scale: 8 }).default('1.00').notNull(),
-  totalShares: numeric('total_shares', { precision: 20, scale: 8 }).default('1000.00').notNull(),
-  isListed: boolean('is_listed').default(false).notNull(),
-  unclaimedBtc: numeric('unclaimed_btc', { precision: 18, scale: 8 }).default('0').notNull(),
-  lastMiningUpdateAt: timestamp('last_mining_update_at', { withTimezone: true }).defaultNow().notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  sharePrice: real('share_price').default(1.00).notNull(),
+  totalShares: real('total_shares').default(1000.00).notNull(),
+  isListed: integer('is_listed', { mode: 'boolean' }).default(false).notNull(),
+  unclaimedBtc: real('unclaimed_btc').default(0).notNull(),
+  lastMiningUpdateAt: integer('last_mining_update_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
 });
 
 export const companiesRelations = relations(companies, ({ one, many }) => ({
@@ -211,11 +232,11 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
   transactions: many(companyTransactions),
 }));
 
-export const companyMembers = pgTable('company_members', {
-  id: serial('id').primaryKey(),
+export const companyMembers = sqliteTable('company_members', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  role: varchar('role', { length: 50, enum: ['ceo', 'manager', 'member'] }).notNull(),
+  role: text('role', { enum: ['ceo', 'manager', 'member'] }).notNull(),
 }, (table) => {
   return {
     companyUserIdx: uniqueIndex('company_user_idx').on(table.companyId, table.userId),
@@ -234,15 +255,16 @@ export const companyMembersRelations = relations(companyMembers, ({ one }) => ({
 }));
 
 
-export const companyShares = pgTable('company_shares', {
-  id: serial('id').primaryKey(),
+export const companyShares = sqliteTable('company_shares', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  quantity: numeric('quantity', { precision: 20, scale: 8 }).notNull(),
-  avgCost: numeric('avg_cost', { precision: 20, scale: 8 }).default('0').notNull(),
+  quantity: real('quantity').notNull(),
+  avgCost: real('avg_cost').default(0).notNull(),
 }, (table) => {
   return {
     companyUserSharesIdx: uniqueIndex('company_user_shares_idx').on(table.companyId, table.userId),
+    sharesUserIdx: index('idx_company_shares_user_id').on(table.userId),
   }
 });
 
@@ -257,15 +279,15 @@ export const companySharesRelations = relations(companyShares, ({ one }) => ({
   }),
 }));
 
-export const companyHoldings = pgTable('company_holdings', {
-  id: serial('id').primaryKey(),
+export const companyHoldings = sqliteTable('company_holdings', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
-  ticker: varchar('ticker', { length: 10 }).notNull(),
-  name: varchar('name', { length: 256 }).notNull(),
-  type: varchar('type', { length: 50 }).notNull(),
-  quantity: numeric('quantity', { precision: 18, scale: 8 }).notNull(),
-  avgCost: numeric('avg_cost', { precision: 18, scale: 8 }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  ticker: text('ticker').notNull(),
+  name: text('name').notNull(),
+  type: text('type').notNull(),
+  quantity: real('quantity').notNull(),
+  avgCost: real('avg_cost').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
 }, (table) => {
   return {
     companyTickerIdx: uniqueIndex('company_holdings_ticker_idx').on(table.companyId, table.ticker),
@@ -279,12 +301,12 @@ export const companyHoldingsRelations = relations(companyHoldings, ({ one }) => 
   }),
 }));
 
-export const companyMiningRigs = pgTable('company_mining_rigs', {
-  id: serial('id').primaryKey(),
+export const companyMiningRigs = sqliteTable('company_mining_rigs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
-  rigId: varchar('rig_id', { length: 50 }).notNull(),
+  rigId: text('rig_id').notNull(),
   quantity: integer('quantity').notNull().default(1),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
 }, (table) => {
   return {
     companyRigIdx: uniqueIndex('company_rig_idx').on(table.companyId, table.rigId),
@@ -298,16 +320,20 @@ export const companyMiningRigsRelations = relations(companyMiningRigs, ({ one })
   }),
 }));
 
-export const companyTransactions = pgTable('company_transactions', {
-  id: serial('id').primaryKey(),
+export const companyTransactions = sqliteTable('company_transactions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   companyId: integer('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
-  type: varchar('type', { length: 4 }).notNull(), // 'Buy' or 'Sell'
-  ticker: varchar('ticker', { length: 10 }).notNull(),
-  name: varchar('name', { length: 256 }).notNull(),
-  quantity: numeric('quantity', { precision: 18, scale: 8 }).notNull(),
-  price: numeric('price', { precision: 18, scale: 8 }).notNull(),
-  value: numeric('value', { precision: 18, scale: 2 }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  type: text('type', { enum: ['Buy', 'Sell'] }).notNull(),
+  ticker: text('ticker').notNull(),
+  name: text('name').notNull(),
+  quantity: real('quantity').notNull(),
+  price: real('price').notNull(),
+  value: real('value').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
+}, (table) => {
+  return {
+    companyTransactionsCompanyIdx: index('idx_company_transactions_company_id').on(table.companyId),
+  }
 });
 
 export const companyTransactionsRelations = relations(companyTransactions, ({ one }) => ({
@@ -318,15 +344,15 @@ export const companyTransactionsRelations = relations(companyTransactions, ({ on
 }));
 
 
-export const automaticOrders = pgTable('automatic_orders', {
-  id: serial('id').primaryKey(),
+export const automaticOrders = sqliteTable('automatic_orders', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   holdingId: integer('holding_id').notNull().references(() => holdings.id, { onDelete: 'cascade' }),
-  type: varchar('type', { length: 20, enum: ['stop-loss', 'take-profit'] }).notNull(),
-  triggerPrice: numeric('trigger_price', { precision: 18, scale: 8 }).notNull(),
-  quantity: numeric('quantity', { precision: 18, scale: 8 }).notNull(),
-  status: varchar('status', { length: 20, enum: ['active', 'triggered', 'cancelled'] }).default('active').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  type: text('type', { enum: ['stop-loss', 'take-profit'] }).notNull(),
+  triggerPrice: real('trigger_price').notNull(),
+  quantity: real('quantity').notNull(),
+  status: text('status', { enum: ['active', 'triggered', 'cancelled'] }).default('active').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(tsDefault).notNull(),
 }, (table) => {
   return {
     userHoldingIdx: index('auto_order_user_holding_idx').on(table.userId, table.holdingId),

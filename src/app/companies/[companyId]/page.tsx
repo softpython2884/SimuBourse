@@ -31,8 +31,9 @@ const formatHashRate = (mhs: number) => {
     return `${mhs.toFixed(0)} MH/s`;
 };
 
-export default async function CompanyDetailPage({ params }: { params: { companyId: string } }) {
-  const companyId = parseInt(params.companyId, 10);
+export default async function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
+  const { companyId: rawCompanyId } = await params;
+  const companyId = parseInt(rawCompanyId, 10);
   if (isNaN(companyId)) {
     notFound();
   }
