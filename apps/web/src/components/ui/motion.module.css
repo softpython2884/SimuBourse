@@ -1,0 +1,178 @@
+/*
+ * Overlay motion.
+ *
+ * Radix keeps an element mounted for the duration of a CSS *animation* (never a
+ * transition), so every enter/exit here must be a keyframe animation keyed on
+ * `data-state`. The project has no animation plugin, and `globals.css` belongs to
+ * another owner, so the keyframes live in this module — motion only, no colour.
+ * `prefers-reduced-motion` is already neutralised globally in the base layer.
+ */
+
+.fade[data-state='open'] {
+  animation: fadeIn 160ms ease-out;
+}
+.fade[data-state='closed'] {
+  animation: fadeOut 120ms ease-in;
+}
+
+/* Centred modal: the keyframes carry the -50% centring transform, otherwise the
+   animated `transform` would fight the utility classes that centre the panel. */
+.dialog[data-state='open'] {
+  animation: dialogIn 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dialog[data-state='closed'] {
+  animation: dialogOut 140ms ease-in;
+}
+
+/* Popper-positioned surfaces (menu, select, tooltip) grow from the edge Radix
+   actually placed them against. */
+.pop {
+  transform-origin: var(
+    --radix-dropdown-menu-content-transform-origin,
+    var(
+      --radix-select-content-transform-origin,
+      var(--radix-tooltip-content-transform-origin, var(--radix-popper-transform-origin, center))
+    )
+  );
+}
+.pop[data-state='open'] {
+  animation: popIn 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.pop[data-state='closed'] {
+  animation: popOut 100ms ease-in;
+}
+
+.sheetRight[data-state='open'] {
+  animation: slideInRight 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sheetRight[data-state='closed'] {
+  animation: slideOutRight 200ms ease-in;
+}
+.sheetLeft[data-state='open'] {
+  animation: slideInLeft 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sheetLeft[data-state='closed'] {
+  animation: slideOutLeft 200ms ease-in;
+}
+.sheetBottom[data-state='open'] {
+  animation: slideInBottom 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sheetBottom[data-state='closed'] {
+  animation: slideOutBottom 200ms ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -46%) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialogOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes popOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes slideInBottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideOutBottom {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
