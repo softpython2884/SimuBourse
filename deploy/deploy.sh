@@ -76,9 +76,15 @@ ok()    { printf '    %s✓%s %s\n' "$C_GREEN" "$C_RESET" "$*"; }
 warn()  { printf '    %s!%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 die()   { printf '\n%serreur:%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 
+# Echoed commands can carry the generated database password; keep it out of the
+# terminal scrollback and out of any CI log this runs in.
+redact() {
+  printf '%s' "$*" | sed -E 's#(://[^:@/]+:)[^@/]+@#\1***@#g'
+}
+
 run() {
   if (( DRY_RUN )); then
-    printf '    %s[dry-run]%s %s\n' "$C_DIM" "$C_RESET" "$*"
+    printf '    %s[dry-run]%s %s\n' "$C_DIM" "$C_RESET" "$(redact "$*")"
   else
     "$@"
   fi
@@ -148,10 +154,15 @@ else
   ok "paquets installés"
 fi
 
-for binary in node npm psql nginx; do
-  have "$binary" || die "$binary est introuvable après l'installation"
+# In dry-run nothing was actually installed, so a missing binary is expected.
+for binary in node npm psql nginx pm2; do
+  if have "$binary"; then continue; fi
+  if (( DRY_RUN )); then
+    warn "$binary absent (il aurait été installé)"
+  else
+    die "$binary est introuvable après l'installation"
+  fi
 done
-have pm2 || die "pm2 est introuvable — installez-le avec: npm install -g pm2"
 
 # --------------------------------------------------------------------------
 # Port allocation
@@ -167,7 +178,12 @@ port_in_use() {
 
 # Reuse the port already recorded in .env so a redeploy does not wander.
 find_free_port() {
-  local preferred="$1" limit="${2:-200}" candidate="$preferred"
+  # Separate declarations: bash expands every word of a `local` line before
+  # assigning any of them, so `candidate="$preferred"` on the same line would
+  # read an unset variable under `set -u`.
+  local preferred="$1"
+  local limit="${2:-200}"
+  local candidate="$preferred"
   for (( i = 0; i < limit; i++ )); do
     if ! port_in_use "$candidate"; then
       printf '%s' "$candidate"
