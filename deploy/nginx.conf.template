@@ -1,0 +1,93 @@
+# Alvora Bourse — nginx site.
+# Rendered by deploy/deploy.sh (@DOMAIN@, @API_PORT@, @WEB_PORT@ are substituted).
+# certbot --nginx adds the TLS listener and the HTTP redirect on top of this block.
+
+# Cap how fast one client can hammer the API. Trading is the expensive path, so it
+# gets its own tighter bucket.
+limit_req_zone $binary_remote_addr zone=alvora_api:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=alvora_orders:10m rate=5r/s;
+
+upstream alvora_api {
+    server 127.0.0.1:@API_PORT@;
+    keepalive 32;
+}
+
+upstream alvora_web {
+    server 127.0.0.1:@WEB_PORT@;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name @DOMAIN@;
+
+    # Let certbot answer the ACME challenge before any redirect certbot adds.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/html;
+        allow all;
+    }
+
+    client_max_body_size 2m;
+    client_body_timeout 15s;
+
+    # Real client IP for rate limiting and the audit log.
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host  $host;
+    proxy_http_version 1.1;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_types text/plain text/css text/javascript application/javascript application/json
+               application/manifest+json image/svg+xml;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # --- WebSocket -----------------------------------------------------------
+    # Socket.IO needs the upgrade headers and a long read timeout, otherwise the
+    # connection is torn down every 60 s and the client reconnect-storms.
+    location /ws {
+        proxy_pass http://alvora_api;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout  7d;
+        proxy_send_timeout  7d;
+        proxy_buffering off;
+    }
+
+    # --- API -----------------------------------------------------------------
+    location = /api/orders {
+        limit_req zone=alvora_orders burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://alvora_api;
+        proxy_read_timeout 30s;
+    }
+
+    location /api/ {
+        limit_req zone=alvora_api burst=40 nodelay;
+        limit_req_status 429;
+        proxy_pass http://alvora_api;
+        proxy_read_timeout 30s;
+        proxy_buffering off;
+    }
+
+    # --- Web -----------------------------------------------------------------
+    # Next.js fingerprints these filenames, so they are safe to cache forever.
+    location /_next/static/ {
+        proxy_pass http://alvora_web;
+        proxy_cache_valid 200 365d;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location / {
+        proxy_pass http://alvora_web;
+        proxy_read_timeout 60s;
+    }
+}
