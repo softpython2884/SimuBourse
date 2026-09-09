@@ -1,0 +1,33 @@
+{
+  "name": "@alvora/db",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./schema": { "types": "./dist/schema.js", "default": "./dist/schema.js" }
+  },
+  "files": ["dist", "migrations"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate": "drizzle-kit generate",
+    "migrate": "node --enable-source-maps dist/migrate.js",
+    "seed": "node --enable-source-maps dist/seed/run.js",
+    "studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@alvora/shared": "*",
+    "drizzle-orm": "^0.44.6",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.5",
+    "typescript": "^5.9.3",
+    "@types/node": "^22.15.3"
+  }
+}
